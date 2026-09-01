@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
+import { countWords, readingTime as calcReadingTime } from "@/lib/publish";
 
 const createSchema = z.object({
   title: z.string().min(1).max(200),
@@ -111,9 +112,11 @@ export async function POST(req: NextRequest) {
       if (existing && (existing as any).slug !== slug && (existing as any).status === "published") {
         await db.redirect.create({ data: { oldSlug: (existing as any).slug, newSlug: slug, blogId: id } as never }).catch(()=>{});
       }
+      const wc = countWords(JSON.stringify(content));
+      const rt = calcReadingTime(wc);
       const updated = await db.blog.update({
         where: { id } as never,
-        data: { title, slug, content, status: status as never, wordCount: JSON.stringify(content).length, scheduledAt: scheduledAt ? new Date(scheduledAt) : null, seo: seo ?? undefined, categoryId: categoryId ?? undefined } as never,
+        data: { title, slug, content, status: status as never, wordCount: wc, readingTime: rt, scheduledAt: scheduledAt ? new Date(scheduledAt) : null, seo: seo ?? undefined, categoryId: categoryId ?? undefined } as never,
       });
       await db.blogRevision.create({ data: { blogId: id, content, createdBy: (existing as any).createdBy, label: "Autosave" } } as never).catch(() => {});
       await syncMediaUsage(id, content);
@@ -133,13 +136,16 @@ export async function POST(req: NextRequest) {
       if (user?.id) createdBy = user.id;
     } catch {}
     // Fallback if user not in users table — use service role bypass, but keep placeholder for build without DB
+    const wc2 = countWords(JSON.stringify(content));
+    const rt2 = calcReadingTime(wc2);
     const blog = await db.blog.create({
       data: {
         title,
         slug,
         content,
         status: status as never,
-        wordCount: JSON.stringify(content).length,
+        wordCount: wc2,
+        readingTime: rt2,
         scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
         publishedAt: status === "published" ? new Date() : null,
         createdBy,

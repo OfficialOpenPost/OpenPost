@@ -3,7 +3,7 @@ import { z } from "zod";
 // Base
 export const paragraphSchema = z.object({ type: z.literal("paragraph"), content: z.array(z.any()).optional(), attrs: z.any().optional() });
 export const headingBlockSchema = z.object({ type: z.literal("heading"), attrs: z.object({ level: z.number().min(1).max(4) }).passthrough().optional(), content: z.array(z.any()).optional() });
-export const imageBlockSchema = z.object({ type: z.literal("image"), attrs: z.object({ src: z.string().url(), alt: z.string().nullable().optional(), caption: z.string().nullable().optional(), align: z.enum(["left", "center", "right"]).optional(), width: z.number().optional(), layout: z.string().optional() }).passthrough().optional() });
+export const imageBlockSchema = z.object({ type: z.literal("image"), attrs: z.object({ src: z.string().url(), alt: z.string().min(2, "Alt required").max(200).nullable().optional(), caption: z.string().nullable().optional(), align: z.enum(["left", "center", "right"]).optional(), width: z.union([z.string(), z.number()]).optional(), layout: z.string().optional() }).passthrough().optional() });
 export const calloutBlockSchema = z.object({ type: z.literal("callout"), attrs: z.object({ tone: z.enum(["info", "warning", "success", "note"]) }).passthrough().optional(), content: z.array(z.any()).optional() });
 export const galleryBlockSchema = z.object({
   type: z.literal("gallery"),
@@ -11,7 +11,7 @@ export const galleryBlockSchema = z.object({
 });
 export const pollBlockSchema = z.object({
   type: z.union([z.literal("poll"), z.literal("pollBlock")]),
-  attrs: z.object({ pollId: z.string().uuid().nullable().optional(), poll_id: z.string().uuid().optional(), question: z.string().optional() }).passthrough().optional(),
+  attrs: z.object({ pollId: z.string().min(1).nullable().optional(), poll_id: z.string().min(1).optional(), question: z.string().optional(), options: z.array(z.any()).optional(), type: z.string().optional(), showResults: z.string().optional() }).passthrough().optional(),
 });
 export const faqBlockSchema = z.object({
   type: z.literal("faq"),
@@ -44,6 +44,15 @@ export const embedBlockSchema = z.object({
 export const codeBlockSchema = z.object({ type: z.literal("codeBlock"), attrs: z.object({ language: z.string().optional() }).passthrough().optional(), content: z.array(z.any()).optional() });
 export const blockquoteSchema = z.object({ type: z.literal("blockquote"), content: z.array(z.any()).optional(), attrs: z.any().optional() });
 export const horizontalRuleSchema = z.object({ type: z.literal("horizontalRule"), attrs: z.any().optional() });
+export const bulletListSchema = z.object({ type: z.literal("bulletList"), content: z.array(z.any()).optional(), attrs: z.any().optional() });
+export const orderedListSchema = z.object({ type: z.literal("orderedList"), content: z.array(z.any()).optional(), attrs: z.any().optional() });
+export const listItemSchema = z.object({ type: z.literal("listItem"), content: z.array(z.any()).optional(), attrs: z.any().optional() });
+export const tableSchema = z.object({ type: z.literal("table"), content: z.array(z.any()).optional(), attrs: z.any().optional() });
+export const tableRowSchema = z.object({ type: z.literal("tableRow"), content: z.array(z.any()).optional(), attrs: z.any().optional() });
+export const tableCellSchema = z.object({ type: z.literal("tableCell"), content: z.array(z.any()).optional(), attrs: z.any().optional() });
+export const tableHeaderSchema = z.object({ type: z.literal("tableHeader"), content: z.array(z.any()).optional(), attrs: z.any().optional() });
+export const taskListSchema = z.object({ type: z.literal("taskList"), content: z.array(z.any()).optional(), attrs: z.any().optional() });
+export const taskItemSchema = z.object({ type: z.literal("taskItem"), content: z.array(z.any()).optional(), attrs: z.any().optional() });
 
 // Keep legacy alias for paragraph
 export const textBlockSchema = paragraphSchema;
@@ -65,6 +74,15 @@ export const blockSchema = z.discriminatedUnion("type", [
   codeBlockSchema,
   blockquoteSchema,
   horizontalRuleSchema,
+  bulletListSchema,
+  orderedListSchema,
+  listItemSchema,
+  tableSchema,
+  tableRowSchema,
+  tableCellSchema,
+  tableHeaderSchema,
+  taskListSchema,
+  taskItemSchema,
 ]);
 export const docSchema = z.object({ type: z.literal("doc"), version: z.number().optional(), content: z.array(blockSchema) });
 

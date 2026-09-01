@@ -40,7 +40,15 @@ const nextConfig: NextConfig = {
     remotePatterns: [
       {
         protocol: "https",
-        hostname: "**.r2.cloudflarestorage.com",
+        hostname: "*.r2.dev",
+      },
+      {
+        protocol: "https",
+        hostname: "*.r2.cloudflarestorage.com",
+      },
+      {
+        protocol: "https",
+        hostname: "*.supabase.co",
       },
     ],
   },
@@ -52,7 +60,17 @@ const nextConfig: NextConfig = {
         headers: securityHeaders,
       },
       {
-        source: "/api/(.*)",
+        source: "/api/v1/(.*)",
+        headers: [
+          ...securityHeaders,
+          {
+            key: "Cache-Control",
+            value: "public, s-maxage=60, stale-while-revalidate=300",
+          },
+        ],
+      },
+      {
+        source: "/api/blogs",
         headers: [
           ...securityHeaders,
           {

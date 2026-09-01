@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 
 // GET /api/webhooks — list
@@ -15,6 +16,7 @@ export async function GET() {
 // POST /api/webhooks — create
 export async function POST(req: NextRequest) {
   try {
+    try { const user = await getCurrentUser().catch(()=>null); if (process.env.NODE_ENV === "production" && !user) return NextResponse.json({ error: { code: "UNAUTHORIZED" } }, { status: 401 }); if (user && ["WRITER","CONTRIBUTOR","author","contributor"].includes(user.role)) return NextResponse.json({ error: { code: "FORBIDDEN" } }, { status: 403 }); } catch {}
     const body = await req.json();
     const { name, url, events, secret, filter } = body;
     if (!name || !url || !events?.length) {

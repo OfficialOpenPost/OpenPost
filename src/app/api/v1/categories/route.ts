@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { z } from "zod";
 import { slugify } from "@/lib/slug";
+import { getCurrentUser } from "@/lib/auth";
 
 const createSchema = z.object({
   name: z.string().min(1).max(100),
@@ -43,6 +44,17 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    // RBAC: require EDITOR+
+    try {
+      const user = await getCurrentUser().catch(()=>null);
+      if (process.env.NODE_ENV === "production" && !user) return NextResponse.json({ error: { code: "UNAUTHORIZED", message: "Authentication required" } }, { status: 401 });
+      if (user && !["ADMIN","EDITOR","owner","admin"].includes(user.role) && user.role !== "ADMIN" && user.role !== "EDITOR") {
+        // WRITER/CONTRIBUTOR cannot manage categories
+        if (["WRITER","CONTRIBUTOR","author","contributor"].includes(user.role)) {
+          return NextResponse.json({ error: { code: "FORBIDDEN", message: "Insufficient role" } }, { status: 403 });
+        }
+      }
+    } catch {}
     const body = await req.json();
     const parsed = createSchema.safeParse(body);
     if (!parsed.success) {

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { z } from "zod";
 import { slugify } from "@/lib/slug";
@@ -15,6 +16,8 @@ const updateSchema = z.object({
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    try { const user = await getCurrentUser().catch(()=>null); if (process.env.NODE_ENV === "production" && !user) return NextResponse.json({ error: { code: "UNAUTHORIZED" } }, { status: 401 }); if (user && ["WRITER","CONTRIBUTOR","author","contributor"].includes(user.role)) return NextResponse.json({ error: { code: "FORBIDDEN" } }, { status: 403 }); } catch {}
+
     const { id } = await params;
     const body = await req.json();
     const parsed = updateSchema.safeParse(body);
@@ -60,6 +63,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    try { const user = await getCurrentUser().catch(()=>null); if (process.env.NODE_ENV === "production" && !user) return NextResponse.json({ error: { code: "UNAUTHORIZED" } }, { status: 401 }); if (user && ["WRITER","CONTRIBUTOR","author","contributor"].includes(user.role)) return NextResponse.json({ error: { code: "FORBIDDEN" } }, { status: 403 }); } catch {}
+
     const { id } = await params;
     const existing = await db.category.findUnique({ where: { id } as never });
     if (!existing) return NextResponse.json({ error: { code: "NOT_FOUND", message: "Category not found" } }, { status: 404 });

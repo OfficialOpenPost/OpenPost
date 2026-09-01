@@ -46,15 +46,16 @@ export async function POST(req: NextRequest) {
   const s3 = getS3Client();
   const bucket = process.env.R2_BUCKET_NAME!;
 
+  const isImage = contentType.startsWith("image/");
   const post = await createPresignedPost(s3, {
     Bucket: bucket,
     Key: key,
     Conditions: [
       ["content-length-range", 1, 25 * 1024 * 1024],
-      ["starts-with", "$Content-Type", "image/"],
+      isImage ? (["starts-with", "$Content-Type", "image/"] as any) : (["eq", "$Content-Type", contentType] as any),
     ],
     Fields: { "Content-Type": contentType },
-    Expires: 60, // 60 seconds
+    Expires: 60,
   });
 
   return NextResponse.json({ data: { url: post.url, fields: post.fields, key, publicUrl: `${process.env.R2_PUBLIC_URL}/${key}` } });

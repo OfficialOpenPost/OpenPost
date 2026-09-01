@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, Suspense, useCallback } from "react";
+import React, { useState, useEffect, useMemo, Suspense, useCallback, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useOpenPostEditor } from "@/components/editor/useOpenPostEditor";
@@ -62,6 +62,14 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
   const effectiveId = initialBlogId || idFromUrl;
 
   const [blogId, setBlogId] = useState<string | null>(effectiveId || null);
+  const blogIdRef = useRef<string | null>(effectiveId || null);
+  const isSavingRef = useRef<boolean>(false);
+  const pendingSaveRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    blogIdRef.current = blogId;
+  }, [blogId]);
+
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
   const [status, setStatus] = useState<"draft" | "published" | "scheduled" | "trash">("draft");
@@ -108,6 +116,7 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
         if (res.data) {
           const post = res.data;
           setBlogId(post.id);
+          blogIdRef.current = post.id;
           setTitle(post.title || "");
           setSlug(post.slug || "untitled");
           setSlugEdited(true);
@@ -258,10 +267,18 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
     }
   };
 
-  // Save handler
+  // Save handler with concurrency lock and immediate blogId reference update
   const save = async (manualLabel?: string) => {
+    if (isSavingRef.current) {
+      pendingSaveRef.current = true;
+      return;
+    }
+
+    isSavingRef.current = true;
     setSaveStatus("saving");
+
     try {
+      const currentBlogId = blogIdRef.current;
       const payload: any = {
         title: title || "Untitled Article",
         slug: slug || "untitled",
@@ -286,8 +303,8 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
       }
 
       let res;
-      if (blogId) {
-        res = await fetch(`/api/blogs/${blogId}`, {
+      if (currentBlogId) {
+        res = await fetch(`/api/blogs/${currentBlogId}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
@@ -306,16 +323,20 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
         throw new Error(jsonRes.error?.message || jsonRes.message || `Failed to save (Status ${res.status})`);
       }
 
-      if (!blogId && jsonRes.data?.id) {
-        setBlogId(jsonRes.data.id);
-        window.history.replaceState({}, "", `/dashboard/editor?id=${jsonRes.data.id}`);
+      // Immediately store returned blog ID in both ref and state
+      if (!currentBlogId && jsonRes.data?.id) {
+        const newId = jsonRes.data.id;
+        blogIdRef.current = newId;
+        setBlogId(newId);
+        window.history.replaceState({}, "", `/dashboard/editor?id=${newId}`);
       }
 
       setSaveStatus("saved");
 
       // Reload revisions
-      if (jsonRes.data?.id || blogId) {
-        fetch(`/api/blogs/${jsonRes.data?.id || blogId}/revisions`)
+      const activeId = currentBlogId || jsonRes.data?.id;
+      if (activeId) {
+        fetch(`/api/blogs/${activeId}/revisions`)
           .then((r) => r.json())
           .then((j) => {
             if (Array.isArray(j.data)) setRevisions(j.data);
@@ -325,6 +346,12 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
     } catch (err) {
       console.error("Save error:", err);
       setSaveStatus("error");
+    } finally {
+      isSavingRef.current = false;
+      if (pendingSaveRef.current) {
+        pendingSaveRef.current = false;
+        save();
+      }
     }
   };
 
@@ -336,12 +363,12 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
     }
   };
 
-  // Debounced auto-save (every 5 seconds of inactivity)
+  // Debounced auto-save (every 4 seconds of inactivity)
   useEffect(() => {
-    if (!title && !editor?.getText()) return;
+    if (!title && !editor?.getText()?.trim()) return;
     const timer = setTimeout(() => {
       save();
-    }, 5000);
+    }, 4000);
     return () => clearTimeout(timer);
   }, [title, html, category, tags, seoTitle, seoDesc, featuredImage, status, scheduledAt]);
 

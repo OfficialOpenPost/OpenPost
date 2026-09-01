@@ -38,6 +38,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
+import { InsertBlockModal, type BlockModalType } from "./InsertBlockModal";
 
 interface ToolbarProps {
   editor: Editor | null;
@@ -79,6 +80,8 @@ function Divider() {
 export function Toolbar({ editor }: ToolbarProps) {
   const [showInsertDropdown, setShowInsertDropdown] = useState(false);
   const [showHeadingsDropdown, setShowHeadingsDropdown] = useState(false);
+  const [activeModal, setActiveModal] = useState<BlockModalType>(null);
+
   const insertMenuRef = useRef<HTMLDivElement>(null);
   const headingsMenuRef = useRef<HTMLDivElement>(null);
 
@@ -97,396 +100,376 @@ export function Toolbar({ editor }: ToolbarProps) {
 
   if (!editor) return null;
 
-  const addImage = async () => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = "image/*";
-    input.onchange = async () => {
-      const file = input.files?.[0];
-      if (!file) return;
-      try {
-        const { uploadImageWithWebP } = await import("@/lib/uploadMedia");
-        const { url } = await uploadImageWithWebP(file);
-        editor.chain().focus().setImage({ src: url }).run();
-      } catch {
-        const url = window.prompt("Upload failed — paste direct image URL:");
-        if (url) editor.chain().focus().setImage({ src: url }).run();
-      }
-    };
-    input.click();
-  };
-
-  const addLink = () => {
-    const previousUrl = editor.getAttributes("link").href;
-    const url = window.prompt("Enter destination URL:", previousUrl || "https://");
-    if (url === null) return;
-    if (url === "") {
-      editor.chain().focus().extendMarkRange("link").unsetLink().run();
-      return;
-    }
-    editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
-  };
-
-  const addTable = () => {
-    editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
-  };
-
-  const insertItems = [
+  const insertItems: Array<{
+    label: string;
+    icon: any;
+    modal: BlockModalType;
+    desc: string;
+  }> = [
     {
-      label: "Image Asset",
+      label: "Image (Upload / Library / URL)",
       icon: ImageIcon,
-      action: () => addImage(),
-      desc: "Upload or insert responsive WebP",
+      modal: "image",
+      desc: "Upload WebP, pick from media, or paste URL",
     },
     {
       label: "Interactive Reader Poll",
       icon: BarChart3,
-      action: () => editor.chain().focus().insertContent("<p>[Poll: Reader survey block]</p>").run(),
-      desc: "Live reader voting with deduplication",
+      modal: "poll",
+      desc: "Create reader poll with live results",
     },
     {
-      label: "Callout Highlight Box",
+      label: "Editorial Callout Box",
       icon: Sparkles,
-      action: () => editor.chain().focus().insertContent('<blockquote data-type="callout">💡 <strong>Pro Tip:</strong> Key editorial callout.</blockquote>').run(),
-      desc: "Highlighted advisory tip or note",
+      modal: "callout",
+      desc: "Tip, Warning, Info, or Success card",
     },
     {
-      label: "Data Table (3×3)",
+      label: "Data Table",
       icon: TableIcon,
-      action: () => addTable(),
-      desc: "Data table with header row",
+      modal: "table",
+      desc: "Customizable row & column grid",
     },
     {
       label: "FAQ Accordion (JSON-LD)",
       icon: HelpCircle,
-      action: () => editor.chain().focus().setFaq({ items: [{ question: "Frequently Asked Question?", answer: "Clear, detailed response." }] }).run(),
-      desc: "Schema.org structured FAQ section",
+      modal: "faq",
+      desc: "Structured schema Q&A section",
     },
     {
-      label: "Collapsible Accordion",
-      icon: Layers,
-      action: () => editor.chain().focus().setAccordion({ items: [{ title: "Collapsible Title", content: "Expandable content details..." }] }).run(),
-      desc: "Expandable toggle section",
-    },
-    {
-      label: "Video Embed",
+      label: "Video Embed (YouTube / Vimeo)",
       icon: Globe,
-      action: () => {
-        const url = window.prompt("Enter YouTube or Vimeo URL:");
-        if (url) editor.chain().focus().insertContent(`<p>[Embed: ${url}]</p>`).run();
-      },
-      desc: "YouTube / Vimeo player embed",
+      modal: "video",
+      desc: "Clean responsive video embed",
     },
     {
       label: "Call-to-Action Button",
       icon: ArrowUpRight,
-      action: () => {
-        const url = window.prompt("Button destination URL:", "https://");
-        const label = window.prompt("Button label:", "Learn More");
-        if (url && label) editor.chain().focus().insertContent(`<p><a href="${url}" class="openpost-button">${label}</a></p>`).run();
-      },
-      desc: "Styled call-to-action button",
+      modal: "button",
+      desc: "Styled link button",
     },
     {
-      label: "File Attachment",
+      label: "Downloadable Resource",
       icon: Download,
-      action: () => {
-        const name = window.prompt("File name (e.g. guide.pdf):", "Report.pdf");
-        if (name) editor.chain().focus().insertContent(`<p>📁 <strong>Download:</strong> ${name}</p>`).run();
-      },
-      desc: "Downloadable PDF / file block",
+      modal: "download",
+      desc: "Attachment file card",
     },
   ];
 
   return (
-    <div className="w-full bg-white border border-border rounded-2xl p-2 shadow-sm">
-      <div className="flex flex-wrap items-center gap-1.5">
-        {/* + Insert Block Dropdown */}
-        <div className="relative shrink-0" ref={insertMenuRef}>
-          <button
-            type="button"
-            onClick={() => setShowInsertDropdown(!showInsertDropdown)}
-            className="flex items-center gap-1.5 rounded-xl bg-brand px-3 py-1.5 text-xs font-bold text-navy hover:bg-brand-hover hover:text-white transition shadow-xs"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            <span>Add Block</span>
-            <ChevronDown className="h-3 w-3 opacity-70" />
-          </button>
+    <>
+      <div className="w-full bg-white border border-border rounded-2xl p-2 shadow-sm">
+        <div className="flex flex-wrap items-center gap-1.5">
+          {/* + Insert Block Dropdown */}
+          <div className="relative shrink-0" ref={insertMenuRef}>
+            <button
+              type="button"
+              onClick={() => setShowInsertDropdown(!showInsertDropdown)}
+              className="flex items-center gap-1.5 rounded-xl bg-brand px-3 py-1.5 text-xs font-bold text-navy hover:bg-brand-hover hover:text-white transition shadow-xs"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              <span>Add Block</span>
+              <ChevronDown className="h-3 w-3 opacity-70" />
+            </button>
 
-          {showInsertDropdown && (
-            <div className="absolute left-0 top-10 z-50 w-72 rounded-2xl border border-border bg-white p-2 shadow-xl animate-in fade-in zoom-in-95">
-              <p className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-text-tertiary">
-                Insert Content Block
-              </p>
-              <div className="space-y-0.5">
-                {insertItems.map((item) => (
-                  <button
-                    key={item.label}
-                    type="button"
-                    onClick={() => {
-                      item.action();
-                      setShowInsertDropdown(false);
-                    }}
-                    className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left hover:bg-surface-raised transition"
-                  >
-                    <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand/15 text-navy shrink-0">
-                      <item.icon className="h-3.5 w-3.5" />
-                    </span>
-                    <div>
-                      <p className="text-xs font-bold text-navy">{item.label}</p>
-                      <p className="text-[11px] text-text-tertiary">{item.desc}</p>
-                    </div>
-                  </button>
-                ))}
+            {showInsertDropdown && (
+              <div className="absolute left-0 top-10 z-50 w-72 rounded-2xl border border-border bg-white p-2 shadow-xl animate-in fade-in zoom-in-95">
+                <p className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-text-tertiary">
+                  Insert Content Block
+                </p>
+                <div className="space-y-0.5">
+                  {insertItems.map((item) => (
+                    <button
+                      key={item.label}
+                      type="button"
+                      onClick={() => {
+                        setActiveModal(item.modal);
+                        setShowInsertDropdown(false);
+                      }}
+                      className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left hover:bg-surface-raised transition"
+                    >
+                      <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand/15 text-navy shrink-0">
+                        <item.icon className="h-3.5 w-3.5" />
+                      </span>
+                      <div>
+                        <p className="text-xs font-bold text-navy">{item.label}</p>
+                        <p className="text-[11px] text-text-tertiary">{item.desc}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
 
-        <Divider />
+          <Divider />
 
-        {/* Headings Selector */}
-        <div className="relative shrink-0" ref={headingsMenuRef}>
-          <button
-            type="button"
-            onClick={() => setShowHeadingsDropdown(!showHeadingsDropdown)}
-            className="flex items-center gap-1 rounded-xl border border-border bg-surface-dim px-2.5 py-1.5 text-xs font-bold text-navy hover:bg-surface-raised transition"
-          >
-            <span>
-              {editor.isActive("heading", { level: 1 })
-                ? "Heading 1"
-                : editor.isActive("heading", { level: 2 })
-                ? "Heading 2"
-                : editor.isActive("heading", { level: 3 })
-                ? "Heading 3"
-                : editor.isActive("heading", { level: 4 })
-                ? "Heading 4"
-                : "Paragraph"}
-            </span>
-            <ChevronDown className="h-3 w-3 opacity-60" />
-          </button>
+          {/* Headings Selector */}
+          <div className="relative shrink-0" ref={headingsMenuRef}>
+            <button
+              type="button"
+              onClick={() => setShowHeadingsDropdown(!showHeadingsDropdown)}
+              className="flex items-center gap-1 rounded-xl border border-border bg-surface-dim px-2.5 py-1.5 text-xs font-bold text-navy hover:bg-surface-raised transition"
+            >
+              <span>
+                {editor.isActive("heading", { level: 1 })
+                  ? "Heading 1"
+                  : editor.isActive("heading", { level: 2 })
+                  ? "Heading 2"
+                  : editor.isActive("heading", { level: 3 })
+                  ? "Heading 3"
+                  : editor.isActive("heading", { level: 4 })
+                  ? "Heading 4"
+                  : "Paragraph"}
+              </span>
+              <ChevronDown className="h-3 w-3 opacity-60" />
+            </button>
 
-          {showHeadingsDropdown && (
-            <div className="absolute left-0 top-10 z-50 w-44 rounded-xl border border-border bg-white p-1.5 shadow-xl animate-in fade-in">
-              <button
-                type="button"
-                onClick={() => {
-                  editor.chain().focus().setParagraph().run();
-                  setShowHeadingsDropdown(false);
-                }}
-                className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-medium text-left ${
-                  editor.isActive("paragraph") ? "bg-brand/20 font-bold text-navy" : "text-navy hover:bg-surface-raised"
-                }`}
-              >
-                Paragraph
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  editor.chain().focus().toggleHeading({ level: 1 }).run();
-                  setShowHeadingsDropdown(false);
-                }}
-                className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-medium text-left ${
-                  editor.isActive("heading", { level: 1 }) ? "bg-brand/20 font-bold text-navy" : "text-navy hover:bg-surface-raised"
-                }`}
-              >
-                <Heading1 className="h-3.5 w-3.5" /> Heading 1
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  editor.chain().focus().toggleHeading({ level: 2 }).run();
-                  setShowHeadingsDropdown(false);
-                }}
-                className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-medium text-left ${
-                  editor.isActive("heading", { level: 2 }) ? "bg-brand/20 font-bold text-navy" : "text-navy hover:bg-surface-raised"
-                }`}
-              >
-                <Heading2 className="h-3.5 w-3.5" /> Heading 2
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  editor.chain().focus().toggleHeading({ level: 3 }).run();
-                  setShowHeadingsDropdown(false);
-                }}
-                className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-medium text-left ${
-                  editor.isActive("heading", { level: 3 }) ? "bg-brand/20 font-bold text-navy" : "text-navy hover:bg-surface-raised"
-                }`}
-              >
-                <Heading3 className="h-3.5 w-3.5" /> Heading 3
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  editor.chain().focus().toggleHeading({ level: 4 }).run();
-                  setShowHeadingsDropdown(false);
-                }}
-                className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-medium text-left ${
-                  editor.isActive("heading", { level: 4 }) ? "bg-brand/20 font-bold text-navy" : "text-navy hover:bg-surface-raised"
-                }`}
-              >
-                <Heading4 className="h-3.5 w-3.5" /> Heading 4
-              </button>
-            </div>
-          )}
-        </div>
+            {showHeadingsDropdown && (
+              <div className="absolute left-0 top-10 z-50 w-44 rounded-xl border border-border bg-white p-1.5 shadow-xl animate-in fade-in">
+                <button
+                  type="button"
+                  onClick={() => {
+                    editor.chain().focus().setParagraph().run();
+                    setShowHeadingsDropdown(false);
+                  }}
+                  className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-medium text-left ${
+                    editor.isActive("paragraph") ? "bg-brand/20 font-bold text-navy" : "text-navy hover:bg-surface-raised"
+                  }`}
+                >
+                  Paragraph
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    editor.chain().focus().toggleHeading({ level: 1 }).run();
+                    setShowHeadingsDropdown(false);
+                  }}
+                  className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-medium text-left ${
+                    editor.isActive("heading", { level: 1 }) ? "bg-brand/20 font-bold text-navy" : "text-navy hover:bg-surface-raised"
+                  }`}
+                >
+                  <Heading1 className="h-3.5 w-3.5" /> Heading 1
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    editor.chain().focus().toggleHeading({ level: 2 }).run();
+                    setShowHeadingsDropdown(false);
+                  }}
+                  className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-medium text-left ${
+                    editor.isActive("heading", { level: 2 }) ? "bg-brand/20 font-bold text-navy" : "text-navy hover:bg-surface-raised"
+                  }`}
+                >
+                  <Heading2 className="h-3.5 w-3.5" /> Heading 2
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    editor.chain().focus().toggleHeading({ level: 3 }).run();
+                    setShowHeadingsDropdown(false);
+                  }}
+                  className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-medium text-left ${
+                    editor.isActive("heading", { level: 3 }) ? "bg-brand/20 font-bold text-navy" : "text-navy hover:bg-surface-raised"
+                  }`}
+                >
+                  <Heading3 className="h-3.5 w-3.5" /> Heading 3
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    editor.chain().focus().toggleHeading({ level: 4 }).run();
+                    setShowHeadingsDropdown(false);
+                  }}
+                  className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs font-medium text-left ${
+                    editor.isActive("heading", { level: 4 }) ? "bg-brand/20 font-bold text-navy" : "text-navy hover:bg-surface-raised"
+                  }`}
+                >
+                  <Heading4 className="h-3.5 w-3.5" /> Heading 4
+                </button>
+              </div>
+            )}
+          </div>
 
-        <Divider />
+          <Divider />
 
-        {/* Text Styling */}
-        <div className="flex items-center gap-1 shrink-0">
-          <ToolbarButton
-            active={editor.isActive("bold")}
-            onClick={() => editor.chain().focus().toggleBold().run()}
-            title="Bold (Ctrl+B)"
-          >
-            <Bold className="h-3.5 w-3.5" />
-          </ToolbarButton>
-          <ToolbarButton
-            active={editor.isActive("italic")}
-            onClick={() => editor.chain().focus().toggleItalic().run()}
-            title="Italic (Ctrl+I)"
-          >
-            <Italic className="h-3.5 w-3.5" />
-          </ToolbarButton>
-          <ToolbarButton
-            active={editor.isActive("underline")}
-            onClick={() => editor.chain().focus().toggleUnderline().run()}
-            title="Underline (Ctrl+U)"
-          >
-            <UnderlineIcon className="h-3.5 w-3.5" />
-          </ToolbarButton>
-          <ToolbarButton
-            active={editor.isActive("strike")}
-            onClick={() => editor.chain().focus().toggleStrike().run()}
-            title="Strikethrough"
-          >
-            <Strikethrough className="h-3.5 w-3.5" />
-          </ToolbarButton>
-          <ToolbarButton
-            active={editor.isActive("highlight")}
-            onClick={() => editor.chain().focus().toggleHighlight().run()}
-            title="Highlight"
-          >
-            <Highlighter className="h-3.5 w-3.5" />
-          </ToolbarButton>
-          <ToolbarButton
-            onClick={() => editor.chain().focus().unsetAllMarks().clearNodes().run()}
-            title="Clear Formatting"
-          >
-            <RemoveFormatting className="h-3.5 w-3.5" />
-          </ToolbarButton>
-        </div>
+          {/* Text Styling */}
+          <div className="flex items-center gap-1 shrink-0">
+            <ToolbarButton
+              active={editor.isActive("bold")}
+              onClick={() => editor.chain().focus().toggleBold().run()}
+              title="Bold (Ctrl+B)"
+            >
+              <Bold className="h-3.5 w-3.5" />
+            </ToolbarButton>
+            <ToolbarButton
+              active={editor.isActive("italic")}
+              onClick={() => editor.chain().focus().toggleItalic().run()}
+              title="Italic (Ctrl+I)"
+            >
+              <Italic className="h-3.5 w-3.5" />
+            </ToolbarButton>
+            <ToolbarButton
+              active={editor.isActive("underline")}
+              onClick={() => editor.chain().focus().toggleUnderline().run()}
+              title="Underline (Ctrl+U)"
+            >
+              <UnderlineIcon className="h-3.5 w-3.5" />
+            </ToolbarButton>
+            <ToolbarButton
+              active={editor.isActive("strike")}
+              onClick={() => editor.chain().focus().toggleStrike().run()}
+              title="Strikethrough"
+            >
+              <Strikethrough className="h-3.5 w-3.5" />
+            </ToolbarButton>
+            <ToolbarButton
+              active={editor.isActive("highlight")}
+              onClick={() => editor.chain().focus().toggleHighlight().run()}
+              title="Highlight Text"
+            >
+              <Highlighter className="h-3.5 w-3.5" />
+            </ToolbarButton>
+            <ToolbarButton
+              onClick={() => editor.chain().focus().unsetAllMarks().clearNodes().run()}
+              title="Clear Formatting"
+            >
+              <RemoveFormatting className="h-3.5 w-3.5" />
+            </ToolbarButton>
+          </div>
 
-        <Divider />
+          <Divider />
 
-        {/* Text Alignment */}
-        <div className="flex items-center gap-1 shrink-0">
-          <ToolbarButton
-            active={editor.isActive({ textAlign: "left" })}
-            onClick={() => editor.chain().focus().setTextAlign("left").run()}
-            title="Align Left"
-          >
-            <AlignLeft className="h-3.5 w-3.5" />
-          </ToolbarButton>
-          <ToolbarButton
-            active={editor.isActive({ textAlign: "center" })}
-            onClick={() => editor.chain().focus().setTextAlign("center").run()}
-            title="Align Center"
-          >
-            <AlignCenter className="h-3.5 w-3.5" />
-          </ToolbarButton>
-          <ToolbarButton
-            active={editor.isActive({ textAlign: "right" })}
-            onClick={() => editor.chain().focus().setTextAlign("right").run()}
-            title="Align Right"
-          >
-            <AlignRight className="h-3.5 w-3.5" />
-          </ToolbarButton>
-          <ToolbarButton
-            active={editor.isActive({ textAlign: "justify" })}
-            onClick={() => editor.chain().focus().setTextAlign("justify").run()}
-            title="Justify"
-          >
-            <AlignJustify className="h-3.5 w-3.5" />
-          </ToolbarButton>
-        </div>
+          {/* Text Alignment */}
+          <div className="flex items-center gap-1 shrink-0">
+            <ToolbarButton
+              active={editor.isActive({ textAlign: "left" })}
+              onClick={() => editor.chain().focus().setTextAlign("left").run()}
+              title="Align Left"
+            >
+              <AlignLeft className="h-3.5 w-3.5" />
+            </ToolbarButton>
+            <ToolbarButton
+              active={editor.isActive({ textAlign: "center" })}
+              onClick={() => editor.chain().focus().setTextAlign("center").run()}
+              title="Align Center"
+            >
+              <AlignCenter className="h-3.5 w-3.5" />
+            </ToolbarButton>
+            <ToolbarButton
+              active={editor.isActive({ textAlign: "right" })}
+              onClick={() => editor.chain().focus().setTextAlign("right").run()}
+              title="Align Right"
+            >
+              <AlignRight className="h-3.5 w-3.5" />
+            </ToolbarButton>
+            <ToolbarButton
+              active={editor.isActive({ textAlign: "justify" })}
+              onClick={() => editor.chain().focus().setTextAlign("justify").run()}
+              title="Justify"
+            >
+              <AlignJustify className="h-3.5 w-3.5" />
+            </ToolbarButton>
+          </div>
 
-        <Divider />
+          <Divider />
 
-        {/* Lists & Quotes */}
-        <div className="flex items-center gap-1 shrink-0">
-          <ToolbarButton
-            active={editor.isActive("bulletList")}
-            onClick={() => editor.chain().focus().toggleBulletList().run()}
-            title="Bullet List"
-          >
-            <List className="h-3.5 w-3.5" />
-          </ToolbarButton>
-          <ToolbarButton
-            active={editor.isActive("orderedList")}
-            onClick={() => editor.chain().focus().toggleOrderedList().run()}
-            title="Numbered List"
-          >
-            <ListOrdered className="h-3.5 w-3.5" />
-          </ToolbarButton>
-          <ToolbarButton
-            active={editor.isActive("taskList")}
-            onClick={() => editor.chain().focus().toggleTaskList().run()}
-            title="Task Checklist"
-          >
-            <ListChecks className="h-3.5 w-3.5" />
-          </ToolbarButton>
-          <ToolbarButton
-            active={editor.isActive("blockquote")}
-            onClick={() => editor.chain().focus().toggleBlockquote().run()}
-            title="Blockquote"
-          >
-            <Quote className="h-3.5 w-3.5" />
-          </ToolbarButton>
-        </div>
+          {/* Lists & Quotes */}
+          <div className="flex items-center gap-1 shrink-0">
+            <ToolbarButton
+              active={editor.isActive("bulletList")}
+              onClick={() => editor.chain().focus().toggleBulletList().run()}
+              title="Bullet List"
+            >
+              <List className="h-3.5 w-3.5" />
+            </ToolbarButton>
+            <ToolbarButton
+              active={editor.isActive("orderedList")}
+              onClick={() => editor.chain().focus().toggleOrderedList().run()}
+              title="Numbered List"
+            >
+              <ListOrdered className="h-3.5 w-3.5" />
+            </ToolbarButton>
+            <ToolbarButton
+              active={editor.isActive("taskList")}
+              onClick={() => editor.chain().focus().toggleTaskList().run()}
+              title="Task Checklist"
+            >
+              <ListChecks className="h-3.5 w-3.5" />
+            </ToolbarButton>
+            <ToolbarButton
+              active={editor.isActive("blockquote")}
+              onClick={() => editor.chain().focus().toggleBlockquote().run()}
+              title="Blockquote"
+            >
+              <Quote className="h-3.5 w-3.5" />
+            </ToolbarButton>
+          </div>
 
-        <Divider />
+          <Divider />
 
-        {/* Block Insertions */}
-        <div className="flex items-center gap-1 shrink-0">
-          <ToolbarButton onClick={addLink} active={editor.isActive("link")} title="Insert Link (Ctrl+K)">
-            <Link2 className="h-3.5 w-3.5" />
-          </ToolbarButton>
-          <ToolbarButton onClick={addImage} title="Upload Image Asset">
-            <ImageIcon className="h-3.5 w-3.5" />
-          </ToolbarButton>
-          <ToolbarButton onClick={addTable} title="Insert Table (3×3)">
-            <TableIcon className="h-3.5 w-3.5" />
-          </ToolbarButton>
-          <ToolbarButton
-            onClick={() => editor.chain().focus().setHorizontalRule().run()}
-            title="Horizontal Divider"
-          >
-            <Minus className="h-3.5 w-3.5" />
-          </ToolbarButton>
-          <ToolbarButton
-            active={editor.isActive("codeBlock")}
-            onClick={() => editor.chain().focus().toggleCodeBlock().run()}
-            title="Syntax Code Block"
-          >
-            <Code2 className="h-3.5 w-3.5" />
-          </ToolbarButton>
-        </div>
+          {/* Direct Visual Block Insertions (Triggering Modals) */}
+          <div className="flex items-center gap-1 shrink-0">
+            <ToolbarButton
+              onClick={() => setActiveModal("image")}
+              title="Insert Image (Upload / URL / Media Library)"
+            >
+              <ImageIcon className="h-3.5 w-3.5 text-brand" />
+            </ToolbarButton>
+            <ToolbarButton
+              onClick={() => setActiveModal("poll")}
+              title="Insert Interactive Poll"
+            >
+              <BarChart3 className="h-3.5 w-3.5 text-blue-600" />
+            </ToolbarButton>
+            <ToolbarButton
+              onClick={() => setActiveModal("callout")}
+              title="Insert Callout Box"
+            >
+              <Sparkles className="h-3.5 w-3.5 text-amber-600" />
+            </ToolbarButton>
+            <ToolbarButton
+              onClick={() => setActiveModal("table")}
+              title="Insert Table Grid"
+            >
+              <TableIcon className="h-3.5 w-3.5 text-emerald-600" />
+            </ToolbarButton>
+            <ToolbarButton
+              onClick={() => editor.chain().focus().setHorizontalRule().run()}
+              title="Horizontal Divider"
+            >
+              <Minus className="h-3.5 w-3.5" />
+            </ToolbarButton>
+            <ToolbarButton
+              active={editor.isActive("codeBlock")}
+              onClick={() => editor.chain().focus().toggleCodeBlock().run()}
+              title="Syntax Code Block"
+            >
+              <Code2 className="h-3.5 w-3.5" />
+            </ToolbarButton>
+          </div>
 
-        <Divider />
+          <Divider />
 
-        {/* Undo / Redo */}
-        <div className="flex items-center gap-1 shrink-0 ml-auto">
-          <ToolbarButton onClick={() => editor.chain().focus().undo().run()} title="Undo (Ctrl+Z)">
-            <Undo2 className="h-3.5 w-3.5" />
-          </ToolbarButton>
-          <ToolbarButton onClick={() => editor.chain().focus().redo().run()} title="Redo (Ctrl+Y)">
-            <Redo2 className="h-3.5 w-3.5" />
-          </ToolbarButton>
+          {/* Undo / Redo */}
+          <div className="flex items-center gap-1 shrink-0 ml-auto">
+            <ToolbarButton onClick={() => editor.chain().focus().undo().run()} title="Undo (Ctrl+Z)">
+              <Undo2 className="h-3.5 w-3.5" />
+            </ToolbarButton>
+            <ToolbarButton onClick={() => editor.chain().focus().redo().run()} title="Redo (Ctrl+Y)">
+              <Redo2 className="h-3.5 w-3.5" />
+            </ToolbarButton>
+          </div>
         </div>
       </div>
-    </div>
+
+      {/* High-Quality Visual Insert Modal */}
+      <InsertBlockModal
+        type={activeModal}
+        isOpen={Boolean(activeModal)}
+        onClose={() => setActiveModal(null)}
+        editor={editor}
+      />
+    </>
   );
 }

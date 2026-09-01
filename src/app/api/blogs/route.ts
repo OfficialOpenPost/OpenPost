@@ -9,12 +9,12 @@ const createSchema = z.object({
   slug: z.string().min(1).max(100),
   content: z.any(),
   status: z.enum(["draft", "published", "scheduled", "trash"]).optional(),
-  projectId: z.string().uuid().nullable().optional(),
-  categoryId: z.string().uuid().nullable().optional(),
+  projectId: z.string().nullable().optional(),
+  categoryId: z.string().nullable().optional(),
   scheduledAt: z.string().nullable().optional(),
   seo: z.any().optional(),
   updatedAt: z.string().optional(),
-  id: z.string().uuid().optional(),
+  id: z.string().nullable().optional(),
 });
 
 function extractMediaUrls(content: any): string[] {
@@ -111,8 +111,24 @@ export async function POST(req: NextRequest) {
     }
     let { title, slug, content, status = "draft", projectId, categoryId, scheduledAt, seo, updatedAt, id } = parsed.data as any;
 
+    // Sanitize empty strings
+    if (!categoryId || typeof categoryId !== "string" || categoryId.trim() === "") categoryId = null;
+    if (!projectId || typeof projectId !== "string" || projectId.trim() === "") projectId = null;
+    if (!id || typeof id !== "string" || id.trim() === "" || id === "new-post") id = undefined;
+
     if (scheduledAt && new Date(scheduledAt) > new Date()) status = "scheduled";
     else if (status === "scheduled" && (!scheduledAt || new Date(scheduledAt) <= new Date())) status = "draft";
+
+    // Verify foreign key references before insert/update
+    if (categoryId) {
+      const cat = await db.category.findUnique({ where: { id: categoryId } as never }).catch(() => null);
+      if (!cat) categoryId = null;
+    }
+
+    if (projectId) {
+      const proj = await db.project.findUnique({ where: { id: projectId } as never }).catch(() => null);
+      if (!proj) projectId = null;
+    }
 
     // 1. If ID provided → update existing post
     if (id) {
@@ -193,7 +209,7 @@ export async function POST(req: NextRequest) {
   } catch (error: any) {
     console.error("Failed to save blog:", error);
     return NextResponse.json(
-      { error: { code: "SAVE_FAILED", message: String(error.message ?? error) } },
+      { error: { code: "SAVE_FAILED", message: String(error?.message ?? error) } },
       { status: 500 }
     );
   }

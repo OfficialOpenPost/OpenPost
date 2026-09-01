@@ -10,7 +10,6 @@ import {
   AlignRight,
   Maximize2,
   GripVertical,
-  Sliders,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -29,7 +28,6 @@ export function ImageCardView({
     width = "100%",
   } = node.attrs;
   const [editing, setEditing] = useState(!src);
-  const [showSizeControls, setShowSizeControls] = useState(false);
 
   if (editing || !src) {
     return (
@@ -98,27 +96,52 @@ export function ImageCardView({
 
   const sizePresets = ["25%", "50%", "75%", "100%"];
 
-  // Drag-to-resize handle (Right side)
+  // Drag-to-resize from Right edge/corners
   const onResizeRight = (e: React.MouseEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     const startX = e.clientX;
     const currentNum = parseInt(String(width).replace("%", "")) || 100;
+
     const onMove = (ev: MouseEvent) => {
-      const deltaPercent = ((ev.clientX - startX) / (window.innerWidth * 0.5)) * 100;
-      const next = Math.min(100, Math.max(20, currentNum + deltaPercent));
+      const deltaPercent = ((ev.clientX - startX) / (window.innerWidth * 0.45)) * 100;
+      const next = Math.min(100, Math.max(15, currentNum + deltaPercent));
       updateAttributes({ width: `${Math.round(next)}%` });
     };
+
     const onUp = () => {
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
     };
+
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  };
+
+  // Drag-to-resize from Left edge/corners
+  const onResizeLeft = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.clientX;
+    const currentNum = parseInt(String(width).replace("%", "")) || 100;
+
+    const onMove = (ev: MouseEvent) => {
+      const deltaPercent = ((startX - ev.clientX) / (window.innerWidth * 0.45)) * 100;
+      const next = Math.min(100, Math.max(15, currentNum + deltaPercent));
+      updateAttributes({ width: `${Math.round(next)}%` });
+    };
+
+    const onUp = () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
   };
 
   const wrapperClass = `image-align-${layout}`;
 
-  // Parse width safely
   const currentWidthVal = width || "100%";
   const widthStyle =
     layout === "left" || layout === "right"
@@ -133,19 +156,21 @@ export function ImageCardView({
       data-drag-handle
     >
       <div
-        className={`group relative overflow-hidden rounded-2xl border bg-white shadow-xs transition ${
-          selected ? "border-brand ring-2 ring-brand/40" : "border-border"
+        className={`group relative rounded-2xl border bg-white shadow-xs transition select-none ${
+          selected
+            ? "border-brand ring-2 ring-brand/50"
+            : "border-border hover:border-brand/40"
         }`}
         style={widthStyle as any}
       >
-        {/* Hover Toolbar (Top Overlay) */}
-        <div className="absolute top-2 left-2 right-2 z-20 flex flex-wrap items-center justify-between gap-1.5 opacity-0 group-hover:opacity-100 transition duration-150">
-          {/* Word-like Drag Handle */}
+        {/* Top Control Bar on Hover */}
+        <div className="absolute top-2.5 left-2.5 right-2.5 z-20 flex flex-wrap items-center justify-between gap-1.5 opacity-0 group-hover:opacity-100 transition duration-150">
+          {/* Word-like Drag Move Handle */}
           <div
             draggable
             data-drag-handle
             className="flex items-center gap-1.5 rounded-full bg-white/95 backdrop-blur-md px-2.5 py-1 text-xs font-bold text-navy border border-border shadow-xs cursor-grab active:cursor-grabbing select-none"
-            title="Drag to reposition image anywhere in article"
+            title="Drag to reposition image anywhere in text"
           >
             <GripVertical className="h-3.5 w-3.5 text-brand" />
             <span>Move</span>
@@ -204,8 +229,8 @@ export function ImageCardView({
           </button>
         </div>
 
-        {/* Image Content Container */}
-        <div className="relative bg-[#FAFAFA] flex items-center justify-center">
+        {/* Image Display Area with Square Resize Blocks */}
+        <div className="relative bg-[#FAFAFA] flex items-center justify-center overflow-visible">
           <img
             src={src}
             alt={alt || ""}
@@ -214,23 +239,51 @@ export function ImageCardView({
             draggable={false}
           />
 
-          {/* Large Resize Corner Handle (Bottom Right) */}
-          <div
-            onMouseDown={onResizeRight}
-            className="absolute bottom-2 right-2 flex h-8 w-8 cursor-nwse-resize items-center justify-center rounded-xl bg-white/95 backdrop-blur-md border border-border shadow-md opacity-0 group-hover:opacity-100 hover:bg-brand hover:text-white transition select-none"
-            title="Drag to dynamically resize width"
-          >
-            <span className="text-xs font-black">↘</span>
-          </div>
+          {/* ======================================================== */}
+          {/* VISIBLE SQUARE RESIZE BLOCKS (Figma / Word / Canva style) */}
+          {/* ======================================================== */}
 
-          {/* Left Resize Handle */}
+          {/* 1. Top-Left Square Block */}
+          <div
+            onMouseDown={onResizeLeft}
+            className="absolute -top-1.5 -left-1.5 h-3.5 w-3.5 bg-white border-2 border-brand shadow-md z-30 cursor-nwse-resize rounded-xs hover:scale-125 hover:bg-brand transition-transform select-none"
+            title="Drag to resize"
+          />
+
+          {/* 2. Top-Right Square Block */}
           <div
             onMouseDown={onResizeRight}
-            className="absolute bottom-2 left-2 flex h-8 w-8 cursor-nesw-resize items-center justify-center rounded-xl bg-white/95 backdrop-blur-md border border-border shadow-md opacity-0 group-hover:opacity-100 hover:bg-brand hover:text-white transition select-none"
+            className="absolute -top-1.5 -right-1.5 h-3.5 w-3.5 bg-white border-2 border-brand shadow-md z-30 cursor-nesw-resize rounded-xs hover:scale-125 hover:bg-brand transition-transform select-none"
+            title="Drag to resize"
+          />
+
+          {/* 3. Bottom-Left Square Block */}
+          <div
+            onMouseDown={onResizeLeft}
+            className="absolute -bottom-1.5 -left-1.5 h-3.5 w-3.5 bg-white border-2 border-brand shadow-md z-30 cursor-nesw-resize rounded-xs hover:scale-125 hover:bg-brand transition-transform select-none"
+            title="Drag to resize"
+          />
+
+          {/* 4. Bottom-Right Square Block */}
+          <div
+            onMouseDown={onResizeRight}
+            className="absolute -bottom-1.5 -right-1.5 h-3.5 w-3.5 bg-white border-2 border-brand shadow-md z-30 cursor-nwse-resize rounded-xs hover:scale-125 hover:bg-brand transition-transform select-none"
+            title="Drag to resize"
+          />
+
+          {/* 5. Middle-Left Square Block */}
+          <div
+            onMouseDown={onResizeLeft}
+            className="absolute top-1/2 -left-1.5 -translate-y-1/2 h-3.5 w-3.5 bg-white border-2 border-brand shadow-md z-30 cursor-ew-resize rounded-xs hover:scale-125 hover:bg-brand transition-transform select-none"
             title="Drag to resize width"
-          >
-            <span className="text-xs font-black">↙</span>
-          </div>
+          />
+
+          {/* 6. Middle-Right Square Block */}
+          <div
+            onMouseDown={onResizeRight}
+            className="absolute top-1/2 -right-1.5 -translate-y-1/2 h-3.5 w-3.5 bg-white border-2 border-brand shadow-md z-30 cursor-ew-resize rounded-xs hover:scale-125 hover:bg-brand transition-transform select-none"
+            title="Drag to resize width"
+          />
         </div>
 
         {/* Caption & Alt Info Bar */}
@@ -241,7 +294,7 @@ export function ImageCardView({
             onChange={(e) => updateAttributes({ caption: e.target.value })}
             className="flex-1 bg-transparent text-navy italic placeholder:text-text-tertiary focus:outline-none text-xs"
           />
-          <span className="text-[10px] font-bold text-text-tertiary font-mono shrink-0 bg-white border border-border px-2 py-0.5 rounded-md">
+          <span className="text-[10px] font-bold text-text-tertiary font-mono shrink-0 bg-white border border-border px-2 py-0.5 rounded-md shadow-2xs">
             Width: {width || "100%"}
           </span>
         </div>

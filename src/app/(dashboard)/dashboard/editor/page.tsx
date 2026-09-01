@@ -21,6 +21,7 @@ import {
   CheckCircle2,
   AlertCircle,
   Clock,
+  Save,
 } from "lucide-react";
 
 interface EditorPageProps {
@@ -459,6 +460,17 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
             className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-white px-3 py-1.5 text-xs font-bold text-navy hover:bg-surface-raised transition shadow-xs"
           >
             <Eye className="h-3.5 w-3.5 text-text-tertiary" /> Preview
+          </button>
+
+          <button
+            onClick={async () => {
+              setStatus("draft");
+              await save("Saved draft");
+            }}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-white px-3 py-1.5 text-xs font-bold text-navy hover:bg-surface-raised transition shadow-xs"
+            title="Save as Draft"
+          >
+            <Save className="h-3.5 w-3.5 text-text-tertiary" /> Save Draft
           </button>
 
           <button

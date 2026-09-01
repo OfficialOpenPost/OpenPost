@@ -16,6 +16,8 @@ enum UserRole {
   editor // legacy
   author // legacy
   contributor // legacy
+
+  @@map("user_role")
 }
 
 enum PostStatus {
@@ -24,23 +26,31 @@ enum PostStatus {
   scheduled
   archived
   trash
+
+  @@map("post_status")
 }
 
 enum PollType {
   single
   multiple
+
+  @@map("poll_type")
 }
 
 enum PollStatus {
   draft
   open
   closed
+
+  @@map("poll_status")
 }
 
 enum PollResultsVisibility {
   always
   after_vote
   after_close
+
+  @@map("poll_results_visibility")
 }
 
 enum ProfileStatus {
@@ -48,6 +58,8 @@ enum ProfileStatus {
   approved
   rejected
   suspended
+
+  @@map("profile_status")
 }
 
 model User {

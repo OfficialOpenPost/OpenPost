@@ -20,9 +20,11 @@ export async function GET(req: NextRequest) {
       take: limit,
       select: { id: true, originalFilename: true, mimeType: true, sizeBytes: true, width: true, height: true, variants: true, altTextDefault: true, createdAt: true } as never,
     });
-    // Attach publicUrl from variants or construct from env
+    // Attach publicUrl from variants — also serialize BigInt
     const withUrl = (data as any[]).map((m) => ({
       ...m,
+      sizeBytes: m.sizeBytes ? Number(m.sizeBytes) : m.sizeBytes,
+      sizeBytesRaw: m.sizeBytes ? m.sizeBytes.toString() : null,
       url: (m.variants as any)?.publicUrl ?? (m.variants as any)?.webp?.url ?? null,
       name: m.originalFilename,
       size: m.sizeBytes ? `${(Number(m.sizeBytes) / 1024).toFixed(1)} KB` : "-",
@@ -90,7 +92,7 @@ export async function POST(req: NextRequest) {
       variants.webp = { url: publicUrl, key, size: sizeBytes };
     }
 
-    const media = await db.media.create({
+    const media: any = await db.media.create({
       data: {
         originalFilename,
         mimeType,
@@ -104,7 +106,9 @@ export async function POST(req: NextRequest) {
       } as never,
     });
 
-    return NextResponse.json({ data: media }, { status: 201 });
+    // Serialize BigInt for JSON
+    const serialized = { ...media, sizeBytes: media.sizeBytes ? Number(media.sizeBytes) : media.sizeBytes };
+    return NextResponse.json({ data: serialized }, { status: 201 });
   } catch (e) {
     console.error(e);
     return NextResponse.json({ error: { code: "DB_ERROR", message: String(e) } }, { status: 500 });

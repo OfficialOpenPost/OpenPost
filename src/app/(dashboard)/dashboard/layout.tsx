@@ -25,28 +25,39 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-[#F0F0F1] flex">
-      <aside className="hidden md:flex w-64 shrink-0 flex-col border-r border-[#C3C4C7] bg-white shadow-sm fixed left-0 top-16 h-[calc(100vh-4rem)] overflow-y-auto z-20">
-        <div className="flex h-10 items-center px-6 mt-2">
-          <span className="text-xs font-bold tracking-widest text-text-tertiary uppercase">Menu</span>
+      <aside className="hidden md:flex w-80 shrink-0 flex-col border-r border-border bg-white fixed left-0 top-16 h-[calc(100vh-4rem)] overflow-y-auto z-20 shadow-[1px_0_0_0_rgba(0,0,0,0.02)]">
+        <div className="flex h-12 items-center px-5 border-b border-border">
+          <img src="/logo.svg" alt="OpenPost" className="h-7 w-7" />
+          <span className="ml-2 text-sm font-bold tracking-tight text-navy">Open<span className="text-[#FEA611]">Post</span></span>
+          <span className="ml-auto rounded-full bg-[#FEA611]/10 px-2 py-0.5 text-[10px] font-bold text-[#2D3440]">CMS</span>
         </div>
-        <nav className="flex-1 p-4 space-y-1 overflow-auto">
+        <div className="px-4 py-3">
+          <span className="text-[11px] font-bold tracking-widest text-text-tertiary uppercase">Menu</span>
+        </div>
+        <nav className="flex-1 px-3 space-y-1 overflow-auto pb-4">
           {nav.map((item) => {
             const isActive = item.href === "/dashboard" ? pathname === "/dashboard" : pathname === item.href || pathname?.startsWith(item.href + "/");
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition ${isActive ? "bg-navy text-white" : "text-text-secondary hover:bg-[#F0F0F1] hover:text-navy"}`}
+                className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${isActive ? "bg-[#2D3440] text-white shadow-sm" : "text-text-secondary hover:bg-[#F0F0F1] hover:text-navy"}`}
               >
-                <item.icon className="h-4 w-4" />
+                <item.icon className={`h-4 w-4 ${isActive ? "text-[#FEA611]" : ""}`} />
                 {item.label}
               </Link>
             );
           })}
         </nav>
+        <div className="p-3 border-t border-border">
+          <Link href="/dashboard/editor" className="flex items-center justify-center gap-2 rounded-xl bg-[#FEA611] px-4 py-2.5 text-sm font-bold text-[#2D3440] hover:bg-[#FE990E] transition">
+            <PenLine className="h-4 w-4" /> New Post
+          </Link>
+          <p className="mt-2 text-center text-[11px] text-text-tertiary">320px fixed · top nav pinned</p>
+        </div>
 
       </aside>
-      <div className="flex-1 min-w-0 flex flex-col md:ml-64">
+      <div className="flex-1 min-w-0 flex flex-col md:ml-80">
         <header className="flex h-16 items-center justify-between border-b border-[#C3C4C7] bg-white px-6 md:hidden shrink-0">
           <Link href="/dashboard" className="flex items-center gap-2">
             <img src="/logo.svg" alt="OpenPost" className="h-8 w-8" />

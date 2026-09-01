@@ -31,10 +31,22 @@ import {
   ArrowUpRight,
   Zap,
   Shield,
+  PenLine,
 } from "lucide-react";
 import { FadeIn, Stagger, StaggerItem, ScaleIn } from "@/components/motion";
+import { useState, useEffect } from "react";
 
 export default function Home() {
+  const [recent, setRecent] = useState<Array<{ id: string; title: string; slug: string; publishedAt?: string; readingTime?: number; category?: string }>>([]);
+  const [statsReal, setStatsReal] = useState<{ posts: number; categories: number } | null>(null);
+  useEffect(() => {
+    fetch("/api/v1/posts?limit=6").then(r=>r.json()).then(j=>{ if(Array.isArray(j.data)) setRecent(j.data.slice(0,6)); }).catch(()=>{});
+    Promise.all([fetch("/api/v1/posts?limit=1").then(r=>r.json()).catch(()=>({})), fetch("/api/v1/categories").then(r=>r.json()).catch(()=>({}))]).then(([p,c])=>{
+      const posts = Array.isArray(p.data) ? p.data.length : 0;
+      const cats = Array.isArray(c.data) ? c.data.length : 0;
+      if(posts || cats) setStatsReal({ posts, categories: cats });
+    });
+  }, []);
   return (
     <div className="overflow-hidden">
       {/* ============================================================
@@ -219,9 +231,44 @@ export default function Home() {
       </section>
 
       {/* ============================================================
-          SECTION 3 — TRUST BAR
-      ============================================================ */}
-      <section className="bg-surface-raised py-10">
+           RECENT POSTS — REAL DATA (was hardcoded, now live from /api/v1/posts)
+       ============================================================ */}
+       <section className="bg-surface py-12 border-y border-border">
+         <div className="mx-auto max-w-7xl px-6">
+           <div className="flex items-end justify-between gap-4">
+             <div>
+               <p className="text-xs font-bold uppercase tracking-widest text-brand">Live from your CMS</p>
+               <h2 className="mt-2 text-2xl font-bold tracking-tight text-navy">Latest posts — real data</h2>
+               <p className="mt-1 text-sm text-text-secondary">Pulled from <code className="rounded bg-surface-raised px-1.5 py-0.5 font-mono text-xs">GET /api/v1/posts?limit=6</code> · {recent.length ? `${recent.length} posts` : "No published posts yet"} {statsReal ? `· ${statsReal.posts} total · ${statsReal.categories} categories` : ""}</p>
+             </div>
+             <Link href="/blog" className="hidden sm:inline-flex items-center gap-1 text-sm font-semibold text-brand hover:text-flame">View blog <ArrowRight className="h-4 w-4" /></Link>
+           </div>
+           {recent.length===0 ? (
+             <div className="mt-8 rounded-2xl border-2 border-dashed border-border bg-surface-raised p-10 text-center">
+               <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-brand/10 text-brand"><FileText className="h-5 w-5" /></div>
+               <p className="mt-3 text-sm font-semibold text-navy">No published posts yet</p>
+               <p className="mt-1 text-sm text-text-secondary">Create your first post in the editor — it will appear here and at <code className="font-mono text-xs">/blog</code> instantly.</p>
+               <Link href="/dashboard/editor" className="mt-4 inline-flex items-center gap-1 rounded-full bg-brand px-5 py-2.5 text-sm font-bold text-navy">Start writing <PenLine className="h-4 w-4" /></Link>
+             </div>
+           ) : (
+             <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+               {recent.map((post)=>(
+                 <Link key={post.id} href={`/blog/${post.slug}`} className="group rounded-2xl border border-border bg-surface p-5 hover:border-brand/20 hover:shadow-md hover:-translate-y-0.5 transition">
+                   <div className="flex items-center gap-2 text-xs"><span className="rounded-full bg-brand/10 px-2 py-0.5 font-semibold text-brand">{post.category ?? "General"}</span><span className="text-text-tertiary flex items-center gap-1"><Clock className="h-3 w-3" />{post.readingTime ?? 5} min</span></div>
+                   <h3 className="mt-3 text-base font-bold leading-tight text-navy group-hover:text-brand line-clamp-2">{post.title}</h3>
+                   <p className="mt-1 font-mono text-xs text-text-tertiary">/{post.slug}</p>
+                   <p className="mt-3 text-xs text-text-tertiary">{post.publishedAt ? new Date(post.publishedAt).toLocaleDateString() : "Published"}</p>
+                 </Link>
+               ))}
+             </div>
+           )}
+         </div>
+       </section>
+
+      {/* ============================================================
+           SECTION 3 — TRUST BAR
+       ============================================================ */}
+       <section className="bg-surface-raised py-10">
         <div className="mx-auto max-w-7xl px-6">
           <p className="text-center text-xs font-semibold uppercase tracking-[0.2em] text-text-tertiary">
             Deployed on

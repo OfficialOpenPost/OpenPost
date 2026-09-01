@@ -13,9 +13,9 @@ interface PreviewProps {
 }
 
 const widths: Record<Viewport, string> = {
-  desktop: "max-w-[720px]",
-  tablet: "max-w-[560px]",
-  mobile: "max-w-[360px]",
+  desktop: "max-w-[960px]",
+  tablet: "max-w-[720px]",
+  mobile: "max-w-[400px]",
 };
 
 export function Preview({ title, html, json }: PreviewProps) {

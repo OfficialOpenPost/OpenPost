@@ -261,9 +261,9 @@ export default function EditorPage() {
         </div>
       )}
 
-      <div className="flex flex-1 min-h-0 overflow-hidden">
+      <div className="flex flex-1 min-h-0">
         {showSidebar && (
-          <aside style={{ width: sidebarWidth }} className="hidden lg:flex shrink-0 flex-col bg-[#FCFCF9] border-r border-border h-[calc(100vh-105px)] sticky top-[105px] overflow-hidden relative">
+          <aside style={{ width: sidebarWidth }} className="hidden lg:flex shrink-0 flex-col bg-white border-r border-border fixed left-0 top-[105px] bottom-0 overflow-hidden z-10 shadow-[1px_0_0_0_rgba(0,0,0,0.02)]">
             <div
               onMouseDown={handleMouseDown}
               className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize hover:bg-brand/20 active:bg-brand/30 transition group flex items-center justify-center z-10"
@@ -271,21 +271,23 @@ export default function EditorPage() {
             >
               <div className="h-10 w-1 rounded-full bg-border group-hover:bg-brand transition" />
             </div>
-            {/* Tabs — Sanity-like minimal */}
-            <div className="flex border-b border-border bg-white sticky top-0 z-10">
+            {/* Tabs — Sanity-like minimal with icons, fixed under top nav */}
+            <div className="flex border-b border-border bg-white sticky top-0 z-10 shrink-0">
               {([
-                ["seo", "SEO"],
-                ["organize", "Organize"],
-                ["featured", "Featured"],
-                ["publishing", "Publish"],
-                ["history", "History"],
-              ] as const).map(([k, label]) => (
+                ["seo", "SEO", Search],
+                ["organize", "Organize", Folder],
+                ["featured", "Featured", ImageIcon],
+                ["publishing", "Publish", Clock],
+                ["history", "History", History],
+              ] as const).map(([k, label, Icon]) => (
                 <button
                   key={k}
                   onClick={() => setActiveTab(k)}
-                  className={`flex-1 px-2 py-2.5 text-[11px] font-semibold uppercase tracking-widest border-b-2 transition ${activeTab===k ? "border-navy text-navy" : "border-transparent text-text-tertiary hover:text-text-primary"}`}
+                  title={label}
+                  className={`flex-1 flex flex-col items-center justify-center gap-0.5 px-1 py-2.5 border-b-2 transition ${activeTab===k ? "border-[#FEA611] text-navy bg-amber-50/50" : "border-transparent text-text-tertiary hover:text-navy hover:bg-surface-raised"}`}
                 >
-                  {label}
+                  <Icon className={`h-3.5 w-3.5 ${activeTab===k ? "text-[#FEA611]" : ""}`} />
+                  <span className="text-[9px] font-bold uppercase tracking-widest leading-none">{label}</span>
                 </button>
               ))}
             </div>
@@ -461,7 +463,7 @@ export default function EditorPage() {
           </aside>
         )}
 
-        <div className="flex-1 min-w-0 overflow-auto bg-[#FCFCF9]">
+        <div className="flex-1 min-w-0 overflow-auto bg-[#FCFCF9]" style={showSidebar ? { marginLeft: sidebarWidth } : undefined}>
           <div className="mx-auto max-w-[960px] px-6 md:px-8 py-10 md:py-14">
             <input
               value={title}

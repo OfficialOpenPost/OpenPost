@@ -10,7 +10,7 @@ import {
   AlignRight,
   Maximize2,
   GripVertical,
-  Move,
+  Sliders,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -29,6 +29,7 @@ export function ImageCardView({
     width = "100%",
   } = node.attrs;
   const [editing, setEditing] = useState(!src);
+  const [showSizeControls, setShowSizeControls] = useState(false);
 
   if (editing || !src) {
     return (
@@ -60,7 +61,7 @@ export function ImageCardView({
                   if (e.key === "Enter") {
                     const val = (e.target as HTMLInputElement).value.trim();
                     if (val) {
-                      updateAttributes({ src: val });
+                      updateAttributes({ src: val, width: "100%" });
                       setEditing(false);
                     }
                   }
@@ -69,7 +70,7 @@ export function ImageCardView({
                 onBlur={(e) => {
                   const val = e.target.value.trim();
                   if (val) {
-                    updateAttributes({ src: val });
+                    updateAttributes({ src: val, width: "100%" });
                     setEditing(false);
                   }
                 }}
@@ -92,16 +93,19 @@ export function ImageCardView({
     { key: "left", label: "Left (Wrap)", icon: AlignLeft },
     { key: "center", label: "Center", icon: AlignCenter },
     { key: "right", label: "Right (Wrap)", icon: AlignRight },
-    { key: "wide", label: "Wide", icon: Maximize2 },
+    { key: "wide", label: "Full Width", icon: Maximize2 },
   ] as const;
 
-  const onResizeMouseDown = (e: React.MouseEvent) => {
+  const sizePresets = ["25%", "50%", "75%", "100%"];
+
+  // Drag-to-resize handle (Right side)
+  const onResizeRight = (e: React.MouseEvent) => {
     e.preventDefault();
     const startX = e.clientX;
-    const startWidth = parseInt(String(width).replace("%", "")) || 100;
+    const currentNum = parseInt(String(width).replace("%", "")) || 100;
     const onMove = (ev: MouseEvent) => {
-      const delta = ((ev.clientX - startX) / window.innerWidth) * 100;
-      const next = Math.min(100, Math.max(25, startWidth + delta * 2));
+      const deltaPercent = ((ev.clientX - startX) / (window.innerWidth * 0.5)) * 100;
+      const next = Math.min(100, Math.max(20, currentNum + deltaPercent));
       updateAttributes({ width: `${Math.round(next)}%` });
     };
     const onUp = () => {
@@ -113,12 +117,15 @@ export function ImageCardView({
   };
 
   const wrapperClass = `image-align-${layout}`;
+
+  // Parse width safely
+  const currentWidthVal = width || "100%";
   const widthStyle =
     layout === "left" || layout === "right"
-      ? { width: width === "100%" ? "45%" : width, maxWidth: "48%" }
-      : layout === "center"
-      ? { width: width === "100%" ? "85%" : width, maxWidth: "780px" }
-      : { width: "100%" };
+      ? { width: currentWidthVal === "100%" ? "48%" : currentWidthVal, maxWidth: "55%" }
+      : layout === "wide"
+      ? { width: "100%" }
+      : { width: currentWidthVal, maxWidth: "100%" };
 
   return (
     <NodeViewWrapper
@@ -127,18 +134,18 @@ export function ImageCardView({
     >
       <div
         className={`group relative overflow-hidden rounded-2xl border bg-white shadow-xs transition ${
-          selected ? "border-brand ring-2 ring-brand/30" : "border-border"
+          selected ? "border-brand ring-2 ring-brand/40" : "border-border"
         }`}
         style={widthStyle as any}
       >
-        {/* Top Control Bar on Hover */}
-        <div className="absolute top-2 left-2 right-2 z-10 flex items-center justify-between opacity-0 group-hover:opacity-100 transition duration-150">
+        {/* Hover Toolbar (Top Overlay) */}
+        <div className="absolute top-2 left-2 right-2 z-20 flex flex-wrap items-center justify-between gap-1.5 opacity-0 group-hover:opacity-100 transition duration-150">
           {/* Word-like Drag Handle */}
           <div
             draggable
             data-drag-handle
             className="flex items-center gap-1.5 rounded-full bg-white/95 backdrop-blur-md px-2.5 py-1 text-xs font-bold text-navy border border-border shadow-xs cursor-grab active:cursor-grabbing select-none"
-            title="Drag to reposition anywhere in text"
+            title="Drag to reposition image anywhere in article"
           >
             <GripVertical className="h-3.5 w-3.5 text-brand" />
             <span>Move</span>
@@ -150,7 +157,10 @@ export function ImageCardView({
               <button
                 key={l.key}
                 type="button"
-                onClick={() => updateAttributes({ layout: l.key, align: l.key })}
+                onClick={() => {
+                  const defaultW = l.key === "left" || l.key === "right" ? "48%" : "100%";
+                  updateAttributes({ layout: l.key, align: l.key, width: defaultW });
+                }}
                 title={l.label}
                 className={`flex h-6 items-center gap-1 rounded-full px-2 text-[11px] font-bold transition ${
                   layout === l.key
@@ -160,6 +170,25 @@ export function ImageCardView({
               >
                 <l.icon className="h-3 w-3" />
                 <span className="hidden sm:inline">{l.label.split(" ")[0]}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* Size Preset Selector (25%, 50%, 75%, 100%) */}
+          <div className="flex items-center gap-1 rounded-full bg-white/95 backdrop-blur-md p-1 border border-border shadow-xs">
+            {sizePresets.map((pct) => (
+              <button
+                key={pct}
+                type="button"
+                onClick={() => updateAttributes({ width: pct })}
+                className={`h-6 rounded-full px-2 text-[10px] font-bold transition ${
+                  width === pct
+                    ? "bg-navy text-white shadow-xs"
+                    : "text-navy hover:bg-surface-raised"
+                }`}
+                title={`Set width to ${pct}`}
+              >
+                {pct}
               </button>
             ))}
           </div>
@@ -175,32 +204,47 @@ export function ImageCardView({
           </button>
         </div>
 
-        {/* Image Display */}
-        <div className="relative bg-[#FAFAFA] flex items-center justify-center min-h-[140px]">
+        {/* Image Content Container */}
+        <div className="relative bg-[#FAFAFA] flex items-center justify-center">
           <img
             src={src}
             alt={alt || ""}
-            className="w-full h-auto max-h-[560px] object-contain rounded-t-xl"
+            className="w-full h-auto object-contain rounded-t-xl"
+            style={{ width: "100%" }}
             draggable={false}
           />
 
-          {/* Resize corner handle */}
+          {/* Large Resize Corner Handle (Bottom Right) */}
           <div
-            onMouseDown={onResizeMouseDown}
-            className="absolute bottom-2 right-2 h-7 w-7 cursor-nwse-resize rounded-lg bg-white/90 backdrop-blur-md border border-border shadow-xs hidden group-hover:flex items-center justify-center hover:bg-navy hover:text-white transition"
+            onMouseDown={onResizeRight}
+            className="absolute bottom-2 right-2 flex h-8 w-8 cursor-nwse-resize items-center justify-center rounded-xl bg-white/95 backdrop-blur-md border border-border shadow-md opacity-0 group-hover:opacity-100 hover:bg-brand hover:text-white transition select-none"
+            title="Drag to dynamically resize width"
+          >
+            <span className="text-xs font-black">↘</span>
+          </div>
+
+          {/* Left Resize Handle */}
+          <div
+            onMouseDown={onResizeRight}
+            className="absolute bottom-2 left-2 flex h-8 w-8 cursor-nesw-resize items-center justify-center rounded-xl bg-white/95 backdrop-blur-md border border-border shadow-md opacity-0 group-hover:opacity-100 hover:bg-brand hover:text-white transition select-none"
             title="Drag to resize width"
           >
-            <span className="text-xs font-bold leading-none select-none">↘</span>
+            <span className="text-xs font-black">↙</span>
           </div>
         </div>
 
-        {/* Caption & Alt Info */}
-        {(caption || alt) && (
-          <div className="px-3.5 py-2 bg-surface-dim border-t border-border/60 text-center">
-            {caption && <p className="text-xs text-text-secondary italic">{caption}</p>}
-            {alt && <p className="text-[10px] text-text-tertiary font-mono">Alt: {alt}</p>}
-          </div>
-        )}
+        {/* Caption & Alt Info Bar */}
+        <div className="px-4 py-2.5 bg-surface-dim border-t border-border/60 flex items-center justify-between text-xs gap-3">
+          <input
+            placeholder="Add an image caption (optional)..."
+            value={caption || ""}
+            onChange={(e) => updateAttributes({ caption: e.target.value })}
+            className="flex-1 bg-transparent text-navy italic placeholder:text-text-tertiary focus:outline-none text-xs"
+          />
+          <span className="text-[10px] font-bold text-text-tertiary font-mono shrink-0 bg-white border border-border px-2 py-0.5 rounded-md">
+            Width: {width || "100%"}
+          </span>
+        </div>
       </div>
     </NodeViewWrapper>
   );

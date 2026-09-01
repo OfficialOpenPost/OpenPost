@@ -2,7 +2,7 @@
 
 import { NodeViewWrapper, NodeViewProps } from "@tiptap/react";
 import {
-  X,
+  Trash2,
   Link2,
   Image as ImageIcon,
   AlignLeft,
@@ -10,6 +10,7 @@ import {
   AlignRight,
   Maximize2,
   GripVertical,
+  MessageSquare,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -28,6 +29,7 @@ export function ImageCardView({
     width = "100%",
   } = node.attrs;
   const [editing, setEditing] = useState(!src);
+  const [showCaptionInput, setShowCaptionInput] = useState(Boolean(caption));
 
   if (editing || !src) {
     return (
@@ -76,6 +78,7 @@ export function ImageCardView({
               />
             </div>
             <button
+              type="button"
               onClick={() => deleteNode()}
               className="rounded-xl border border-border px-4 py-2 text-sm font-semibold hover:bg-surface"
             >
@@ -142,7 +145,7 @@ export function ImageCardView({
 
   const wrapperClass = `image-align-${layout}`;
 
-  // Inner margin alignment according to position within the document card
+  // Inner container alignment classes
   const innerMarginCls =
     layout === "left"
       ? "mr-auto ml-0"
@@ -152,98 +155,49 @@ export function ImageCardView({
       ? "w-full mx-0"
       : "mx-auto"; // center
 
-  const currentWidthVal = width || "100%";
-  const widthStyle = { width: currentWidthVal, maxWidth: "100%" };
+  const currentWidthVal = width || (layout === "left" || layout === "right" ? "45%" : "100%");
+  const widthStyle =
+    layout === "left" || layout === "right"
+      ? { width: currentWidthVal === "100%" ? "45%" : currentWidthVal, maxWidth: "50%" }
+      : { width: currentWidthVal, maxWidth: "100%" };
 
   return (
     <NodeViewWrapper
-      className={`my-4 ${wrapperClass} transition-all`}
+      className={`my-4 ${wrapperClass} transition-all select-none`}
       data-drag-handle
     >
-      <div
-        className={`group relative rounded-2xl border bg-white shadow-xs transition select-none ${innerMarginCls} ${
-          selected
-            ? "border-brand ring-2 ring-brand/50"
-            : "border-border hover:border-brand/40"
-        }`}
-        style={widthStyle as any}
-      >
-        {/* Top Control Bar on Hover */}
-        <div className="absolute top-2.5 left-2.5 right-2.5 z-20 flex flex-wrap items-center justify-between gap-1.5 opacity-0 group-hover:opacity-100 transition duration-150">
-          {/* Word-like Drag Move Handle */}
+      <div className={`relative group ${innerMarginCls}`} style={widthStyle as any}>
+        {/* Main Image Box */}
+        <div
+          className={`relative rounded-2xl border bg-white shadow-xs overflow-visible transition ${
+            selected
+              ? "border-brand ring-2 ring-brand/50"
+              : "border-border hover:border-brand/40"
+          }`}
+        >
+          {/* Top Left Drag Move Handle */}
           <div
             draggable
             data-drag-handle
-            className="flex items-center gap-1.5 rounded-full bg-white/95 backdrop-blur-md px-2.5 py-1 text-xs font-bold text-navy border border-border shadow-xs cursor-grab active:cursor-grabbing select-none"
+            className="absolute top-2.5 left-2.5 z-20 flex items-center gap-1.5 rounded-full bg-white/95 backdrop-blur-md px-2.5 py-1 text-[11px] font-bold text-navy border border-border shadow-xs cursor-grab active:cursor-grabbing select-none opacity-0 group-hover:opacity-100 transition"
             title="Drag to reposition image anywhere in text"
           >
-            <GripVertical className="h-3.5 w-3.5 text-brand" />
+            <GripVertical className="h-3 w-3 text-brand" />
             <span>Move</span>
           </div>
 
-          {/* Quick Layout Buttons (Preserves current image width) */}
-          <div className="flex items-center gap-1 rounded-full bg-white/95 backdrop-blur-md p-1 border border-border shadow-xs">
-            {layouts.map((l) => (
-              <button
-                key={l.key}
-                type="button"
-                onClick={() => {
-                  updateAttributes({ layout: l.key, align: l.key });
-                }}
-                title={l.label}
-                className={`flex h-6 items-center gap-1 rounded-full px-2 text-[11px] font-bold transition ${
-                  layout === l.key
-                    ? "bg-brand text-navy shadow-xs"
-                    : "text-text-secondary hover:bg-surface-raised hover:text-navy"
-                }`}
-              >
-                <l.icon className="h-3 w-3" />
-                <span className="hidden sm:inline">{l.label.split(" ")[0]}</span>
-              </button>
-            ))}
+          {/* Clean Image View */}
+          <div className="relative bg-[#FAFAFA] flex items-center justify-center rounded-2xl overflow-hidden">
+            <img
+              src={src}
+              alt={alt || ""}
+              className="w-full h-auto object-contain rounded-2xl"
+              style={{ width: "100%" }}
+              draggable={false}
+            />
           </div>
 
-          {/* Size Preset Selector (25%, 50%, 75%, 100%) */}
-          <div className="flex items-center gap-1 rounded-full bg-white/95 backdrop-blur-md p-1 border border-border shadow-xs">
-            {sizePresets.map((pct) => (
-              <button
-                key={pct}
-                type="button"
-                onClick={() => updateAttributes({ width: pct })}
-                className={`h-6 rounded-full px-2 text-[10px] font-bold transition ${
-                  width === pct
-                    ? "bg-navy text-white shadow-xs"
-                    : "text-navy hover:bg-surface-raised"
-                }`}
-                title={`Set width to ${pct}`}
-              >
-                {pct}
-              </button>
-            ))}
-          </div>
-
-          {/* Delete Button */}
-          <button
-            type="button"
-            onClick={() => deleteNode()}
-            className="flex h-7 w-7 items-center justify-center rounded-full bg-white/95 backdrop-blur-md text-text-tertiary hover:bg-red-50 hover:text-red-600 border border-border shadow-xs transition"
-            title="Remove Image"
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
-        </div>
-
-        {/* Image Display Area with Square Resize Blocks */}
-        <div className="relative bg-[#FAFAFA] flex items-center justify-center overflow-visible">
-          <img
-            src={src}
-            alt={alt || ""}
-            className="w-full h-auto object-contain rounded-t-xl"
-            style={{ width: "100%" }}
-            draggable={false}
-          />
-
-          {/* VISIBLE SQUARE RESIZE BLOCKS (Figma / Word / Canva style) */}
+          {/* VISIBLE 6-POINT SQUARE RESIZE BLOCKS (Figma / Word / Canva style) */}
           <div
             onMouseDown={onResizeLeft}
             className="absolute -top-1.5 -left-1.5 h-3.5 w-3.5 bg-white border-2 border-brand shadow-md z-30 cursor-nwse-resize rounded-xs hover:scale-125 hover:bg-brand transition-transform select-none"
@@ -276,18 +230,103 @@ export function ImageCardView({
           />
         </div>
 
-        {/* Caption & Alt Info Bar */}
-        <div className="px-4 py-2.5 bg-surface-dim border-t border-border/60 flex items-center justify-between text-xs gap-3">
-          <input
-            placeholder="Add an image caption (optional)..."
-            value={caption || ""}
-            onChange={(e) => updateAttributes({ caption: e.target.value })}
-            className="flex-1 bg-transparent text-navy italic placeholder:text-text-tertiary focus:outline-none text-xs"
-          />
-          <span className="text-[10px] font-bold text-text-tertiary font-mono shrink-0 bg-white border border-border px-2 py-0.5 rounded-md shadow-2xs">
-            Width: {width || "100%"}
-          </span>
+        {/* ======================================================== */}
+        {/* SLEEK PILL-SHAPED FLOATING OPTIONS CARD JUST BELOW IMAGE */}
+        {/* ======================================================== */}
+        <div className="flex justify-center pt-2">
+          <div className="inline-flex flex-wrap items-center gap-1.5 rounded-full border border-border bg-white/98 px-3 py-1.5 shadow-md backdrop-blur-md opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition duration-150 select-none">
+            {/* 1. Alignment Pills */}
+            <div className="flex items-center gap-0.5">
+              {layouts.map((l) => (
+                <button
+                  key={l.key}
+                  type="button"
+                  onClick={() => {
+                    const newW =
+                      l.key === "left" || l.key === "right"
+                        ? width === "100%"
+                          ? "45%"
+                          : width
+                        : width;
+                    updateAttributes({ layout: l.key, align: l.key, width: newW });
+                  }}
+                  title={l.label}
+                  className={`flex h-7 items-center gap-1 rounded-full px-2.5 text-xs font-bold transition ${
+                    layout === l.key
+                      ? "bg-brand text-navy shadow-xs"
+                      : "text-text-secondary hover:bg-surface-raised hover:text-navy"
+                  }`}
+                >
+                  <l.icon className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline text-[11px]">{l.label.split(" ")[0]}</span>
+                </button>
+              ))}
+            </div>
+
+            <div className="h-4 w-px bg-border mx-0.5" />
+
+            {/* 2. Size Preset Selector (25%, 50%, 75%, 100%) */}
+            <div className="flex items-center gap-0.5">
+              {sizePresets.map((pct) => (
+                <button
+                  key={pct}
+                  type="button"
+                  onClick={() => updateAttributes({ width: pct })}
+                  className={`h-6 rounded-full px-2 text-[10px] font-bold transition ${
+                    width === pct
+                      ? "bg-navy text-white shadow-xs"
+                      : "text-navy hover:bg-surface-raised"
+                  }`}
+                  title={`Set width to ${pct}`}
+                >
+                  {pct}
+                </button>
+              ))}
+            </div>
+
+            <div className="h-4 w-px bg-border mx-0.5" />
+
+            {/* 3. Caption Toggle Button */}
+            <button
+              type="button"
+              onClick={() => setShowCaptionInput(!showCaptionInput)}
+              className={`flex h-7 items-center gap-1 rounded-full px-2 text-[11px] font-bold transition ${
+                showCaptionInput || caption
+                  ? "bg-brand/20 text-navy"
+                  : "text-text-secondary hover:bg-surface-raised hover:text-navy"
+              }`}
+              title="Add or Edit Caption"
+            >
+              <MessageSquare className="h-3 w-3" />
+              <span className="hidden md:inline">Caption</span>
+            </button>
+
+            {/* 4. Delete Image Button */}
+            <button
+              type="button"
+              onClick={() => deleteNode()}
+              className="flex h-7 w-7 items-center justify-center rounded-full text-text-tertiary hover:bg-red-50 hover:text-red-600 transition"
+              title="Remove Image"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          </div>
         </div>
+
+        {/* Optional Caption Input Bar */}
+        {(showCaptionInput || caption) && (
+          <div className="mt-1.5 px-3 py-1.5 bg-surface-dim/80 rounded-xl border border-border/60 flex items-center justify-between text-xs gap-2">
+            <input
+              placeholder="Write a caption for this image..."
+              value={caption || ""}
+              onChange={(e) => updateAttributes({ caption: e.target.value })}
+              className="flex-1 bg-transparent text-navy italic placeholder:text-text-tertiary focus:outline-none text-xs"
+            />
+            <span className="text-[10px] font-bold text-text-tertiary font-mono shrink-0 bg-white border border-border px-1.5 py-0.5 rounded-md">
+              {width || "100%"}
+            </span>
+          </div>
+        )}
       </div>
     </NodeViewWrapper>
   );

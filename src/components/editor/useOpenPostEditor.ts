@@ -16,7 +16,12 @@ export function useOpenPostEditor({ content = "", onChange, editable = true }: U
     content: content || "<p></p>",
     editable,
     onUpdate: ({ editor }) => {
-      onChange?.(editor.getHTML(), editor.getJSON());
+      const html = editor.getHTML();
+      const json = editor.getJSON();
+      // Use queueMicrotask to avoid flushSync warnings in React 19
+      queueMicrotask(() => {
+        onChange?.(html, json);
+      });
     },
     editorProps: {
       attributes: {
@@ -31,7 +36,6 @@ export function useOpenPostEditor({ content = "", onChange, editable = true }: U
               const { uploadImageWithWebP } = await import("@/lib/uploadMedia");
               for (const f of Array.from(files)) {
                 const { url } = await uploadImageWithWebP(f as File);
-                // Insert at drop position
                 const pos = view.posAtCoords({ left: event.clientX, top: event.clientY })?.pos ?? view.state.selection.from;
                 view.dispatch(view.state.tr.insert(pos, view.state.schema.nodes.image.create({ src: url })));
               }

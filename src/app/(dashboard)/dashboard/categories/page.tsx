@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { Plus, Search, Edit3, Trash2, Folder, FolderOpen, X } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Plus, Search, Edit3, Trash2, Folder, FolderOpen, X, AlertTriangle } from "lucide-react";
 import { slugify } from "@/lib/slug";
+import { useDebounce } from "@/hooks/useDebounce";
 
 interface Category {
   id: string;
@@ -19,31 +20,93 @@ const INITIAL: Category[] = [];
 export default function CategoriesPage() {
   const [cats, setCats] = useState<Category[]>(INITIAL);
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search, 300);
   const [editing, setEditing] = useState<Category | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState<Partial<Category>>({ name: "", slug: "", description: "", parentId: null, seoTitle: "", seoDesc: "" });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Category | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  const filtered = cats.filter((c) => c.name.toLowerCase().includes(search.toLowerCase()) || c.slug.includes(search.toLowerCase()));
+  // Fetch from DB
+  const fetchCats = async (q?: string) => {
+    try {
+      setLoading(true);
+      const url = q ? `/api/v1/categories?search=${encodeURIComponent(q)}` : "/api/v1/categories";
+      const res = await fetch(url);
+      const json = await res.json();
+      if (json.data) setCats(json.data);
+    } catch {
+      // fallback keep empty — build must not break without DB
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchCats();
+  }, []);
+
+  useEffect(() => {
+    if (debouncedSearch) fetchCats(debouncedSearch);
+    else fetchCats();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearch]);
+
+  const filtered = cats.filter((c) => c.name.toLowerCase().includes(debouncedSearch.toLowerCase()) || c.slug.includes(debouncedSearch.toLowerCase()));
 
   const openCreate = () => {
     setEditing(null);
     setForm({ name: "", slug: "", description: "", parentId: null, seoTitle: "", seoDesc: "" });
+    setError(null);
     setShowModal(true);
   };
   const openEdit = (c: Category) => {
     setEditing(c);
     setForm(c);
+    setError(null);
     setShowModal(true);
   };
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.name) return;
-    const slug = slugify(form.slug || form.name || "");
-    if (editing) {
-      setCats((prev) => prev.map((c) => (c.id === editing.id ? { ...c, ...form, slug } as Category : c)));
-    } else {
-      setCats((prev) => [...prev, { id: Date.now().toString(), name: form.name!, slug, description: form.description || null, parentId: form.parentId || null, seoTitle: form.seoTitle || null, seoDesc: form.seoDesc || null }]);
+    setSaving(true);
+    setError(null);
+    try {
+      const slug = slugify(form.slug || form.name || "");
+      const payload = { name: form.name, slug, description: form.description || null, parentId: form.parentId || null, seoTitle: form.seoTitle || null, seoDesc: form.seoDesc || null };
+      const url = editing ? `/api/v1/categories/${editing.id}` : "/api/v1/categories";
+      const method = editing ? "PUT" : "POST";
+      const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error?.message ?? "Failed to save");
+      await fetchCats(debouncedSearch);
+      setShowModal(false);
+    } catch (e: any) {
+      setError(e.message ?? "Failed to save");
+    } finally {
+      setSaving(false);
     }
-    setShowModal(false);
+  };
+
+  const handleDelete = async (c: Category) => {
+    setDeleteError(null);
+    try {
+      const res = await fetch(`/api/v1/categories/${c.id}`, { method: "DELETE" });
+      const json = await res.json();
+      if (!res.ok) {
+        if (json.error?.code === "IN_USE") {
+          setDeleteError(json.error.message);
+          return;
+        }
+        throw new Error(json.error?.message ?? "Delete failed");
+      }
+      setCats((prev) => prev.filter((x) => x.id !== c.id));
+      setDeleteTarget(null);
+    } catch (e: any) {
+      setDeleteError(e.message);
+    }
   };
 
   const parentCats = cats.filter((c) => !c.parentId);
@@ -96,7 +159,7 @@ export default function CategoriesPage() {
                         <button onClick={() => openEdit(c)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-border hover:bg-surface-raised">
                           <Edit3 className="h-4 w-4 text-text-secondary" />
                         </button>
-                        <button onClick={() => setCats((prev) => prev.filter((x) => x.id !== c.id))} className="flex h-8 w-8 items-center justify-center rounded-lg border border-border hover:bg-flame/10 text-flame">
+                        <button onClick={() => setDeleteTarget(c)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-border hover:bg-flame/10 text-flame">
                           <Trash2 className="h-4 w-4" />
                         </button>
                       </div>
@@ -107,8 +170,29 @@ export default function CategoriesPage() {
             </tbody>
           </table>
         </div>
-        {filtered.length === 0 && <p className="py-12 text-center text-sm text-text-tertiary">No categories found.</p>}
+        {loading && <p className="py-8 text-center text-sm text-text-tertiary">Loading categories…</p>}
+        {!loading && filtered.length === 0 && <p className="py-12 text-center text-sm text-text-tertiary">No categories found.</p>}
       </div>
+
+      {/* Safe-delete modal */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy/40 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-2xl border border-border bg-surface p-6 shadow-xl">
+            <div className="flex items-center gap-3 text-amber-600">
+              <AlertTriangle className="h-5 w-5" />
+              <h3 className="font-bold text-navy">Delete category?</h3>
+            </div>
+            <p className="mt-3 text-sm text-text-secondary">
+              Delete <span className="font-semibold">{deleteTarget.name}</span> (<span className="font-mono">/{deleteTarget.slug}</span>)? This cannot be undone.
+            </p>
+            {deleteError && <p className="mt-3 rounded-xl bg-flame/10 p-3 text-sm text-flame">{deleteError}</p>}
+            <div className="mt-6 flex justify-end gap-2">
+              <button onClick={() => { setDeleteTarget(null); setDeleteError(null); }} className="rounded-xl border border-border px-5 py-2.5 text-sm font-semibold hover:bg-surface-raised">Cancel</button>
+              <button onClick={() => handleDelete(deleteTarget)} className="rounded-xl bg-flame px-5 py-2.5 text-sm font-bold text-white hover:opacity-90">Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal */}
       {showModal && (
@@ -170,12 +254,13 @@ export default function CategoriesPage() {
               </div>
             </div>
 
+            {error && <p className="mt-4 rounded-xl bg-flame/10 p-3 text-sm text-flame">{error}</p>}
             <div className="mt-6 flex justify-end gap-2">
               <button onClick={() => setShowModal(false)} className="rounded-xl border border-border px-5 py-2.5 text-sm font-semibold hover:bg-surface-raised">
                 Cancel
               </button>
-              <button onClick={handleSave} className="rounded-xl bg-brand px-5 py-2.5 text-sm font-bold text-navy hover:bg-brand-hover">
-                {editing ? "Update" : "Create"}
+              <button onClick={handleSave} disabled={saving} className="rounded-xl bg-brand px-5 py-2.5 text-sm font-bold text-navy hover:bg-brand-hover disabled:opacity-50">
+                {saving ? "Saving…" : editing ? "Update" : "Create"}
               </button>
             </div>
           </div>

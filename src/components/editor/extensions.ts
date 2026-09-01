@@ -17,6 +17,7 @@ import { SlashExtension } from "./SlashMenu";
 import { Callout } from "./blocks/Callout";
 import { Gallery } from "./blocks/Gallery";
 import { Faq } from "./blocks/Faq";
+import { Accordion } from "./blocks/Accordion";
 import { ButtonBlock } from "./blocks/Button";
 import { DownloadBlock } from "./blocks/Download";
 import { SocialEmbed } from "./blocks/SocialEmbed";
@@ -118,6 +119,7 @@ export const editorExtensions = [
   Callout,
   Gallery,
   Faq,
+  Accordion,
   ButtonBlock,
   DownloadBlock,
   SocialEmbed,

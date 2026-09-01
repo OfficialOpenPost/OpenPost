@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { Plus, Search, Edit3, Trash2, User, X, Globe } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Plus, Search, Edit3, Trash2, User, X, Globe, AlertTriangle } from "lucide-react";
 import { slugify } from "@/lib/slug";
+import { useDebounce } from "@/hooks/useDebounce";
 
 interface Author {
   id: string;
@@ -20,38 +21,67 @@ const INITIAL: Author[] = [];
 export default function AuthorsPage() {
   const [authors, setAuthors] = useState<Author[]>(INITIAL);
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search, 300);
   const [editing, setEditing] = useState<Author | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState<Partial<Author & { twitter: string; linkedin: string }>>({ name: "", slug: "", bio: "", email: "", website: "", twitter: "", linkedin: "" });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Author | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  const filtered = authors.filter((a) => a.name.toLowerCase().includes(search.toLowerCase()) || a.slug.includes(search.toLowerCase()));
+  const fetchAuthors = async (q?: string) => {
+    try {
+      setLoading(true);
+      const url = q ? `/api/v1/authors?search=${encodeURIComponent(q)}` : "/api/v1/authors";
+      const res = await fetch(url);
+      const json = await res.json();
+      if (json.data) setAuthors(json.data.map((a: any) => ({ ...a, social: a.socialLinks ?? a.social ?? {}, postCount: 0 })));
+    } catch {}
+    finally { setLoading(false); }
+  };
+  useEffect(() => { fetchAuthors(); }, []);
+  useEffect(() => { if (debouncedSearch) fetchAuthors(debouncedSearch); else fetchAuthors(); }, [debouncedSearch]);
+
+  const filtered = authors.filter((a) => a.name.toLowerCase().includes(debouncedSearch.toLowerCase()) || a.slug.includes(debouncedSearch.toLowerCase()));
 
   const openCreate = () => {
     setEditing(null);
     setForm({ name: "", slug: "", bio: "", email: "", website: "", twitter: "", linkedin: "" });
+    setError(null);
     setShowModal(true);
   };
   const openEdit = (a: Author) => {
     setEditing(a);
     setForm({ ...a, twitter: a.social.twitter ?? "", linkedin: a.social.linkedin ?? "" });
+    setError(null);
     setShowModal(true);
   };
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.name) return;
-    const slug = slugify(form.slug || form.name || "");
-    const payload: Author = {
-      id: editing?.id ?? Date.now().toString(),
-      name: form.name!,
-      slug,
-      bio: form.bio || null,
-      email: form.email || null,
-      website: form.website || null,
-      social: { ...(form.twitter ? { twitter: form.twitter } : {}), ...(form.linkedin ? { linkedin: form.linkedin } : {}) },
-      postCount: editing?.postCount ?? 0,
-    };
-    if (editing) setAuthors((prev) => prev.map((x) => (x.id === editing.id ? payload : x)));
-    else setAuthors((prev) => [...prev, payload]);
-    setShowModal(false);
+    setSaving(true); setError(null);
+    try {
+      const slug = slugify(form.slug || form.name || "");
+      const payload = { name: form.name, slug, bio: form.bio || null, email: form.email || null, website: form.website || null, twitter: form.twitter || null, linkedin: form.linkedin || null };
+      const url = editing ? `/api/v1/authors/${editing.id}` : "/api/v1/authors";
+      const method = editing ? "PUT" : "POST";
+      const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error?.message ?? "Failed");
+      await fetchAuthors(debouncedSearch);
+      setShowModal(false);
+    } catch (e: any) { setError(e.message); } finally { setSaving(false); }
+  };
+  const handleDelete = async (a: Author) => {
+    setDeleteError(null);
+    try {
+      const res = await fetch(`/api/v1/authors/${a.id}`, { method: "DELETE" });
+      const json = await res.json();
+      if (!res.ok) { if (json.error?.code === "IN_USE") { setDeleteError(json.error.message); return; } throw new Error(json.error?.message ?? "Delete failed"); }
+      setAuthors((prev) => prev.filter((x) => x.id !== a.id));
+      setDeleteTarget(null);
+    } catch (e: any) { setDeleteError(e.message); }
   };
 
   return (
@@ -86,7 +116,7 @@ export default function AuthorsPage() {
                 <button onClick={() => openEdit(author)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-border hover:bg-surface-raised">
                   <Edit3 className="h-3.5 w-3.5 text-text-secondary" />
                 </button>
-                <button onClick={() => setAuthors((prev) => prev.filter((x) => x.id !== author.id))} className="flex h-8 w-8 items-center justify-center rounded-lg border border-border hover:bg-flame/10 text-flame">
+                <button onClick={() => setDeleteTarget(author)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-border hover:bg-flame/10 text-flame">
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
               </div>
@@ -123,7 +153,22 @@ export default function AuthorsPage() {
         ))}
       </div>
 
-      {filtered.length === 0 && <p className="py-12 text-center text-sm text-text-tertiary">No authors found.</p>}
+      {loading && <p className="py-8 text-center text-sm text-text-tertiary">Loading…</p>}
+      {!loading && filtered.length === 0 && <p className="py-12 text-center text-sm text-text-tertiary">No authors found.</p>}
+
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy/40 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-2xl border border-border bg-surface p-6 shadow-xl">
+            <div className="flex items-center gap-3 text-amber-600"><AlertTriangle className="h-5 w-5" /><h3 className="font-bold text-navy">Delete author?</h3></div>
+            <p className="mt-3 text-sm text-text-secondary">Delete <span className="font-semibold">{deleteTarget.name}</span>?</p>
+            {deleteError && <p className="mt-3 rounded-xl bg-flame/10 p-3 text-sm text-flame">{deleteError}</p>}
+            <div className="mt-6 flex justify-end gap-2">
+              <button onClick={() => { setDeleteTarget(null); setDeleteError(null); }} className="rounded-xl border border-border px-5 py-2.5 text-sm font-semibold hover:bg-surface-raised">Cancel</button>
+              <button onClick={() => handleDelete(deleteTarget)} className="rounded-xl bg-flame px-5 py-2.5 text-sm font-bold text-white">Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy/40 backdrop-blur-sm p-4">
@@ -168,12 +213,13 @@ export default function AuthorsPage() {
                 </div>
               </div>
             </div>
+            {error && <p className="mt-4 rounded-xl bg-flame/10 p-3 text-sm text-flame">{error}</p>}
             <div className="mt-6 flex justify-end gap-2">
               <button onClick={() => setShowModal(false)} className="rounded-xl border border-border px-5 py-2.5 text-sm font-semibold hover:bg-surface-raised">
                 Cancel
               </button>
-              <button onClick={handleSave} className="rounded-xl bg-brand px-5 py-2.5 text-sm font-bold text-navy hover:bg-brand-hover">
-                {editing ? "Update" : "Create"}
+              <button onClick={handleSave} disabled={saving} className="rounded-xl bg-brand px-5 py-2.5 text-sm font-bold text-navy hover:bg-brand-hover disabled:opacity-50">
+                {saving ? "Saving…" : editing ? "Update" : "Create"}
               </button>
             </div>
           </div>

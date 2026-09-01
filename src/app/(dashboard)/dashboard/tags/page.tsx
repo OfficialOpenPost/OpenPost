@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { Plus, Search, Edit3, Trash2, Tag as TagIcon, X, Hash } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Plus, Search, Edit3, Trash2, Tag as TagIcon, X, Hash, AlertTriangle } from "lucide-react";
 import { slugify } from "@/lib/slug";
+import { useDebounce } from "@/hooks/useDebounce";
 
 interface Tag {
   id: string;
@@ -17,28 +18,67 @@ const INITIAL: Tag[] = [];
 export default function TagsPage() {
   const [tags, setTags] = useState<Tag[]>(INITIAL);
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search, 300);
   const [editing, setEditing] = useState<Tag | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState<Partial<Tag>>({ name: "", slug: "", description: "" });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Tag | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  const filtered = tags.filter((t) => t.name.toLowerCase().includes(search.toLowerCase()) || t.slug.includes(search.toLowerCase()));
+  const fetchTags = async (q?: string) => {
+    try {
+      setLoading(true);
+      const url = q ? `/api/v1/tags?search=${encodeURIComponent(q)}` : "/api/v1/tags";
+      const res = await fetch(url);
+      const json = await res.json();
+      if (json.data) setTags(json.data.map((t: any) => ({ ...t, postCount: 0 })));
+    } catch {}
+    finally { setLoading(false); }
+  };
+  useEffect(() => { fetchTags(); }, []);
+  useEffect(() => { if (debouncedSearch) fetchTags(debouncedSearch); else fetchTags(); }, [debouncedSearch]);
+
+  const filtered = tags.filter((t) => t.name.toLowerCase().includes(debouncedSearch.toLowerCase()) || t.slug.includes(debouncedSearch.toLowerCase()));
 
   const openCreate = () => {
     setEditing(null);
     setForm({ name: "", slug: "", description: "" });
+    setError(null);
     setShowModal(true);
   };
   const openEdit = (t: Tag) => {
     setEditing(t);
     setForm(t);
+    setError(null);
     setShowModal(true);
   };
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.name) return;
-    const slug = slugify(form.slug || form.name || "");
-    if (editing) setTags((prev) => prev.map((x) => (x.id === editing.id ? { ...x, ...form, slug } as Tag : x)));
-    else setTags((prev) => [...prev, { id: Date.now().toString(), name: form.name!, slug, description: form.description || null, postCount: 0 }]);
-    setShowModal(false);
+    setSaving(true); setError(null);
+    try {
+      const slug = slugify(form.slug || form.name || "");
+      const payload = { name: form.name, slug, description: form.description || null };
+      const url = editing ? `/api/v1/tags/${editing.id}` : "/api/v1/tags";
+      const method = editing ? "PUT" : "POST";
+      const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error?.message ?? "Failed");
+      await fetchTags(debouncedSearch);
+      setShowModal(false);
+    } catch (e: any) { setError(e.message); } finally { setSaving(false); }
+  };
+  const handleDelete = async (t: Tag) => {
+    setDeleteError(null);
+    try {
+      const res = await fetch(`/api/v1/tags/${t.id}`, { method: "DELETE" });
+      const json = await res.json();
+      if (!res.ok) { if (json.error?.code === "IN_USE") { setDeleteError(json.error.message); return; } throw new Error(json.error?.message ?? "Delete failed"); }
+      setTags((prev) => prev.filter((x) => x.id !== t.id));
+      setDeleteTarget(null);
+    } catch (e: any) { setDeleteError(e.message); }
   };
 
   return (
@@ -69,7 +109,7 @@ export default function TagsPage() {
                 <button onClick={() => openEdit(tag)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-border hover:bg-surface-raised">
                   <Edit3 className="h-3.5 w-3.5 text-text-secondary" />
                 </button>
-                <button onClick={() => setTags((prev) => prev.filter((x) => x.id !== tag.id))} className="flex h-8 w-8 items-center justify-center rounded-lg border border-border hover:bg-flame/10 text-flame">
+                <button onClick={() => setDeleteTarget(tag)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-border hover:bg-flame/10 text-flame">
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
               </div>
@@ -82,7 +122,22 @@ export default function TagsPage() {
         ))}
       </div>
 
-      {filtered.length === 0 && <p className="py-12 text-center text-sm text-text-tertiary">No tags found.</p>}
+      {loading && <p className="py-8 text-center text-sm text-text-tertiary">Loading…</p>}
+      {!loading && filtered.length === 0 && <p className="py-12 text-center text-sm text-text-tertiary">No tags found.</p>}
+
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy/40 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-2xl border border-border bg-surface p-6 shadow-xl">
+            <div className="flex items-center gap-3 text-amber-600"><AlertTriangle className="h-5 w-5" /><h3 className="font-bold text-navy">Delete tag?</h3></div>
+            <p className="mt-3 text-sm text-text-secondary">Delete <span className="font-semibold">#{deleteTarget.name}</span>?</p>
+            {deleteError && <p className="mt-3 rounded-xl bg-flame/10 p-3 text-sm text-flame">{deleteError}</p>}
+            <div className="mt-6 flex justify-end gap-2">
+              <button onClick={() => { setDeleteTarget(null); setDeleteError(null); }} className="rounded-xl border border-border px-5 py-2.5 text-sm font-semibold hover:bg-surface-raised">Cancel</button>
+              <button onClick={() => handleDelete(deleteTarget)} className="rounded-xl bg-flame px-5 py-2.5 text-sm font-bold text-white">Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy/40 backdrop-blur-sm p-4">
@@ -107,12 +162,13 @@ export default function TagsPage() {
                 <textarea value={form.description ?? ""} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={2} placeholder="What this tag is for..." className="mt-1 w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20 resize-none" />
               </div>
             </div>
+            {error && <p className="mt-4 rounded-xl bg-flame/10 p-3 text-sm text-flame">{error}</p>}
             <div className="mt-6 flex justify-end gap-2">
               <button onClick={() => setShowModal(false)} className="rounded-xl border border-border px-5 py-2.5 text-sm font-semibold hover:bg-surface-raised">
                 Cancel
               </button>
-              <button onClick={handleSave} className="rounded-xl bg-brand px-5 py-2.5 text-sm font-bold text-navy hover:bg-brand-hover">
-                {editing ? "Update" : "Create"}
+              <button onClick={handleSave} disabled={saving} className="rounded-xl bg-brand px-5 py-2.5 text-sm font-bold text-navy hover:bg-brand-hover disabled:opacity-50">
+                {saving ? "Saving…" : editing ? "Update" : "Create"}
               </button>
             </div>
           </div>

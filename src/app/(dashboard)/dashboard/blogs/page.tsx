@@ -2,7 +2,8 @@
 
 import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
-import { Search, Filter, Plus, Trash2, MoreHorizontal, ArrowUpDown, Eye, Edit3, Clock, CheckCircle2, Archive, SearchX } from "lucide-react";
+import { Search, Filter, Plus, Trash2, MoreHorizontal, ArrowUpDown, Eye, Edit3, Clock, CheckCircle2, Archive, SearchX, AlertTriangle } from "lucide-react";
+import { useDebounce } from "@/hooks/useDebounce";
 
 type Status = "all" | "draft" | "published" | "scheduled" | "trash";
 
@@ -29,11 +30,14 @@ const statusStyles: Record<Exclude<Status, "all">, string> = {
 export default function BlogsPage() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search, 300);
   const [status, setStatus] = useState<Status>("all");
   const [sort, setSort] = useState<"newest" | "oldest" | "title" | "updated">("newest");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(1);
   const perPage = 5;
+  const [deleteTarget, setDeleteTarget] = useState<Post | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   useEffect(() => {
     // Fetch real posts from Supabase via API — falls back to [] for new forks
@@ -61,8 +65,8 @@ export default function BlogsPage() {
 
   const filtered = useMemo(() => {
     let out = [...posts];
-    if (search) {
-      const q = search.toLowerCase();
+    if (debouncedSearch) {
+      const q = debouncedSearch.toLowerCase();
       out = out.filter((p) => p.title.toLowerCase().includes(q) || p.slug.includes(q) || p.category.toLowerCase().includes(q));
     }
     if (status !== "all") out = out.filter((p) => p.status === status);
@@ -70,7 +74,7 @@ export default function BlogsPage() {
     else if (sort === "oldest") out.sort((a, b) => (a.publishedAt ?? "").localeCompare(b.publishedAt ?? ""));
     else out.sort((a, b) => (b.publishedAt ?? "").localeCompare(a.publishedAt ?? ""));
     return out;
-  }, [search, status, sort]);
+  }, [debouncedSearch, status, sort]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
   const paginated = filtered.slice((page - 1) * perPage, page * perPage);
@@ -80,6 +84,28 @@ export default function BlogsPage() {
     if (next.has(id)) next.delete(id);
     else next.add(id);
     setSelected(next);
+  };
+
+  const handleDelete = async (post: Post) => {
+    setDeleteError(null);
+    try {
+      const res = await fetch(`/api/blogs/${post.id}`, { method: "DELETE" });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j.error?.message ?? "Delete failed");
+      // Refresh: move to trash or remove
+      const isTrash = j.data?.status === "trash";
+      if (isTrash) setPosts((prev) => prev.map((p) => (p.id === post.id ? { ...p, status: "trash" as const } : p)));
+      else setPosts((prev) => prev.filter((p) => p.id !== post.id));
+      setDeleteTarget(null);
+    } catch (e: any) { setDeleteError(e.message); }
+  };
+
+  const handleBulkTrash = async () => {
+    for (const id of selected) {
+      await fetch(`/api/blogs/${id}`, { method: "DELETE" }).catch(() => {});
+    }
+    setPosts((prev) => prev.map((p) => (selected.has(p.id) ? { ...p, status: "trash" as const } : p)));
+    setSelected(new Set());
   };
 
   const isEmpty = posts.length === 0;
@@ -158,10 +184,22 @@ export default function BlogsPage() {
         <div className="mt-4 flex items-center gap-2 rounded-xl border border-brand/20 bg-brand/5 p-3">
           <span className="text-sm font-semibold text-navy">{selected.size} selected</span>
           <div className="ml-auto flex gap-2">
-            <button className="rounded-lg border border-border bg-surface px-3 py-2 text-xs font-semibold hover:bg-surface-raised">Move to Trash</button>
-            <button onClick={() => setSelected(new Set())} className="rounded-lg bg-navy px-3 py-2 text-xs font-semibold text-white">
-              Clear
-            </button>
+            <button onClick={handleBulkTrash} className="rounded-lg border border-border bg-surface px-3 py-2 text-xs font-semibold hover:bg-surface-raised">Move to Trash</button>
+            <button onClick={() => setSelected(new Set())} className="rounded-lg bg-navy px-3 py-2 text-xs font-semibold text-white">Clear</button>
+          </div>
+        </div>
+      )}
+
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy/40 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-2xl border border-border bg-surface p-6 shadow-xl">
+            <div className="flex items-center gap-3 text-amber-600"><AlertTriangle className="h-5 w-5" /><h3 className="font-bold text-navy">Move to trash?</h3></div>
+            <p className="mt-3 text-sm text-text-secondary">Move <span className="font-semibold">{deleteTarget.title}</span> to trash? You can restore from trash later. Trash items are hard-deleted on second delete.</p>
+            {deleteError && <p className="mt-3 rounded-xl bg-flame/10 p-3 text-sm text-flame">{deleteError}</p>}
+            <div className="mt-6 flex justify-end gap-2">
+              <button onClick={() => { setDeleteTarget(null); setDeleteError(null); }} className="rounded-xl border border-border px-5 py-2.5 text-sm font-semibold hover:bg-surface-raised">Cancel</button>
+              <button onClick={() => handleDelete(deleteTarget)} className="rounded-xl bg-flame px-5 py-2.5 text-sm font-bold text-white">Move to Trash</button>
+            </div>
           </div>
         </div>
       )}
@@ -239,11 +277,11 @@ export default function BlogsPage() {
                         <Link href={`/dashboard/editor/${post.id}`} className="flex h-8 w-8 items-center justify-center rounded-lg border border-border hover:bg-surface-raised">
                           <Edit3 className="h-4 w-4 text-text-secondary" />
                         </Link>
-                        <button className="flex h-8 w-8 items-center justify-center rounded-lg border border-border hover:bg-surface-raised">
+                        <Link href={`/blog/${post.slug}`} target="_blank" className="flex h-8 w-8 items-center justify-center rounded-lg border border-border hover:bg-surface-raised">
                           <Eye className="h-4 w-4 text-text-secondary" />
-                        </button>
-                        <button className="flex h-8 w-8 items-center justify-center rounded-lg border border-border hover:bg-surface-raised">
-                          <MoreHorizontal className="h-4 w-4 text-text-secondary" />
+                        </Link>
+                        <button onClick={() => setDeleteTarget(post)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-border hover:bg-flame/10 text-flame">
+                          <Trash2 className="h-4 w-4" />
                         </button>
                       </div>
                     </td>

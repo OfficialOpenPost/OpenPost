@@ -1,42 +1,34 @@
-# Supabase Migrations — Run one by one
+# Supabase Migrations — Run in Sequential Order
 
-1. Open Supabase Dashboard → SQL Editor → New query
-2. Run each file **in order** `001` → `010` (copy-paste, Run)
-3. Check “Success” then next file. RLS is enabled per table — see notes below.
+1. Open **Supabase Dashboard** &rarr; **SQL Editor** &rarr; **New Query**
+2. Run each file **in sequential order** `001` &rarr; `018` (copy-paste, click **Run**)
+3. Check for “Success”, then proceed to the next file.
 
-| File | What it does |
-|------|--------------|
-| `001_extensions_enums.sql` | `pgcrypto`, `uuid-ossp`, 5 enums |
-| `002_users.sql` | `users` + `update_updated_at()` |
-| `003_categories_tags.sql` | `categories` (single-level parent) + `tags` |
-| `004_authors.sql` | `media` + `authors` (photo FK) |
-| `005_blogs.sql` | `blogs` + `blog_revisions` + `redirects` + `settings` |
-| `006_blog_relations.sql` | `blog_tags`, `blog_authors`, `media_usage` |
-| `007_polls.sql` | `polls`, `poll_options`, `poll_votes` (fingerprint unique) |
-| `008_webhooks.sql` | `webhooks` + `webhook_deliveries` (Sanity-like) |
-| `009_fts_search.sql` | `search_vector` tsvector + GIN index + `search_blogs()` helper |
-| `010_storage_rls.sql` | Notes for R2 vs Supabase Storage (no-op if using R2) |
+| File | Purpose / Description |
+|---|---|
+| `001_extensions_enums.sql` | PostgreSQL extensions (`pgcrypto`, `uuid-ossp`) and base enums |
+| `002_users.sql` | `users` table and `update_updated_at()` trigger function |
+| `003_categories_tags.sql` | `categories` (parent-child hierarchy) and `tags` tables |
+| `004_authors.sql` | `media` storage records and `authors` profile table |
+| `005_blogs.sql` | `blogs`, `blog_revisions`, `redirects`, and `settings` tables |
+| `006_blog_relations.sql` | Many-to-many junction tables (`blog_tags`, `blog_authors`, `media_usage`) |
+| `007_polls.sql` | `polls`, `poll_options`, and `poll_votes` with voter fingerprint uniqueness |
+| `008_webhooks.sql` | `webhooks` definition and `webhook_deliveries` audit logs |
+| `009_fts_search.sql` | Full-text search tsvector column, GIN indexes, and `search_blogs()` helper |
+| `010_storage_rls.sql` | Storage RLS policies and Cloudflare R2 presigned notes |
+| `011_projects_core.sql` | Multi-tenant `projects` and `project_members` tables |
+| `012_integrations_codes.sql` | API `integrations` tokens and `connection_codes` for CLI handshake |
+| `013_fix_role_enum_compat.sql` | Role enum compatibility layer |
+| `014_rls_hardening.sql` | Enterprise RLS hardening across project boundaries |
+| `015_fix_users_name.sql` | Users display name compatibility |
+| `016_auto_profile_on_signup.sql` | Supabase auth signup triggers and automated profile provisioning |
+| `017_strict_rls_and_canonical_roles.sql` | Strict canonical roles (`ADMIN`, `EDITOR`, `WRITER`), composite indexes, and fail-closed RLS policies |
+| `018_assign_legacy_blogs_to_default_project.sql` | Backfills any unassigned legacy posts/taxonomies (`project_id IS NULL`) to primary project |
 
-## RLS Summary
+---
 
-- **Public read:** `blogs` (only `published`), `categories`, `tags`, `authors`, `media`, `redirects`, `polls/options` — for headless API
-- **Authenticated write:** `categories/tags/authors/blogs/media/polls/webhooks` — `auth.role()='authenticated'`
-- **Votes:** public can `insert` into `poll_votes` (unique `poll_id+voter_fingerprint` prevents double vote, rate limit in API)
-- **Users:** `users_self_read` via `auth.uid()`, admin via JWT role; `service_role` bypasses RLS (used by `src/lib/db.ts` with `DATABASE_URL` pooler)
-- **Storage:** R2 uses presigned URLs (`src/lib/storage.ts`); if using Supabase Storage `media` bucket, see `010` comments
+## Row Level Security (RLS) Rules
 
-## After running
-
-```bash
-# Verify
-npx prisma db pull # introspect
-npx prisma generate
-
-# Test RLS
-# As anon: should see only published blogs
-# As authenticated (log in at /login): should see drafts + published
-```
-
-## Supabase Auth
-
-If using Supabase Auth (recommended), `users` table is optional — you can sync `auth.users` → `users` via trigger, or just use `auth.uid()` directly. Current API uses `created_by uuid` — set to `auth.uid()` in `src/app/api/blogs/route.ts:24`.
+* **Public Read**: `blogs` (strictly `status = 'published'`), `categories`, `tags`, `authors`, `polls` & `options`.
+* **Member Read / Write**: Full draft editing and creation scoped strictly to projects where `project_members.user_id = auth.uid()`.
+* **Admin Governance**: Role permissions (`ADMIN` > `EDITOR` > `WRITER`) enforced at both database RLS and API layer.

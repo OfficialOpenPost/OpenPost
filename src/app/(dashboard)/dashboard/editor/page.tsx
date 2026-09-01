@@ -209,14 +209,14 @@ export default function EditorPage() {
       </header>
       {/* Spacer for fixed header */}
       <div className="h-16 shrink-0" />
-      {/* Toolbar — floating pill over editing content on right side, no line */}
-      <div className="hidden lg:flex fixed z-30 rounded-full bg-white shadow-xl px-2 py-1 border-0" style={showSidebar ? { right: 24, top: 76, left: sidebarWidth + 16 } : { right: 24, top: 76, left: 16 }}>
+      {/* Toolbar — light, bold, floating only over editing content on right side — no black */}
+      <div className="hidden lg:flex fixed z-30 rounded-full bg-white shadow-xl border border-border px-2 py-1" style={showSidebar ? { right: 24, top: 76, left: sidebarWidth + 16 } : { right: 24, top: 76, left: 16 }}>
         <div className="mx-auto">
           <Toolbar editor={editor} />
         </div>
       </div>
-      {/* Mobile toolbar — below header, no line */}
-      <div className="bg-white shrink-0 lg:hidden">
+      {/* Mobile toolbar — below header */}
+      <div className="bg-white shrink-0 lg:hidden border-b border-border">
         <Toolbar editor={editor} />
       </div>
 

@@ -51,8 +51,8 @@ function ToolbarButton({
       title={title}
       aria-label={title}
       aria-pressed={active}
-      className={`flex h-8 w-8 items-center justify-center rounded-lg text-sm transition ${
-        active ? "bg-navy text-white shadow-sm" : "text-text-secondary hover:bg-surface-raised hover:text-text-primary"
+      className={`flex h-8 w-8 items-center justify-center rounded-lg text-sm font-extrabold transition ${
+        active ? "bg-[#FEA611] text-[#2D3440] shadow-sm" : "text-[#2D3440] hover:bg-[#FEA611]/10 hover:text-[#2D3440]"
       }`}
     >
       {children}

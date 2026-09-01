@@ -41,16 +41,16 @@ export default function BlogsPage() {
 
   useEffect(() => {
     // Fetch real posts from Supabase via API — falls back to [] for new forks
-    fetch("/api/blogs?limit=50")
+    fetch(`/api/blogs?limit=50&_t=${Date.now()}`, { cache: "no-store" })
       .then((r) => r.json())
       .then((j) => {
         if (Array.isArray(j.data)) {
           const mapped: Post[] = j.data.map((b: any) => ({
             id: b.id,
-            title: b.title,
+            title: b.title || "Untitled Article",
             slug: b.slug,
             status: b.status as Exclude<Status, "all">,
-            author: "You",
+            author: b.author?.name ?? "You",
             category: b.category?.name ?? "Uncategorized",
             tags: [],
             publishedAt: b.publishedAt ?? b.createdAt ?? null,

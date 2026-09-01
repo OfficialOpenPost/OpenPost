@@ -57,11 +57,11 @@ export default function DashboardPage() {
     try {
       setLoading(true);
       const [blogsRes, catsRes, tagsRes, authorsRes, mediaRes] = await Promise.all([
-        fetch("/api/blogs?limit=50").then((r) => r.json()).catch(() => ({ data: [] })),
-        fetch("/api/v1/categories").then((r) => r.json()).catch(() => ({ data: [] })),
-        fetch("/api/v1/tags").then((r) => r.json()).catch(() => ({ data: [] })),
-        fetch("/api/v1/authors").then((r) => r.json()).catch(() => ({ data: [] })),
-        fetch("/api/media?limit=1").then((r) => r.json()).catch(() => ({ data: [], meta: { total: 0 } })),
+        fetch(`/api/blogs?limit=50&_t=${Date.now()}`, { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
+        fetch("/api/v1/categories", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
+        fetch("/api/v1/tags", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
+        fetch("/api/v1/authors", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
+        fetch("/api/media?limit=1", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [], meta: { total: 0 } })),
       ]);
 
       const postList: PostItem[] = Array.isArray(blogsRes.data) ? blogsRes.data : [];

@@ -127,7 +127,9 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
           }
           if (editor && post.content) {
             try {
-              editor.commands.setContent(post.content);
+              queueMicrotask(() => {
+                editor.commands.setContent(post.content);
+              });
             } catch (err) {
               console.warn("Could not set editor content:", err);
             }

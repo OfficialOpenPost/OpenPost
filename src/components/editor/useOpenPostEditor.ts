@@ -3,6 +3,20 @@
 import { useEditor } from "@tiptap/react";
 import { editorExtensions } from "./extensions";
 
+// Suppress benign @tiptap/react ReactRenderer flushSync lifecycle dev noise in React 18/19
+if (typeof window !== "undefined") {
+  const origError = console.error;
+  console.error = (...args: any[]) => {
+    if (
+      typeof args[0] === "string" &&
+      args[0].includes("flushSync was called from inside a lifecycle method")
+    ) {
+      return;
+    }
+    origError.apply(console, args);
+  };
+}
+
 interface UseOpenPostEditorOptions {
   content?: any;
   onChange?: (html: string, json: Record<string, unknown>) => void;

@@ -139,10 +139,12 @@ export function FloatingImageView({
         const nw = img.naturalWidth || 800;
         const nh = img.naturalHeight || 600;
         const ar = Number((nw / nh).toFixed(4));
-        updateAttributes({
-          naturalWidth: nw,
-          naturalHeight: nh,
-          aspectRatio: ar,
+        queueMicrotask(() => {
+          updateAttributes({
+            naturalWidth: nw,
+            naturalHeight: nh,
+            aspectRatio: ar,
+          });
         });
       }
     },

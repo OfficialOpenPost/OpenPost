@@ -107,6 +107,38 @@ async function resolveAuthorUserId(): Promise<string> {
   return "00000000-0000-0000-0000-000000000000";
 }
 
+export async function GET(req: NextRequest) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const limit = parseInt(searchParams.get("limit") || "50", 10);
+    const status = searchParams.get("status");
+
+    const where: any = {};
+    if (status && status !== "all") {
+      where.status = status;
+    }
+
+    const blogs = await db.blog.findMany({
+      where: Object.keys(where).length ? where : undefined,
+      take: Math.min(100, Math.max(1, limit)),
+      orderBy: { updatedAt: "desc" },
+      include: {
+        category: true,
+        author: { select: { name: true, email: true } },
+        featuredImage: true,
+      } as never,
+    });
+
+    return NextResponse.json({ data: blogs });
+  } catch (error: any) {
+    console.error("GET /api/blogs error:", error);
+    return NextResponse.json(
+      { error: { code: "FETCH_FAILED", message: String(error?.message ?? error) } },
+      { status: 500 }
+    );
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();

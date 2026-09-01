@@ -2,12 +2,6 @@
 
 import type { Editor } from "@tiptap/core";
 import {
-  Bold,
-  Italic,
-  Underline as UnderlineIcon,
-  Strikethrough,
-  Highlighter,
-  RemoveFormatting,
   Heading1,
   Heading2,
   Heading3,
@@ -289,53 +283,6 @@ export function Toolbar({ editor }: ToolbarProps) {
                 </button>
               </div>
             )}
-          </div>
-
-          <Divider />
-
-          {/* Text Styling */}
-          <div className="flex items-center gap-1 shrink-0">
-            <ToolbarButton
-              active={editor.isActive("bold")}
-              onClick={() => editor.chain().focus().toggleBold().run()}
-              title="Bold (Ctrl+B)"
-            >
-              <Bold className="h-3.5 w-3.5" />
-            </ToolbarButton>
-            <ToolbarButton
-              active={editor.isActive("italic")}
-              onClick={() => editor.chain().focus().toggleItalic().run()}
-              title="Italic (Ctrl+I)"
-            >
-              <Italic className="h-3.5 w-3.5" />
-            </ToolbarButton>
-            <ToolbarButton
-              active={editor.isActive("underline")}
-              onClick={() => editor.chain().focus().toggleUnderline().run()}
-              title="Underline (Ctrl+U)"
-            >
-              <UnderlineIcon className="h-3.5 w-3.5" />
-            </ToolbarButton>
-            <ToolbarButton
-              active={editor.isActive("strike")}
-              onClick={() => editor.chain().focus().toggleStrike().run()}
-              title="Strikethrough"
-            >
-              <Strikethrough className="h-3.5 w-3.5" />
-            </ToolbarButton>
-            <ToolbarButton
-              active={editor.isActive("highlight")}
-              onClick={() => editor.chain().focus().toggleHighlight().run()}
-              title="Highlight Text"
-            >
-              <Highlighter className="h-3.5 w-3.5" />
-            </ToolbarButton>
-            <ToolbarButton
-              onClick={() => editor.chain().focus().unsetAllMarks().clearNodes().run()}
-              title="Clear Formatting"
-            >
-              <RemoveFormatting className="h-3.5 w-3.5" />
-            </ToolbarButton>
           </div>
 
           <Divider />

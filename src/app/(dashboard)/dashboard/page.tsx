@@ -58,7 +58,7 @@ export default function DashboardPage() {
       setLoading(true);
       const activeProjId = typeof window !== "undefined" ? localStorage.getItem("openpost_active_project_id") : null;
       const projQuery = activeProjId ? `&projectId=${activeProjId}` : "";
-      const projHeader = activeProjId ? { "X-OpenPost-Project": activeProjId } : {};
+      const projHeader: Record<string, string> = activeProjId ? { "X-OpenPost-Project": activeProjId } : {};
 
       const [blogsRes, catsRes, tagsRes, authorsRes, mediaRes] = await Promise.all([
         fetch(`/api/blogs?limit=50&_t=${Date.now()}${projQuery}`, {

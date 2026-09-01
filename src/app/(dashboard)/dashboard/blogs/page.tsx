@@ -67,14 +67,16 @@ export default function BlogsPage() {
       const projQuery = activeProjId ? `&projectId=${activeProjId}` : "";
       const catQuery = activeProjId ? `?project=${activeProjId}` : "";
 
+      const projHeaders: Record<string, string> = activeProjId ? { "X-OpenPost-Project": activeProjId } : {};
+
       const [blogsRes, catsRes] = await Promise.all([
         fetch(`/api/blogs?limit=100&_t=${Date.now()}${projQuery}`, {
           cache: "no-store",
-          headers: activeProjId ? { "X-OpenPost-Project": activeProjId } : {},
+          headers: projHeaders,
         }).then((r) => r.json()),
         fetch(`/api/v1/categories${catQuery}`, {
           cache: "no-store",
-          headers: activeProjId ? { "X-OpenPost-Project": activeProjId } : {},
+          headers: projHeaders,
         }).then((r) => r.json()).catch(() => ({ data: [] })),
       ]);
 

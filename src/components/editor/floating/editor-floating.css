@@ -1,0 +1,97 @@
+/* ================================================================
+   OpenPost Floating Image & Text Flow Layout System
+   ================================================================ */
+
+.openpost-floating-image-node {
+  box-sizing: border-box !important;
+  position: relative !important;
+}
+
+/* Floating left */
+.openpost-floating-image-node[data-float="left"] {
+  float: left !important;
+  clear: none !important;
+  display: block !important;
+  max-width: 80% !important;
+  margin: 4px 14px 8px 0px !important;
+}
+
+/* Floating right */
+.openpost-floating-image-node[data-float="right"] {
+  float: right !important;
+  clear: none !important;
+  display: block !important;
+  max-width: 80% !important;
+  margin: 4px 0px 8px 14px !important;
+}
+
+/* Center */
+.openpost-floating-image-node[data-layout="center"]:not([data-float="left"]):not([data-float="right"]) {
+  float: none !important;
+  clear: both !important;
+  display: block !important;
+  max-width: 100% !important;
+  margin: 1.25rem auto !important;
+}
+
+/* Wide */
+.openpost-floating-image-node[data-layout="wide"] {
+  float: none !important;
+  clear: both !important;
+  display: block !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  margin: 1.5rem 0 !important;
+}
+
+/* Text block flow around floats */
+.tiptap {
+  position: relative;
+}
+
+.tiptap::after {
+  content: "";
+  display: table;
+  clear: both;
+}
+
+.tiptap > p,
+.tiptap > h1,
+.tiptap > h2,
+.tiptap > h3,
+.tiptap > h4,
+.tiptap > h5,
+.tiptap > h6,
+.tiptap > ul,
+.tiptap > ol,
+.tiptap > blockquote {
+  overflow: visible;
+  clear: none;
+}
+
+/* Mobile responsive fallback */
+@media (max-width: 640px) {
+  .openpost-floating-image-node[data-float="left"],
+  .openpost-floating-image-node[data-float="right"] {
+    float: none !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 1rem 0 !important;
+    clear: both !important;
+  }
+}
+
+/* Move line drop indicator matching dragged image width */
+.prosemirror-dropcursor-block,
+.openpost-prosemirror-dropcursor {
+  width: var(--dragged-image-width, 100%) !important;
+  max-width: var(--dragged-image-width, 100%) !important;
+  height: 3px !important;
+  background: #FEA611 !important;
+  border-radius: 3px !important;
+  box-shadow: 0 0 8px rgba(254, 166, 17, 0.45) !important;
+  pointer-events: none !important;
+  margin-left: 0 !important;
+  transition: width 0.1s ease !important;
+}
+

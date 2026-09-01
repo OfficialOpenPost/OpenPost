@@ -121,92 +121,86 @@ export function EditorSidePanel({
 
   return (
     <div className="flex flex-col h-full bg-white text-navy select-none">
-      {/* Context Mode Indicators */}
-      {isImageActive ? (
-        <div className="p-3 bg-brand/10 border-b border-brand/20 flex items-center gap-2 text-xs font-bold text-navy">
-          <ImageIcon className="h-4 w-4 text-brand" />
-          <span>Active Context: Image Selected</span>
-        </div>
-      ) : isTableActive ? (
-        <div className="p-3 bg-brand/10 border-b border-brand/20 flex items-center gap-2 text-xs font-bold text-navy">
-          <TableIcon className="h-4 w-4 text-brand" />
-          <span>Active Context: Table Cell</span>
-        </div>
-      ) : (
-        /* Regular Navigation Tabs */
-        <div className="grid grid-cols-6 p-1 border-b border-border bg-[#F9FAFB] gap-0.5 text-[11px] font-bold text-center">
-          <button
-            type="button"
-            onClick={() => setActiveTab("post")}
-            className={`py-2 rounded-lg transition ${
-              activeTab === "post" ? "bg-white text-navy shadow-xs" : "text-text-tertiary hover:text-navy"
-            }`}
-            title="Post Details & Tags"
-          >
-            Post
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab("seo")}
-            className={`py-2 rounded-lg transition relative ${
-              activeTab === "seo" ? "bg-white text-navy shadow-xs" : "text-text-tertiary hover:text-navy"
-            }`}
-            title="SEO & Social Meta"
-          >
-            SEO
-            {seoWarnings.length > 0 && (
-              <span className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-brand" />
-            )}
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab("cover")}
-            className={`py-2 rounded-lg transition ${
-              activeTab === "cover" ? "bg-white text-navy shadow-xs" : "text-text-tertiary hover:text-navy"
-            }`}
-            title="Cover Image"
-          >
-            Cover
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab("publish")}
-            className={`py-2 rounded-lg transition ${
-              activeTab === "publish" ? "bg-white text-navy shadow-xs" : "text-text-tertiary hover:text-navy"
-            }`}
-            title="Publishing Status"
-          >
-            Status
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab("history")}
-            className={`py-2 rounded-lg transition ${
-              activeTab === "history" ? "bg-white text-navy shadow-xs" : "text-text-tertiary hover:text-navy"
-            }`}
-            title="Revisions History"
-          >
-            Revisions
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab("outline")}
-            className={`py-2 rounded-lg transition ${
-              activeTab === "outline" ? "bg-white text-navy shadow-xs" : "text-text-tertiary hover:text-navy"
-            }`}
-            title="Document Outline"
-          >
-            Outline
-          </button>
+      {/* Table Context Mode Indicator (only if active table cell) */}
+      {isTableActive && (
+        <div className="p-2.5 bg-brand/10 border-b border-brand/20 flex items-center justify-between text-xs font-bold text-navy">
+          <div className="flex items-center gap-2">
+            <TableIcon className="h-4 w-4 text-brand" />
+            <span>Table Cell Tools</span>
+          </div>
         </div>
       )}
 
+      {/* Regular Navigation Tabs */}
+      <div className="grid grid-cols-6 p-1 border-b border-border bg-[#F9FAFB] gap-0.5 text-[11px] font-bold text-center">
+        <button
+          type="button"
+          onClick={() => setActiveTab("post")}
+          className={`py-2 rounded-lg transition ${
+            activeTab === "post" ? "bg-white text-navy shadow-xs font-bold" : "text-text-tertiary hover:text-navy"
+          }`}
+          title="Post Details & Tags"
+        >
+          Post
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("seo")}
+          className={`py-2 rounded-lg transition relative ${
+            activeTab === "seo" ? "bg-white text-navy shadow-xs font-bold" : "text-text-tertiary hover:text-navy"
+          }`}
+          title="SEO & Social Meta"
+        >
+          SEO
+          {seoWarnings.length > 0 && (
+            <span className="absolute top-1 right-1 h-1.5 w-1.5 rounded-full bg-brand" />
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("cover")}
+          className={`py-2 rounded-lg transition ${
+            activeTab === "cover" ? "bg-white text-navy shadow-xs font-bold" : "text-text-tertiary hover:text-navy"
+          }`}
+          title="Cover Image"
+        >
+          Cover
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("publish")}
+          className={`py-2 rounded-lg transition ${
+            activeTab === "publish" ? "bg-white text-navy shadow-xs font-bold" : "text-text-tertiary hover:text-navy"
+          }`}
+          title="Publishing Status"
+        >
+          Status
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("history")}
+          className={`py-2 rounded-lg transition ${
+            activeTab === "history" ? "bg-white text-navy shadow-xs font-bold" : "text-text-tertiary hover:text-navy"
+          }`}
+          title="Revisions History"
+        >
+          Revisions
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("outline")}
+          className={`py-2 rounded-lg transition ${
+            activeTab === "outline" ? "bg-white text-navy shadow-xs font-bold" : "text-text-tertiary hover:text-navy"
+          }`}
+          title="Document Outline"
+        >
+          Outline
+        </button>
+      </div>
+
       {/* Main Panel Content */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 text-xs">
-        {/* Context 1: Image Selected */}
-        {isImageActive && editor ? (
-          <ImageSettingsPanel editor={editor} />
-        ) : isTableActive && editor ? (
+        {isTableActive && editor ? (
           <TableContextMenu editor={editor} />
         ) : (
           <>

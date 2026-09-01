@@ -272,11 +272,11 @@ function EditorInner({ initialBlogId }: EditorPageProps) {
   }
 
   return (
-    <div className={`min-h-screen bg-[#F4F5F7] flex flex-col text-navy ${isFullscreen ? "fixed inset-0 z-50 overflow-hidden" : ""}`}>
+    <div className="fixed inset-0 h-screen w-screen overflow-hidden bg-[#F4F5F7] flex flex-col text-navy select-none">
       <style dangerouslySetInnerHTML={{ __html: EDITOR_STYLES }} />
 
-      {/* Top Application Bar */}
-      <header className="fixed top-0 left-0 right-0 h-14 border-b border-border bg-white z-30 flex items-center justify-between px-4 sm:px-6 shadow-xs">
+      {/* Top Application Bar (Fixed at top: 0, height: 56px) */}
+      <header className="h-14 shrink-0 border-b border-border bg-white z-30 flex items-center justify-between px-4 sm:px-6 shadow-xs select-none">
         <div className="flex items-center gap-3 min-w-0">
           <Link
             href="/dashboard/blogs"
@@ -360,8 +360,25 @@ function EditorInner({ initialBlogId }: EditorPageProps) {
         </div>
       </header>
 
-      {/* Editor Body */}
-      <div className="flex-1 flex pt-14 h-[calc(100vh)] overflow-hidden relative">
+      {/* FIXED TOP OPTIONS NAVBAR (Directly below header, 100% fixed, always visible) */}
+      <div
+        className="w-full shrink-0 border-b border-border bg-white/95 backdrop-blur-md px-3 sm:px-5 py-1.5 flex justify-center z-20 shadow-xs transition-all overflow-hidden"
+        style={{ paddingRight: showSidebar ? `${sidebarWidth}px` : undefined }}
+      >
+        <div className="w-full max-w-[920px] 2xl:max-w-[1020px]">
+          <EditorRibbon
+            editor={editor}
+            onOpenFindReplace={() => setShowFindReplace(true)}
+            onToggleOutline={() => setShowOutlineDrawer(!showOutlineDrawer)}
+            onToggleFullscreen={() => setIsFullscreen(!isFullscreen)}
+            isFullscreen={isFullscreen}
+            onOpenPreview={() => setPreview(true)}
+          />
+        </div>
+      </div>
+
+      {/* Editor Body Area (Fills exact remaining viewport height, zero outer scroll) */}
+      <div className="flex-1 flex overflow-hidden relative min-h-0">
         {/* Document Outline Drawer (Collapsible Left Flyout) */}
         {showOutlineDrawer && (
           <div className="fixed left-0 top-14 bottom-0 z-25 w-72 border-r border-border bg-white/95 backdrop-blur-md p-4 shadow-xl overflow-y-auto animate-in slide-in-from-left duration-200">
@@ -369,43 +386,33 @@ function EditorInner({ initialBlogId }: EditorPageProps) {
           </div>
         )}
 
-        {/* Main Canvas Area */}
+        {/* Find & Replace Bar Overlay */}
+        <FindReplaceBar
+          editor={editor}
+          isOpen={showFindReplace}
+          onClose={() => setShowFindReplace(false)}
+        />
+
+        {/* Main Canvas Area (Fixed, centered paper card) */}
         <main
-          className="flex-1 flex flex-col items-center py-3 px-3 sm:px-6 h-full overflow-hidden transition-all relative"
+          className="flex-1 flex flex-col items-center p-3 sm:p-4 h-full overflow-hidden transition-all relative min-h-0 w-full"
           style={{ marginRight: showSidebar ? `${sidebarWidth}px` : "0" }}
         >
-          {/* Find & Replace Bar Overlay */}
-          <FindReplaceBar
-            editor={editor}
-            isOpen={showFindReplace}
-            onClose={() => setShowFindReplace(false)}
-          />
-
-          {/* Multi-tier Word/Docs Style Ribbon Toolbar */}
-          <div className="w-full max-w-5xl mb-3 shrink-0">
-            <EditorRibbon
-              editor={editor}
-              onOpenFindReplace={() => setShowFindReplace(true)}
-              onToggleOutline={() => setShowOutlineDrawer(!showOutlineDrawer)}
-              onToggleFullscreen={() => setIsFullscreen(!isFullscreen)}
-              isFullscreen={isFullscreen}
-              onOpenPreview={() => setPreview(true)}
-            />
-          </div>
-
-          {/* Central Document Paper Canvas */}
-          <div className="w-full max-w-5xl flex-1 bg-white rounded-2xl border border-border shadow-sm overflow-hidden flex flex-col transition-all mb-3">
-            {/* Scrollable Canvas Container */}
-            <div className="flex-1 overflow-y-auto p-8 sm:p-14 relative">
-              {/* Title Input */}
+          {/* Central Document Paper Card — Fixed size, ONLY internal content scrolls */}
+          <div className="w-full max-w-[920px] 2xl:max-w-[1020px] h-full flex flex-col bg-white rounded-2xl border border-border shadow-sm overflow-hidden relative transition-all min-h-0">
+            {/* Title Section (Fixed at top of paper card) */}
+            <div className="px-6 sm:px-12 pt-6 pb-3 shrink-0 border-b border-border/40 bg-white">
               <input
                 type="text"
                 placeholder="Article Title..."
                 value={title}
                 onChange={(e) => handleTitleChange(e.target.value)}
-                className="w-full text-3xl sm:text-5xl font-black text-navy placeholder:text-text-tertiary focus:outline-none border-b border-border pb-5 mb-8 leading-tight tracking-tight"
+                className="w-full text-2xl sm:text-4xl font-black text-navy placeholder:text-text-tertiary focus:outline-none leading-tight tracking-tight bg-transparent"
               />
+            </div>
 
+            {/* Scrollable Document Canvas (ONLY the text/image content inside scrolls) */}
+            <div className="flex-1 overflow-y-auto overflow-x-hidden px-6 sm:px-12 py-6 relative select-text">
               {/* Dynamic Editor CSS Injection */}
               <style dangerouslySetInnerHTML={{ __html: EDITOR_STYLES }} />
 
@@ -415,11 +422,12 @@ function EditorInner({ initialBlogId }: EditorPageProps) {
               {/* Tiptap Canvas */}
               <EditorContent
                 editor={editor}
-                className="prose prose-lg prose-navy max-w-none focus:outline-none min-h-[480px]"
+                className="prose prose-lg prose-navy max-w-none focus:outline-none min-h-[360px]"
               />
             </div>
           </div>
         </main>
+      </div>
 
         {/* Resizer Handle */}
         {showSidebar && (
@@ -475,9 +483,8 @@ function EditorInner({ initialBlogId }: EditorPageProps) {
           </aside>
         )}
       </div>
-    </div>
-  );
-}
+    );
+  }
 
 export default function EditorPage({ initialBlogId }: EditorPageProps) {
   return (

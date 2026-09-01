@@ -141,13 +141,25 @@ export function SharedRender({ content }: SharedRenderProps) {
               xl: "shadow-2xl",
             };
 
+            const parseRenderWidth = (w: any) => {
+              if (typeof w === "number") return `${w}px`;
+              if (typeof w === "string") return w;
+              return "380px";
+            };
+
             const figureStyle: React.CSSProperties = {
-              width: isLeft || isRight ? (width === "100%" ? "45%" : width || "45%") : isCenter ? (width || "100%") : isWide ? "100%" : (width || "280px"),
-              maxWidth: isLeft || isRight ? "60%" : "100%",
-              marginTop: `${marginTop}px`,
-              marginRight: isCenter ? "auto" : isRight ? "0px" : `${marginRight}px`,
-              marginBottom: `${marginBottom}px`,
-              marginLeft: isCenter ? "auto" : isLeft ? "0px" : `${marginLeft}px`,
+              width: isLeft || isRight
+                ? (width === "100%" ? "42%" : parseRenderWidth(width))
+                : isCenter
+                ? (width === "100%" ? "100%" : parseRenderWidth(width))
+                : isWide
+                ? "100%"
+                : parseRenderWidth(width),
+              maxWidth: "100%",
+              marginTop: `${marginTop ?? 6}px`,
+              marginRight: isCenter ? "auto" : isRight ? "0px" : `${marginRight ?? 20}px`,
+              marginBottom: `${marginBottom ?? 12}px`,
+              marginLeft: isCenter ? "auto" : isLeft ? "0px" : `${marginLeft ?? 20}px`,
             };
 
             const imageElement = (
@@ -157,7 +169,7 @@ export function SharedRender({ content }: SharedRenderProps) {
                 alt={isDecorative ? "" : alt || ""}
                 title={title || undefined}
                 loading="lazy"
-                className={`block w-full h-auto object-cover ${shadowMap[shadow] || "shadow-xs"} transition-all`}
+                className={`block w-full h-auto object-contain ${shadowMap[shadow] || "shadow-xs"} transition-all`}
                 style={{
                   borderRadius: `${borderRadius}px`,
                   borderWidth: borderWidth ? `${borderWidth}px` : undefined,

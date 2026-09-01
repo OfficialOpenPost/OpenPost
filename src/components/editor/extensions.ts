@@ -19,7 +19,8 @@ import Color from "@tiptap/extension-color";
 import TextAlign from "@tiptap/extension-text-align";
 import { SlashExtension } from "./SlashMenu";
 import { Extension } from "@tiptap/core";
-import { FloatingImage } from "./image/FloatingImageExtension";
+import { FloatingImageNode } from "./floating/FloatingImageNode";
+import "./floating/editor-floating.css";
 import { FontSize } from "./extensions/FontSize";
 import { LineHeight } from "./extensions/LineHeight";
 import { Callout } from "./blocks/Callout";
@@ -85,6 +86,11 @@ export const editorExtensions = [
         class: "leading-relaxed text-text-primary my-3.5",
       },
     },
+    dropcursor: {
+      color: "#FEA611",
+      width: 3,
+      class: "openpost-prosemirror-dropcursor",
+    },
   }),
   Underline,
   Subscript,
@@ -107,7 +113,7 @@ export const editorExtensions = [
       class: "text-flame underline underline-offset-4 decoration-flame/30 hover:decoration-flame font-medium cursor-pointer",
     },
   }),
-  FloatingImage,
+  FloatingImageNode,
   Youtube.configure({
     HTMLAttributes: {
       class: "aspect-video w-full rounded-2xl my-6 overflow-hidden shadow-sm",
@@ -180,6 +186,7 @@ export const EDITOR_STYLES = `
     -webkit-font-smoothing: antialiased;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
     position: relative;
+    font-family: Inter, system-ui, -apple-system, sans-serif;
   }
 
   .tiptap::after {
@@ -202,8 +209,7 @@ export const EDITOR_STYLES = `
     font-size: 1.125rem;
     color: #2D3440;
     text-wrap: pretty;
-    clear: none !important;
-    overflow: visible !important;
+    overflow: visible;
   }
 
   .tiptap h1 {
@@ -213,7 +219,6 @@ export const EDITOR_STYLES = `
     letter-spacing: -0.025em;
     margin: 2.5rem 0 1rem;
     color: #1E293B;
-    clear: none !important;
   }
 
   .tiptap h2 {
@@ -223,7 +228,6 @@ export const EDITOR_STYLES = `
     letter-spacing: -0.02em;
     margin: 2rem 0 0.85rem;
     color: #1E293B;
-    clear: none !important;
   }
 
   .tiptap h3 {
@@ -232,7 +236,6 @@ export const EDITOR_STYLES = `
     line-height: 1.35;
     margin: 1.75rem 0 0.75rem;
     color: #334155;
-    clear: none !important;
   }
 
   .tiptap h4 {
@@ -241,57 +244,6 @@ export const EDITOR_STYLES = `
     line-height: 1.4;
     margin: 1.5rem 0 0.5rem;
     color: #334155;
-    clear: none !important;
-  }
-
-  /* ========================================================== */
-  /* TEXT ALIGNMENTS                                            */
-  /* ========================================================== */
-
-  .tiptap [style*="text-align: center"],
-  .tiptap p[style*="text-align: center"],
-  .tiptap h1[style*="text-align: center"],
-  .tiptap h2[style*="text-align: center"],
-  .tiptap h3[style*="text-align: center"],
-  .tiptap h4[style*="text-align: center"],
-  .tiptap h5[style*="text-align: center"],
-  .tiptap h6[style*="text-align: center"],
-  .tiptap blockquote[style*="text-align: center"],
-  .tiptap div[style*="text-align: center"] {
-    text-align: center !important;
-  }
-
-  .tiptap [style*="text-align: right"],
-  .tiptap p[style*="text-align: right"],
-  .tiptap h1[style*="text-align: right"],
-  .tiptap h2[style*="text-align: right"],
-  .tiptap h3[style*="text-align: right"],
-  .tiptap h4[style*="text-align: right"],
-  .tiptap h5[style*="text-align: right"],
-  .tiptap h6[style*="text-align: right"],
-  .tiptap blockquote[style*="text-align: right"],
-  .tiptap div[style*="text-align: right"] {
-    text-align: right !important;
-  }
-
-  .tiptap [style*="text-align: justify"],
-  .tiptap p[style*="text-align: justify"],
-  .tiptap h1[style*="text-align: justify"],
-  .tiptap h2[style*="text-align: justify"],
-  .tiptap h3[style*="text-align: justify"],
-  .tiptap h4[style*="text-align: justify"],
-  .tiptap div[style*="text-align: justify"] {
-    text-align: justify !important;
-  }
-
-  .tiptap [style*="text-align: left"],
-  .tiptap p[style*="text-align: left"],
-  .tiptap h1[style*="text-align: left"],
-  .tiptap h2[style*="text-align: left"],
-  .tiptap h3[style*="text-align: left"],
-  .tiptap h4[style*="text-align: left"],
-  .tiptap div[style*="text-align: left"] {
-    text-align: left !important;
   }
 
   .tiptap a {
@@ -352,93 +304,9 @@ export const EDITOR_STYLES = `
     background: rgba(254,166,17,0.28);
   }
 
-  /* ========================================================== */
-  /* PROFESSIONAL EDITORIAL FLOATING IMAGE & TEXT FLOW RULES   */
-  /* ========================================================== */
-
-  .tiptap .floating-image-host.image-float-left,
-  .tiptap div[data-node-view-wrapper].image-align-left,
-  .tiptap .floating-image-nodeview-root.image-align-left,
-  .tiptap .image-align-left {
-    float: left !important;
-    clear: none !important;
-    display: inline-block !important;
-  }
-
-  .tiptap .floating-image-host.image-float-right,
-  .tiptap div[data-node-view-wrapper].image-align-right,
-  .tiptap .floating-image-nodeview-root.image-align-right,
-  .tiptap .image-align-right {
-    float: right !important;
-    clear: none !important;
-    display: inline-block !important;
-  }
-
-  .tiptap .floating-image-host.image-float-center,
-  .tiptap div[data-node-view-wrapper].image-align-center,
-  .tiptap .floating-image-nodeview-root.image-align-center,
-  .tiptap .image-align-center {
-    display: block !important;
-    width: 100% !important;
-    clear: both !important;
-    float: none !important;
-    margin-left: auto !important;
-    margin-right: auto !important;
-    text-align: center !important;
-  }
-
-  .tiptap .floating-image-host.image-float-wide,
-  .tiptap div[data-node-view-wrapper].image-align-wide,
-  .tiptap .floating-image-nodeview-root.image-align-wide,
-  .tiptap .image-align-wide {
-    display: block !important;
-    width: 100% !important;
-    clear: both !important;
-    float: none !important;
-  }
-
-  .tiptap .floating-image-host.image-float-inline,
-  .tiptap div[data-node-view-wrapper].image-align-inline,
-  .tiptap .floating-image-nodeview-root.image-align-inline,
-  .tiptap .image-align-inline {
-    display: inline-block !important;
-    vertical-align: middle !important;
-    clear: none !important;
-    float: none !important;
-  }
-
-  /* Text flow clarity alongside floats */
-  .tiptap p,
-  .tiptap h1,
-  .tiptap h2,
-  .tiptap h3,
-  .tiptap h4,
-  .tiptap h5,
-  .tiptap h6,
-  .tiptap ul,
-  .tiptap ol,
-  .tiptap blockquote {
-    clear: none !important;
-    overflow: visible !important;
-    display: block;
-  }
-
-  /* Mobile responsiveness: collapse floats automatically to prevent overflow */
-  @media (max-width: 640px) {
-    .tiptap .floating-image-host.image-float-left,
-    .tiptap .floating-image-host.image-float-right,
-    .tiptap div[data-node-view-wrapper].image-align-left,
-    .tiptap div[data-node-view-wrapper].image-align-right,
-    .tiptap .floating-image-nodeview-root.image-align-left,
-    .tiptap .floating-image-nodeview-root.image-align-right,
-    .tiptap .image-align-left,
-    .tiptap .image-align-right {
-      float: none !important;
-      display: block !important;
-      width: 100% !important;
-      margin-left: auto !important;
-      margin-right: auto !important;
-      clear: both !important;
-    }
-  }
+  /* Text alignment */
+  .tiptap [style*="text-align: center"] { text-align: center !important; }
+  .tiptap [style*="text-align: right"] { text-align: right !important; }
+  .tiptap [style*="text-align: justify"] { text-align: justify !important; }
+  .tiptap [style*="text-align: left"] { text-align: left !important; }
 `;

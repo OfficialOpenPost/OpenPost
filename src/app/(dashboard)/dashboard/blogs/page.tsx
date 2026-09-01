@@ -63,9 +63,19 @@ export default function BlogsPage() {
   const fetchPosts = useCallback(async () => {
     setLoading(true);
     try {
+      const activeProjId = typeof window !== "undefined" ? localStorage.getItem("openpost_active_project_id") : null;
+      const projQuery = activeProjId ? `&projectId=${activeProjId}` : "";
+      const catQuery = activeProjId ? `?project=${activeProjId}` : "";
+
       const [blogsRes, catsRes] = await Promise.all([
-        fetch(`/api/blogs?limit=100&_t=${Date.now()}`, { cache: "no-store" }).then((r) => r.json()),
-        fetch("/api/v1/categories", { cache: "no-store" }).then((r) => r.json()).catch(() => ({ data: [] })),
+        fetch(`/api/blogs?limit=100&_t=${Date.now()}${projQuery}`, {
+          cache: "no-store",
+          headers: activeProjId ? { "X-OpenPost-Project": activeProjId } : {},
+        }).then((r) => r.json()),
+        fetch(`/api/v1/categories${catQuery}`, {
+          cache: "no-store",
+          headers: activeProjId ? { "X-OpenPost-Project": activeProjId } : {},
+        }).then((r) => r.json()).catch(() => ({ data: [] })),
       ]);
 
       if (Array.isArray(catsRes.data)) {
@@ -86,9 +96,12 @@ export default function BlogsPage() {
           readingTime: b.readingTime ?? 1,
         }));
         setPosts(mapped);
+      } else {
+        setPosts([]);
       }
     } catch (err) {
       console.error("Error fetching posts:", err);
+      setPosts([]);
     } finally {
       setLoading(false);
     }
@@ -96,6 +109,13 @@ export default function BlogsPage() {
 
   useEffect(() => {
     fetchPosts();
+
+    const handleProjectChanged = () => {
+      fetchPosts();
+    };
+
+    window.addEventListener("projectChanged", handleProjectChanged);
+    return () => window.removeEventListener("projectChanged", handleProjectChanged);
   }, [fetchPosts]);
 
   // Reset page when filter changes

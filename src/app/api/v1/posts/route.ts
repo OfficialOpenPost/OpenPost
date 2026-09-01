@@ -19,10 +19,7 @@ export async function GET(req: NextRequest) {
     };
 
     if (projectContext?.projectId) {
-      where.OR = [
-        { projectId: projectContext.projectId },
-        { projectId: null },
-      ];
+      where.projectId = projectContext.projectId;
     }
 
     if (categorySlug) {

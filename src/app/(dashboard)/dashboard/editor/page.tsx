@@ -355,11 +355,14 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
     setSaveStatus("saving");
 
     try {
+      const activeProjId = typeof window !== "undefined" ? localStorage.getItem("openpost_active_project_id") : null;
+
       const payload: any = {
         title: title || "Untitled Article",
         slug: slug || "untitled",
         content: editor?.getJSON() || {},
         status: targetStatus,
+        ...(activeProjId ? { projectId: activeProjId } : {}),
         featuredImage: featuredImage ? { url: featuredImage } : null,
         category: category ? { name: category } : null,
         tags: tags.map((t) => ({ name: t })),
@@ -382,13 +385,19 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
       if (currentBlogId) {
         res = await fetch(`/api/blogs/${currentBlogId}`, {
           method: "PUT",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            ...(activeProjId ? { "X-OpenPost-Project": activeProjId } : {}),
+          },
           body: JSON.stringify(payload),
         });
       } else {
         res = await fetch("/api/blogs", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            ...(activeProjId ? { "X-OpenPost-Project": activeProjId } : {}),
+          },
           body: JSON.stringify(payload),
         });
       }

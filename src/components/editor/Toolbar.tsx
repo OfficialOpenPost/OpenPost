@@ -99,7 +99,7 @@ export function Toolbar({ editor }: ToolbarProps) {
   };
 
   return (
-    <div className="border-t border-[#E5E7EB] bg-white">
+    <div className="bg-white">
       <div className="mx-auto flex max-w-[960px] items-center gap-1 overflow-x-auto px-3 py-2 scrollbar-none">
         {/* Text group */}
         <div className="flex items-center gap-0.5 shrink-0">

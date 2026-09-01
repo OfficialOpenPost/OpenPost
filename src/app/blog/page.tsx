@@ -1,15 +1,22 @@
 import Link from "next/link";
 import { Search, Calendar, Clock, ArrowRight, BookOpen } from "lucide-react";
-import { db } from "@/lib/db";
+import { db, withDbRetry } from "@/lib/db";
 
 async function getPublishedPosts() {
   try {
-    const posts = await db.blog.findMany({
-      where: { status: "published" },
-      orderBy: { createdAt: "desc" },
-      include: { category: true, featuredImage: true },
-      take: 24,
-    });
+    const posts = await withDbRetry(() =>
+      db.blog.findMany({
+        where: { status: "published" },
+        orderBy: { createdAt: "desc" },
+        include: {
+          category: true,
+          featuredImage: {
+            select: { id: true, variants: true },
+          },
+        },
+        take: 24,
+      })
+    );
     if (posts && posts.length > 0) {
       return posts.map((p) => ({
         slug: p.slug,

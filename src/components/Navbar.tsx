@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState, useEffect } from "react";
+import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { ArrowRight } from "lucide-react";
 
@@ -14,6 +15,8 @@ const navLinks = [
 ];
 
 export function Navbar() {
+  const pathname = usePathname();
+  const isDocs = pathname?.startsWith("/docs");
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
@@ -29,13 +32,13 @@ export function Navbar() {
 
   return (
     <header className="sticky top-0 z-50 border-b border-border bg-white/90 backdrop-blur-md">
-      <nav className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
+      <nav className={`flex h-16 items-center justify-between px-6 ${isDocs ? "w-full max-w-full" : "mx-auto max-w-7xl"}`}>
         {/* Logo */}
-        <Link href="/" className="flex items-center gap-2.5 group">
-          <div className="relative flex h-8 w-8 items-center justify-center rounded-lg bg-white border border-border p-1 shadow-xs transition group-hover:scale-105">
-            <img src="/logo.svg" alt="OpenPost" className="h-full w-full object-contain" />
+        <Link href="/" className="flex items-center gap-3 group">
+          <div className="relative flex h-10 w-10 items-center justify-center rounded-xl bg-white border border-border p-0.5 shadow-xs transition-all group-hover:scale-105 group-hover:border-brand/40">
+            <img src="/logo.svg" alt="OpenPost" className="h-8.5 w-8.5 object-contain" />
           </div>
-          <span className="text-lg font-bold tracking-tight text-navy">
+          <span className="text-xl font-bold tracking-tight text-navy">
             Open<span className="text-brand">Post</span>
           </span>
         </Link>

@@ -119,13 +119,16 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
   });
 
   const loadedContentRef = useRef<any>(null);
+  const contentSyncedRef = useRef<boolean>(false);
 
   // Load existing post if editing
   useEffect(() => {
     if (!effectiveId) return;
     setLoadingInitial(true);
     isInitialLoadRef.current = true;
-    fetch(`/api/blogs/${effectiveId}`)
+    contentSyncedRef.current = false;
+
+    fetch(`/api/blogs/${effectiveId}?_t=${Date.now()}`, { cache: "no-store" })
       .then((r) => r.json())
       .then((res) => {
         if (res.data) {
@@ -166,9 +169,10 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
 
           if (editor && cnt) {
             try {
-              editor.commands.setContent(cnt);
+              editor.commands.setContent(cnt, false);
+              contentSyncedRef.current = true;
             } catch (err) {
-              console.warn("Could not set editor content:", err);
+              console.warn("Could not set editor content directly:", err);
             }
           }
           setIsDirty(false);
@@ -180,13 +184,14 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
       })
       .catch((err) => console.error("Error loading blog:", err))
       .finally(() => setLoadingInitial(false));
-  }, [effectiveId]);
+  }, [effectiveId, editor]);
 
   // Sync content into editor once editor instance is available
   useEffect(() => {
-    if (editor && loadedContentRef.current) {
+    if (editor && loadedContentRef.current && !contentSyncedRef.current) {
       try {
-        editor.commands.setContent(loadedContentRef.current);
+        editor.commands.setContent(loadedContentRef.current, false);
+        contentSyncedRef.current = true;
         setTimeout(() => {
           isInitialLoadRef.current = false;
           setIsDirty(false);
@@ -196,7 +201,7 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
         console.warn("Could not sync editor content:", err);
       }
     }
-  }, [editor, loadingInitial]);
+  }, [editor]);
 
   // Native Fullscreen Toggle
   const toggleFullscreen = useCallback(() => {
@@ -394,12 +399,20 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
         throw new Error(jsonRes.error?.message || jsonRes.message || `Failed to save (Status ${res.status})`);
       }
 
-      // Immediately store returned blog ID in both ref and state
-      if (!currentBlogId && jsonRes.data?.id) {
-        const newId = jsonRes.data.id;
-        blogIdRef.current = newId;
-        setBlogId(newId);
-        window.history.replaceState({}, "", `/dashboard/editor?id=${newId}`);
+      // Immediately store returned blog ID, status, and slug in state
+      if (jsonRes.data) {
+        if (!currentBlogId && jsonRes.data.id) {
+          const newId = jsonRes.data.id;
+          blogIdRef.current = newId;
+          setBlogId(newId);
+          window.history.replaceState({}, "", `/dashboard/editor?id=${newId}`);
+        }
+        if (jsonRes.data.status) {
+          setStatus(jsonRes.data.status);
+        }
+        if (jsonRes.data.slug) {
+          setSlug(jsonRes.data.slug);
+        }
       }
 
       setIsDirty(false);
@@ -742,18 +755,19 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
                   </div>
                 )}
 
-                {/* Tiptap Content */}
-                {loadingInitial ? (
-                  <div className="flex flex-col items-center justify-center py-20 gap-3">
+                {/* Loading Overlay */}
+                {loadingInitial && (
+                  <div className="absolute inset-0 bg-white/90 backdrop-blur-xs flex flex-col items-center justify-center z-30 gap-3">
                     <Loader2 className="h-7 w-7 animate-spin text-brand" />
                     <p className="text-xs font-semibold text-text-tertiary">Loading article content...</p>
                   </div>
-                ) : (
-                  <EditorContent
-                    editor={editor}
-                    className="prose prose-lg prose-navy max-w-none focus:outline-none min-h-[360px]"
-                  />
                 )}
+
+                {/* Tiptap Content - permanently mounted so content is never lost */}
+                <EditorContent
+                  editor={editor}
+                  className="prose prose-lg prose-navy max-w-none focus:outline-none min-h-[360px]"
+                />
               </div>
             </div>
           </main>

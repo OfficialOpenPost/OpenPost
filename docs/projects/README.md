@@ -1,3 +1,3 @@
-# Projects
+# Projects & Multi-Tenancy Reference
 
-One install, many isolated projects. Every blog, media, category has project_id. RLS enforces isolation.
+See the full [Projects & Multi-Tenancy Guide](/docs/projects) for workspace isolation, role-based invites, and integration API tokens.

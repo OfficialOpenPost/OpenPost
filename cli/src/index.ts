@@ -4,75 +4,177 @@ import open from "open";
 import fs from "fs";
 import path from "path";
 
+function copyRecursiveSync(src: string, dest: string) {
+  const exists = fs.existsSync(src);
+  const stats = exists && fs.statSync(src);
+  const isDirectory = exists && stats && stats.isDirectory();
+
+  if (isDirectory) {
+    if (!fs.existsSync(dest)) {
+      fs.mkdirSync(dest, { recursive: true });
+    }
+    fs.readdirSync(src).forEach((childItemName) => {
+      copyRecursiveSync(path.join(src, childItemName), path.join(dest, childItemName));
+    });
+  } else {
+    fs.copyFileSync(src, dest);
+  }
+}
+
 async function main() {
-  console.log("Welcome to create-openpost — connect your frontend to OpenPost CMS\n");
+  console.log("\n=======================================================");
+  console.log("  OpenPost CLI — Full-Stack Blog Starter Generator");
+  console.log("=======================================================\n");
 
   const { cmsUrl } = await prompts({
     type: "text",
     name: "cmsUrl",
     message: "Enter your OpenPost CMS URL:",
-    initial: "https://cms.example.com",
+    initial: "http://localhost:3000",
     validate: (v: string) => {
-      try { new URL(v); return true; } catch { return "Enter a valid URL"; }
-    }
+      try {
+        new URL(v);
+        return true;
+      } catch {
+        return "Please enter a valid URL (e.g. http://localhost:3000)";
+      }
+    },
   });
 
-  if (!cmsUrl) process.exit(1);
-
-  // Validate URL
-  try {
-    const res = await fetch(`${cmsUrl}/api/health`);
-    if (!res.ok) console.log("Warning: CMS health check failed, continuing...");
-  } catch {
-    console.log("Warning: could not reach CMS, continuing...");
+  if (!cmsUrl) {
+    console.log("Setup aborted.");
+    process.exit(1);
   }
 
-  const connectUrl = `${cmsUrl.replace(/\/$/, "")}/cli/connect`;
+  const cleanCmsUrl = cmsUrl.replace(/\/$/, "");
+
+  // Health check
+  try {
+    const healthRes = await fetch(`${cleanCmsUrl}/api/health`).catch(() => null);
+    if (!healthRes || !healthRes.ok) {
+      console.log("Notice: CMS health check returned non-200. Proceeding with setup...");
+    } else {
+      console.log("✓ Connected to OpenPost CMS successfully.");
+    }
+  } catch {
+    console.log("Notice: Could not reach health endpoint. Proceeding...");
+  }
+
+  const connectUrl = `${cleanCmsUrl}/cli/connect`;
   console.log(`\nOpening browser for authorization: ${connectUrl}`);
-  await open(connectUrl);
+  try {
+    await open(connectUrl);
+  } catch {
+    console.log(`Open this URL in your browser to approve: ${connectUrl}`);
+  }
 
   const { code } = await prompts({
     type: "text",
     name: "code",
-    message: "Paste the authorization code from the browser (or connection code OP-XXXX-XXXX):",
-    validate: (v: string) => v.length > 5 ? true : "Enter code"
+    message: "Paste the authorization code from your browser (e.g. OP-XXXX-YYYY-ZZZZ):",
+    validate: (v: string) => (v && v.trim().length >= 6 ? true : "Please enter the authorization code."),
   });
 
-  // Exchange code for token
-  console.log("\nExchanging code...");
-  const res = await fetch(`${cmsUrl}/api/cli/exchange`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }) });
-  if (!res.ok) {
-    const j = await res.json().catch(() => ({}));
-    console.error("Exchange failed:", j.error ?? res.statusText);
-    process.exit(1);
-  }
-  const { token, projectId } = await res.json();
-  if (!token || !projectId) {
-    console.error("Invalid response from CMS");
+  if (!code) {
+    console.log("Setup aborted.");
     process.exit(1);
   }
 
-  // Generate project
+  console.log("\nExchanging authorization code for secure API token...");
+
+  const exchangeRes = await fetch(`${cleanCmsUrl}/api/cli/exchange`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code: code.trim() }),
+  });
+
+  if (!exchangeRes.ok) {
+    const errorJson = await exchangeRes.json().catch(() => ({}));
+    console.error("❌ Code exchange failed:", errorJson.error?.message || exchangeRes.statusText);
+    process.exit(1);
+  }
+
+  const exchangeData = await exchangeRes.json();
+  const { token, projectId, projectName: cmsProjectName } = exchangeData;
+
+  if (!token || !projectId) {
+    console.error("❌ Invalid response received from CMS.");
+    process.exit(1);
+  }
+
+  console.log(`✓ Authorized for project: ${cmsProjectName || projectId}`);
+
+  // Project destination
   const { projectName } = await prompts({
     type: "text",
     name: "projectName",
-    message: "Project name:",
-    initial: "my-blog"
+    message: "Enter the directory name for your new Next.js blog:",
+    initial: "my-openpost-blog",
   });
 
-  const dest = path.join(process.cwd(), projectName);
-  if (fs.existsSync(dest)) {
-    console.log("Directory already exists");
+  if (!projectName) {
+    console.log("Setup aborted.");
     process.exit(1);
   }
+
+  const dest = path.resolve(process.cwd(), projectName);
+  if (fs.existsSync(dest)) {
+    console.error(`❌ Directory "${projectName}" already exists. Please choose a different name.`);
+    process.exit(1);
+  }
+
+  console.log(`\nScaffolding Next.js production blog in: ${dest}...`);
   fs.mkdirSync(dest, { recursive: true });
 
-  // Copy template (simplified)
-  fs.writeFileSync(path.join(dest, ".env.local"), `OPENPOST_URL=${cmsUrl}\nOPENPOST_PROJECT_ID=${projectId}\nOPENPOST_TOKEN=${token}\n`);
-  fs.writeFileSync(path.join(dest, "package.json"), JSON.stringify({ name: projectName, dependencies: { next: "16.3.3" } }, null, 2));
+  // Locate templates/nextjs-blog
+  // Check relative paths from CLI installation directory or monorepo root
+  const candidateTemplateDirs = [
+    path.resolve(__dirname, "../../templates/nextjs-blog"),
+    path.resolve(__dirname, "../templates/nextjs-blog"),
+    path.resolve(process.cwd(), "templates/nextjs-blog"),
+  ];
 
-  console.log(`\nCreated ${projectName} with OpenPost integration`);
-  console.log(`Next: cd ${projectName} && npm install && npm run dev`);
+  let templateDir = candidateTemplateDirs.find((d) => fs.existsSync(d) && fs.statSync(d).isDirectory());
+
+  if (!templateDir) {
+    console.error("❌ Could not locate templates/nextjs-blog directory.");
+    process.exit(1);
+  }
+
+  // Copy template files recursively
+  copyRecursiveSync(templateDir, dest);
+
+  // Write .env.local
+  const envContent = `# OpenPost CMS Connection Configuration
+OPENPOST_URL=${cleanCmsUrl}
+OPENPOST_PROJECT_ID=${projectId}
+OPENPOST_TOKEN=${token}
+SITE_URL=http://localhost:3001
+`;
+
+  fs.writeFileSync(path.join(dest, ".env.local"), envContent, "utf-8");
+
+  // Customize package.json name
+  const pkgPath = path.join(dest, "package.json");
+  if (fs.existsSync(pkgPath)) {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
+      pkg.name = projectName;
+      fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2), "utf-8");
+    } catch {}
+  }
+
+  console.log("\n=======================================================");
+  console.log(`  🎉 Successfully created ${projectName}!`);
+  console.log("=======================================================\n");
+  console.log("Next steps to start publishing:\n");
+  console.log(`  1. cd ${projectName}`);
+  console.log("  2. npm install");
+  console.log("  3. npm run dev -p 3001\n");
+  console.log(`Your blog will be live at http://localhost:3001 and connected to OpenPost CMS!\n`);
 }
 
-main().catch((e) => { console.error(e); process.exit(1); });
+main().catch((err) => {
+  console.error("Unexpected error:", err);
+  process.exit(1);
+});

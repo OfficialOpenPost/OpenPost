@@ -1,35 +1,59 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/db";
-
-const MOCK_POLLS: Record<string, { id: string; question: string; options: { id: string; label: string; votes: number }[]; type: string }> = {
-  "poll-1": {
-    id: "poll-1",
-    question: "What is your favorite feature?",
-    options: [
-      { id: "opt-1", label: "Block Editor", votes: 12 },
-      { id: "opt-2", label: "Headless API", votes: 8 },
-      { id: "opt-3", label: "Media Pipeline", votes: 5 },
-    ],
-    type: "single",
-  },
-};
+import { db, withDbRetry } from "@/lib/db";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+
+  if (!id) {
+    return NextResponse.json({ error: { code: "BAD_REQUEST", message: "Poll ID required" } }, { status: 400 });
+  }
+
   try {
-    const poll = await db.poll.findUnique({ where: { id } as never, include: { options: true, votes: true } as never }).catch(() => null);
-    if (poll) {
-      const data = {
-        id: (poll as any).id,
-        question: (poll as any).question,
-        type: (poll as any).type,
-        status: (poll as any).status,
-        options: (poll as any).options?.map((o: any) => ({ id: o.id, label: o.label, votes: (poll as any).votes?.filter((v: any) => v.optionId === o.id).length ?? 0 })) ?? [],
-      };
-      return NextResponse.json({ data }, { headers: { "Cache-Control": "public, s-maxage=30" } });
+    const poll = await withDbRetry(() =>
+      db.poll.findUnique({
+        where: { id },
+        include: {
+          options: {
+            orderBy: { sortOrder: "asc" },
+            include: {
+              _count: { select: { votes: true } },
+            },
+          },
+          _count: { select: { votes: true } },
+        },
+      })
+    );
+
+    if (!poll || poll.status === "draft") {
+      return NextResponse.json({ error: { code: "NOT_FOUND", message: "Poll not found" } }, { status: 404 });
     }
-  } catch {}
-  const mock = MOCK_POLLS[id];
-  if (!mock) return NextResponse.json({ error: { code: "NOT_FOUND", message: "Poll not found" } }, { status: 404 });
-  return NextResponse.json({ data: mock }, { headers: { "Cache-Control": "public, s-maxage=30" } });
+
+    const isExpired = poll.closesAt ? new Date(poll.closesAt) < new Date() : false;
+    const effectiveStatus = isExpired ? "closed" : poll.status;
+
+    const formatted = {
+      id: poll.id,
+      question: poll.question,
+      type: poll.type,
+      status: effectiveStatus,
+      allowAnonymous: poll.allowAnonymous,
+      showResults: poll.showResults,
+      closesAt: poll.closesAt,
+      totalVotes: poll._count.votes,
+      options: poll.options.map((o) => ({
+        id: o.id,
+        label: o.label,
+        sortOrder: o.sortOrder,
+        votes: o._count.votes,
+      })),
+    };
+
+    return NextResponse.json(
+      { data: formatted },
+      { headers: { "Cache-Control": "public, s-maxage=30, stale-while-revalidate=60" } }
+    );
+  } catch (error: any) {
+    console.error("GET /api/v1/polls/[id] error:", error);
+    return NextResponse.json({ error: { code: "FETCH_FAILED", message: "Failed to fetch poll." } }, { status: 500 });
+  }
 }

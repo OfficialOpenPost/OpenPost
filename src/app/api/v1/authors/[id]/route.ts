@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { db, withDbRetry } from "@/lib/db";
 import { z } from "zod";
 import { slugify } from "@/lib/slug";
+import { requirePermission, AuthError } from "@/lib/auth";
 
 const updateSchema = z.object({
   name: z.string().min(1).max(100).optional(),
@@ -18,60 +18,92 @@ const updateSchema = z.object({
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    try { const user = await getCurrentUser().catch(()=>null); if (process.env.NODE_ENV === "production" && !user) return NextResponse.json({ error: { code: "UNAUTHORIZED" } }, { status: 401 }); if (user && ["WRITER","CONTRIBUTOR","author","contributor"].includes(user.role)) return NextResponse.json({ error: { code: "FORBIDDEN" } }, { status: 403 }); } catch {}
-
     const { id } = await params;
-    const body = await req.json();
+    const body = await req.json().catch(() => ({}));
     const parsed = updateSchema.safeParse(body);
     if (!parsed.success) return NextResponse.json({ error: { code: "VALIDATION_ERROR", message: parsed.error.message } }, { status: 400 });
-    const existing = await db.author.findUnique({ where: { id } as never });
-    if (!existing) return NextResponse.json({ error: { code: "NOT_FOUND", message: "Author not found" } }, { status: 404 });
+
+    const existing = await withDbRetry(() => db.author.findUnique({ where: { id } }));
+    if (!existing) return NextResponse.json({ error: { code: "NOT_FOUND", message: "Author not found." } }, { status: 404 });
+
+    if (existing.projectId) {
+      await requirePermission(existing.projectId, "taxonomy.manage");
+    }
+
     const data: Record<string, unknown> = {};
-    if (parsed.data.name !== undefined) data.name = parsed.data.name;
+    if (parsed.data.name !== undefined) data.name = parsed.data.name.trim();
     if (parsed.data.bio !== undefined) data.bio = parsed.data.bio;
     if (parsed.data.email !== undefined) data.email = parsed.data.email || null;
     if (parsed.data.website !== undefined) data.website = parsed.data.website || null;
     if (parsed.data.photoId !== undefined) data.photoId = parsed.data.photoId;
     if (parsed.data.socialLinks !== undefined) data.socialLinks = parsed.data.socialLinks;
     else if (parsed.data.twitter !== undefined || parsed.data.linkedin !== undefined) {
-      const current = (existing as any).socialLinks ?? {};
+      const current = (existing.socialLinks as any) ?? {};
       const next: Record<string, string> = { ...current };
-      if (parsed.data.twitter !== undefined) { if (parsed.data.twitter) next.twitter = parsed.data.twitter; else delete next.twitter; }
-      if (parsed.data.linkedin !== undefined) { if (parsed.data.linkedin) next.linkedin = parsed.data.linkedin; else delete next.linkedin; }
+      if (parsed.data.twitter !== undefined) {
+        if (parsed.data.twitter) next.twitter = parsed.data.twitter;
+        else delete next.twitter;
+      }
+      if (parsed.data.linkedin !== undefined) {
+        if (parsed.data.linkedin) next.linkedin = parsed.data.linkedin;
+        else delete next.linkedin;
+      }
       data.socialLinks = next;
     }
     if (parsed.data.slug !== undefined || parsed.data.name !== undefined) {
-      const raw = parsed.data.slug ?? (parsed.data.name as string) ?? (existing as any).slug;
+      const raw = parsed.data.slug ?? (parsed.data.name as string) ?? existing.slug;
       const slug = slugify(raw);
-      if (!slug) return NextResponse.json({ error: { code: "VALIDATION_ERROR", message: "Invalid slug" } }, { status: 400 });
-      const dup = await db.author.findFirst({ where: { slug, id: { not: id } } as never });
-      if (dup) return NextResponse.json({ error: { code: "SLUG_EXISTS", message: "Slug already exists" } }, { status: 409 });
+      if (!slug) return NextResponse.json({ error: { code: "VALIDATION_ERROR", message: "Invalid slug." } }, { status: 400 });
+
+      if (existing.projectId) {
+        const dup = await withDbRetry(() =>
+          db.author.findFirst({
+            where: { slug, projectId: existing.projectId, id: { not: id } },
+          })
+        );
+        if (dup) return NextResponse.json({ error: { code: "SLUG_EXISTS", message: "Author slug already exists in project." } }, { status: 409 });
+      }
       data.slug = slug;
     }
-    const updated = await db.author.update({ where: { id } as never, data: data as never });
+
+    const updated = await withDbRetry(() =>
+      db.author.update({
+        where: { id },
+        data: data as never,
+      })
+    );
+
     return NextResponse.json({ data: updated });
-  } catch (e) {
-    console.error(e);
-    return NextResponse.json({ error: { code: "DB_ERROR", message: String(e) } }, { status: 500 });
+  } catch (error: any) {
+    const status = error instanceof AuthError ? error.statusCode : 500;
+    const code = error instanceof AuthError ? error.code : "UPDATE_FAILED";
+    return NextResponse.json({ error: { code, message: error.message || "Failed to update author." } }, { status });
   }
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    try { const user = await getCurrentUser().catch(()=>null); if (process.env.NODE_ENV === "production" && !user) return NextResponse.json({ error: { code: "UNAUTHORIZED" } }, { status: 401 }); if (user && ["WRITER","CONTRIBUTOR","author","contributor"].includes(user.role)) return NextResponse.json({ error: { code: "FORBIDDEN" } }, { status: 403 }); } catch {}
-
     const { id } = await params;
-    const existing = await db.author.findUnique({ where: { id } as never });
-    if (!existing) return NextResponse.json({ error: { code: "NOT_FOUND", message: "Author not found" } }, { status: 404 });
-    let count = 0;
-    try { const r: any = await db.$queryRaw`SELECT COUNT(*)::int as c FROM blog_authors WHERE author_id = ${id}::uuid`; count = r?.[0]?.c ?? 0; } catch {}
-    if (count > 0) {
-      return NextResponse.json({ error: { code: "IN_USE", message: `Author in use by ${count} post(s)`, details: { count } } }, { status: 409 });
+    const existing = await withDbRetry(() => db.author.findUnique({ where: { id } }));
+    if (!existing) return NextResponse.json({ error: { code: "NOT_FOUND", message: "Author not found." } }, { status: 404 });
+
+    if (existing.projectId) {
+      await requirePermission(existing.projectId, "taxonomy.manage");
     }
-    await db.author.delete({ where: { id } as never });
-    return NextResponse.json({ data: { ok: true } });
-  } catch (e) {
-    console.error(e);
-    return NextResponse.json({ error: { code: "DB_ERROR", message: String(e) } }, { status: 500 });
+
+    const count = await withDbRetry(() => db.blogAuthor.count({ where: { authorId: id } })).catch(() => 0);
+    if (count > 0) {
+      return NextResponse.json(
+        { error: { code: "IN_USE", message: `Author in use by ${count} post(s).` } },
+        { status: 409 }
+      );
+    }
+
+    await withDbRetry(() => db.author.delete({ where: { id } }));
+    return NextResponse.json({ data: { success: true } });
+  } catch (error: any) {
+    const status = error instanceof AuthError ? error.statusCode : 500;
+    const code = error instanceof AuthError ? error.code : "DELETE_FAILED";
+    return NextResponse.json({ error: { code, message: error.message || "Failed to delete author." } }, { status });
   }
 }

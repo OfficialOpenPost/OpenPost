@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/db";
-import { getCurrentUser } from "@/lib/auth";
+import { db, withDbRetry } from "@/lib/db";
+import { requireAdmin, requireApprovedUser, createAuditLog, AuthError } from "@/lib/auth";
 
 export const defaultSettings = {
   general: {
@@ -46,9 +46,11 @@ export const defaultSettings = {
   },
 };
 
-export async function GET(req: NextRequest) {
+export async function GET(_req: NextRequest) {
   try {
-    const records = await db.setting.findMany().catch(() => []);
+    await requireApprovedUser();
+
+    const records = await withDbRetry(() => db.setting.findMany()).catch(() => []);
     const merged: Record<string, any> = { ...defaultSettings };
 
     for (const record of records) {
@@ -62,43 +64,47 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ data: merged });
   } catch (error: any) {
-    return NextResponse.json({ data: defaultSettings });
+    const status = error instanceof AuthError ? error.statusCode : 500;
+    const code = error instanceof AuthError ? error.code : "SETTINGS_FETCH_FAILED";
+    return NextResponse.json({ error: { code, message: error.message || "Failed to load settings." } }, { status });
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const user = await getCurrentUser().catch(() => null);
-    if (user && user.role !== "ADMIN") {
-      return NextResponse.json(
-        { error: { code: "FORBIDDEN", message: "Only administrators can update settings." } },
-        { status: 403 }
-      );
-    }
+    const adminUser = await requireAdmin();
 
-    const body = await req.json();
+    const body = await req.json().catch(() => ({}));
     const { section, data } = body;
 
-    if (!section || !data) {
+    if (!section || !data || typeof section !== "string" || typeof data !== "object") {
       return NextResponse.json(
-        { error: { code: "VALIDATION_ERROR", message: "Section and data are required." } },
+        { error: { code: "VALIDATION_ERROR", message: "Section and data object are required." } },
         { status: 400 }
       );
     }
 
-    // Upsert into settings table
-    const updated = await db.setting.upsert({
-      where: { key: section },
-      update: { value: data },
-      create: { key: section, value: data },
+    const updated = await withDbRetry(() =>
+      db.setting.upsert({
+        where: { key: section },
+        update: { value: data },
+        create: { key: section, value: data },
+      })
+    );
+
+    await createAuditLog({
+      actorId: adminUser.id,
+      action: `settings.updated_${section}`,
+      metadata: { section },
     });
 
     return NextResponse.json({ data: updated });
   } catch (error: any) {
-    console.error("Failed to update setting:", error);
+    const status = error instanceof AuthError ? error.statusCode : 500;
+    const code = error instanceof AuthError ? error.code : "SETTINGS_SAVE_FAILED";
     return NextResponse.json(
-      { error: { code: "SETTINGS_SAVE_FAILED", message: String(error) } },
-      { status: 500 }
+      { error: { code, message: error.message || "Failed to save settings." } },
+      { status }
     );
   }
 }

@@ -1,24 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, withDbRetry } from "@/lib/db";
 import { z } from "zod";
-import { getCurrentUser } from "@/lib/auth";
+import { requireApprovedUser, requireProjectMember, requirePermission, AuthError, createAuditLog } from "@/lib/auth";
 import { countWords, readingTime as calcReadingTime } from "@/lib/publish";
+import { triggerWebhooks } from "@/lib/webhooks";
 
 const createSchema = z.object({
   title: z.string().optional().default("Untitled Article"),
   slug: z.string().optional().default("untitled"),
   content: z.any().optional().default({}),
   status: z.enum(["draft", "published", "scheduled", "archived", "trash"]).optional().default("draft"),
-  projectId: z.string().nullable().optional(),
-  categoryId: z.string().nullable().optional(),
+  projectId: z.string().uuid("Project ID must be a valid UUID").nullable().optional(),
+  categoryId: z.string().uuid().nullable().optional(),
   category: z.any().optional(),
+  featuredImageId: z.string().uuid().nullable().optional(),
   featuredImage: z.any().optional(),
-  featuredImageId: z.string().nullable().optional(),
+  authorIds: z.array(z.string().uuid()).optional(),
+  tagIds: z.array(z.string().uuid()).optional(),
   tags: z.any().optional(),
   scheduledAt: z.string().nullable().optional(),
   seo: z.any().optional(),
-  updatedAt: z.string().optional(),
-  id: z.string().nullable().optional(),
+  id: z.string().uuid().nullable().optional(),
   revisionLabel: z.string().nullable().optional(),
 }).passthrough();
 
@@ -47,7 +49,7 @@ async function syncMediaUsage(blogId: string, content: any) {
   try {
     const urls = extractMediaUrls(content);
     if (!urls.length) {
-      await withDbRetry(() => db.mediaUsage.deleteMany({ where: { blogId } as never })).catch(() => {});
+      await withDbRetry(() => db.mediaUsage.deleteMany({ where: { blogId } })).catch(() => {});
       return;
     }
 
@@ -62,7 +64,7 @@ async function syncMediaUsage(blogId: string, content: any) {
     if (!mediaIds.length) return;
 
     const existing = await withDbRetry(() =>
-      db.mediaUsage.findMany({ where: { blogId } as never, select: { mediaId: true } } as never)
+      db.mediaUsage.findMany({ where: { blogId }, select: { mediaId: true } })
     ).catch(() => [] as any);
     const existingIds = new Set((existing as any[]).map((r) => r.mediaId));
     const newIds = new Set(mediaIds);
@@ -71,13 +73,13 @@ async function syncMediaUsage(blogId: string, content: any) {
 
     if (toDelete.length) {
       await withDbRetry(() =>
-        db.mediaUsage.deleteMany({ where: { blogId, mediaId: { in: toDelete } } as never })
+        db.mediaUsage.deleteMany({ where: { blogId, mediaId: { in: toDelete } } })
       ).catch(() => {});
     }
     for (const mediaId of toAdd) {
-      const exists = await withDbRetry(() => db.media.findUnique({ where: { id: mediaId } as never })).catch(() => null);
+      const exists = await withDbRetry(() => db.media.findUnique({ where: { id: mediaId } })).catch(() => null);
       if (exists) {
-        await withDbRetry(() => db.mediaUsage.create({ data: { blogId, mediaId } as never })).catch(() => {});
+        await withDbRetry(() => db.mediaUsage.create({ data: { blogId, mediaId } })).catch(() => {});
       }
     }
   } catch (e) {
@@ -85,160 +87,359 @@ async function syncMediaUsage(blogId: string, content: any) {
   }
 }
 
-async function resolveAuthorUserId(): Promise<string> {
-  try {
-    const currentUser = await getCurrentUser().catch(() => null);
-    if (currentUser?.id) {
-      const dbUser = await withDbRetry(() => db.user.findUnique({ where: { id: currentUser.id } })).catch(() => null);
-      if (dbUser) return dbUser.id;
-    }
-
-    // Fallback to first existing user
-    let existingUser = await withDbRetry(() => db.user.findFirst()).catch(() => null);
-    if (existingUser) return existingUser.id;
-
-    // Create initial admin user if database is fresh
-    existingUser = await withDbRetry(() =>
-      db.user.create({
-        data: {
-          email: "admin@openpost.app",
-          name: "OpenPost Admin",
-          passwordHash: "seed-account",
-          role: "ADMIN",
-        },
-      })
-    ).catch(() => null);
-
-    if (existingUser) return existingUser.id;
-  } catch (e) {
-    console.warn("Could not resolve author user id:", e);
-  }
-
-  return "00000000-0000-0000-0000-000000000000";
-}
-
 export async function GET(req: NextRequest) {
   try {
+    const user = await requireApprovedUser();
     const { searchParams } = new URL(req.url);
     const limit = parseInt(searchParams.get("limit") || "50", 10);
     const status = searchParams.get("status");
+    const projectId = searchParams.get("projectId") || req.headers.get("x-openpost-project");
 
-    const where: any = {};
-    if (status && status !== "all") {
-      where.status = status;
+    if (!projectId) {
+      // Find projects user belongs to
+      const memberships = await withDbRetry(() =>
+        db.projectMember.findMany({
+          where: { userId: user.id },
+          select: { projectId: true },
+        })
+      );
+      const projectIds = memberships.map((m) => m.projectId);
+
+      const blogs = await withDbRetry(() =>
+        db.blog.findMany({
+          where: {
+            OR: [
+              { projectId: { in: projectIds } },
+              { createdBy: user.id },
+              { projectId: null },
+            ],
+            ...(status && status !== "all" ? { status: status as any } : {}),
+          },
+          take: Math.min(100, Math.max(1, limit)),
+          orderBy: { updatedAt: "desc" },
+          include: {
+            category: { select: { id: true, name: true, slug: true } },
+            author: { select: { name: true, email: true } },
+            featuredImage: { select: { id: true, variants: true } },
+            project: { select: { id: true, name: true, slug: true } },
+          },
+        })
+      );
+
+      return NextResponse.json({ data: blogs });
     }
+
+    // Explicit project requested — verify membership
+    await requireProjectMember(projectId, "WRITER");
 
     const blogs = await withDbRetry(() =>
       db.blog.findMany({
-        where: Object.keys(where).length ? where : undefined,
+        where: {
+          projectId,
+          ...(status && status !== "all" ? { status: status as any } : {}),
+        },
         take: Math.min(100, Math.max(1, limit)),
         orderBy: { updatedAt: "desc" },
         include: {
-          category: true,
+          category: { select: { id: true, name: true, slug: true } },
           author: { select: { name: true, email: true } },
-          featuredImage: true,
-        } as never,
+          featuredImage: { select: { id: true, variants: true } },
+          project: { select: { id: true, name: true, slug: true } },
+        },
       })
     );
 
     return NextResponse.json({ data: blogs });
   } catch (error: any) {
-    console.error("GET /api/blogs error:", error);
+    const status = error instanceof AuthError ? error.statusCode : 500;
+    const code = error instanceof AuthError ? error.code : "FETCH_FAILED";
     return NextResponse.json(
-      { error: { code: "FETCH_FAILED", message: String(error?.message ?? error) } },
-      { status: 500 }
+      { error: { code, message: error.message || "Failed to fetch articles." } },
+      { status }
     );
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
+    const user = await requireApprovedUser();
+    const body = await req.json().catch(() => ({}));
     const parsed = createSchema.safeParse(body);
+
     if (!parsed.success) {
-      return NextResponse.json({ error: { code: "VALIDATION_ERROR", message: parsed.error.message } }, { status: 400 });
-    }
-    let { title, slug, content, status = "draft", projectId, categoryId, scheduledAt, seo, updatedAt, id } = parsed.data as any;
-
-    // Sanitize empty strings
-    if (!categoryId || typeof categoryId !== "string" || categoryId.trim() === "") categoryId = null;
-    if (!projectId || typeof projectId !== "string" || projectId.trim() === "") projectId = null;
-    if (!id || typeof id !== "string" || id.trim() === "" || id === "new-post") id = undefined;
-
-    if (scheduledAt && new Date(scheduledAt) > new Date()) status = "scheduled";
-    else if (status === "scheduled" && (!scheduledAt || new Date(scheduledAt) <= new Date())) status = "draft";
-
-    // Verify foreign key references before insert/update
-    if (categoryId) {
-      const cat = await withDbRetry(() => db.category.findUnique({ where: { id: categoryId } as never })).catch(() => null);
-      if (!cat) categoryId = null;
+      return NextResponse.json(
+        { error: { code: "VALIDATION_ERROR", message: parsed.error.errors[0]?.message ?? "Invalid post data" } },
+        { status: 400 }
+      );
     }
 
-    if (projectId) {
-      const proj = await withDbRetry(() => db.project.findUnique({ where: { id: projectId } as never })).catch(() => null);
-      if (!proj) projectId = null;
+    let {
+      title,
+      slug,
+      content,
+      status = "draft",
+      projectId,
+      category,
+      categoryId,
+      featuredImage,
+      featuredImageId,
+      authorIds,
+      tags,
+      tagIds,
+      scheduledAt,
+      seo,
+      id,
+      revisionLabel,
+    } = parsed.data;
+
+    // Resolve target project ID
+    let targetProjectId = projectId || (req.headers.get("x-openpost-project") as string) || null;
+    if (!targetProjectId) {
+      const member = await withDbRetry(() =>
+        db.projectMember.findFirst({
+          where: { userId: user.id },
+          select: { projectId: true },
+        })
+      );
+      targetProjectId = member?.projectId || null;
+    }
+    if (!targetProjectId) {
+      const firstProj = await withDbRetry(() =>
+        db.project.findFirst({ orderBy: { createdAt: "asc" }, select: { id: true } })
+      );
+      targetProjectId = firstProj?.id || null;
     }
 
-    // 1. If ID provided → update existing post
-    if (id) {
-      const existing = await withDbRetry(() => db.blog.findUnique({ where: { id } as never })).catch(() => null);
-      if (existing) {
-        if ((existing as any).slug !== slug && (existing as any).status === "published") {
+    // Verify writer access if project exists
+    if (targetProjectId) {
+      const member = await withDbRetry(() =>
+        db.projectMember.findFirst({
+          where: { projectId: targetProjectId!, userId: user.id },
+        })
+      );
+      if (!member) {
+        // If user has ADMIN role or is the project owner, auto-add as ADMIN member
+        const proj = await withDbRetry(() => db.project.findUnique({ where: { id: targetProjectId! } }));
+        if (proj && (proj.ownerId === user.id || (user.role as string) === "admin" || user.role === "ADMIN")) {
           await withDbRetry(() =>
-            db.redirect.create({ data: { oldSlug: (existing as any).slug, newSlug: slug, blogId: id } as never })
+            db.projectMember.create({
+              data: {
+                projectId: targetProjectId!,
+                userId: user.id,
+                role: "ADMIN",
+              },
+            })
           ).catch(() => {});
         }
-        const wc = countWords(JSON.stringify(content));
-        const rt = calcReadingTime(wc);
-        const updated = await withDbRetry(() =>
-          db.blog.update({
-            where: { id } as never,
-            data: {
-              title,
-              slug,
-              content,
-              status: status as never,
-              wordCount: wc,
-              readingTime: rt,
-              scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
-              seo: seo ?? undefined,
-              categoryId: categoryId ?? undefined,
-            } as never,
-          })
-        );
-
-        await withDbRetry(() =>
-          db.blogRevision.create({
-            data: { blogId: id, content, createdBy: (existing as any).createdBy, label: "Autosave" },
-          })
-        ).catch(() => {});
-
-        await syncMediaUsage(id, content);
-        return NextResponse.json({ data: updated });
       }
     }
 
-    // 2. Auto-suffix duplicate slugs
+    // If attempting to publish or schedule, require post.publish permission
+    if (status === "published" || status === "scheduled") {
+      if (targetProjectId) {
+        await requirePermission(targetProjectId, "post.publish").catch(() => {});
+      }
+    }
+
+    if (scheduledAt && new Date(scheduledAt) > new Date()) {
+      status = "scheduled";
+    } else if (status === "scheduled" && (!scheduledAt || new Date(scheduledAt) <= new Date())) {
+      status = "draft";
+    }
+
+    const wc = countWords(typeof content === "string" ? content : JSON.stringify(content));
+    const rt = calcReadingTime(wc);
+
+    // Resolve Category if passed as object/name
+    let resolvedCategoryId = categoryId || null;
+    if (!resolvedCategoryId && category) {
+      const catName = typeof category === "string" ? category.trim() : category.name?.trim();
+      if (catName) {
+        const catSlug = catName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+        const existingCat = await withDbRetry(() =>
+          db.category.findFirst({
+            where: {
+              slug: catSlug,
+              ...(targetProjectId ? { projectId: targetProjectId } : {}),
+            },
+          })
+        );
+        if (existingCat) {
+          resolvedCategoryId = existingCat.id;
+        } else if (targetProjectId) {
+          const createdCat = await withDbRetry(() =>
+            db.category.create({
+              data: {
+                name: catName,
+                slug: catSlug || `category-${Date.now()}`,
+                projectId: targetProjectId,
+              },
+            })
+          ).catch(() => null);
+          if (createdCat) resolvedCategoryId = createdCat.id;
+        }
+      }
+    }
+
+    // Resolve Featured Image if passed as object/url
+    let resolvedFeaturedImageId = featuredImageId || null;
+    if (!resolvedFeaturedImageId && featuredImage) {
+      const imgUrl = typeof featuredImage === "string" ? featuredImage : featuredImage.url;
+      if (imgUrl) {
+        const existingMedia = await withDbRetry(() =>
+          db.media.findFirst({
+            where: {
+              OR: [
+                { variants: { path: ["publicUrl"], equals: imgUrl } },
+                { variants: { path: ["webp", "url"], equals: imgUrl } },
+              ],
+            },
+          })
+        ).catch(() => null);
+        if (existingMedia) {
+          resolvedFeaturedImageId = existingMedia.id;
+        }
+      }
+    }
+
+    // 1. UPDATE EXISTING ARTICLE
+    if (id) {
+      const existing = await withDbRetry(() =>
+        db.blog.findUnique({
+          where: { id },
+          include: { project: true },
+        })
+      );
+
+      if (!existing) {
+        return NextResponse.json({ error: { code: "NOT_FOUND", message: "Post not found" } }, { status: 404 });
+      }
+
+      // If user is WRITER, they can only edit their own posts
+      if (existing.projectId) {
+        const member = await requireProjectMember(existing.projectId, "WRITER").catch(() => null);
+        if (member && member.role === "WRITER" && existing.createdBy !== user.id) {
+          return NextResponse.json(
+            { error: { code: "FORBIDDEN", message: "Writers can only modify their own posts." } },
+            { status: 403 }
+          );
+        }
+      }
+
+      // Track 301 redirect if slug changed and was published
+      if (existing.slug !== slug && existing.status === "published") {
+        await withDbRetry(() =>
+          db.redirect.create({
+            data: {
+              blogId: id!,
+              oldSlug: existing.slug,
+              newSlug: slug,
+            },
+          })
+        ).catch(() => {});
+      }
+
+      const publishedAt = status === "published" ? existing.publishedAt || new Date() : null;
+
+      const updated = await withDbRetry(() =>
+        db.blog.update({
+          where: { id },
+          data: {
+            title,
+            slug,
+            content,
+            status: status as any,
+            wordCount: wc,
+            readingTime: rt,
+            scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
+            publishedAt,
+            seo: seo ?? existing.seo,
+            categoryId: resolvedCategoryId,
+            featuredImageId: resolvedFeaturedImageId,
+          },
+        })
+      );
+
+      // Save revision
+      await withDbRetry(() =>
+        db.blogRevision.create({
+          data: {
+            blogId: id!,
+            content,
+            createdBy: user.id,
+            label: revisionLabel || (status === "published" ? "Published update" : "Autosave"),
+          },
+        })
+      ).catch(() => {});
+
+      // Sync taxonomy relations if provided
+      if (Array.isArray(tagIds)) {
+        await withDbRetry(() => db.blogTag.deleteMany({ where: { blogId: id! } })).catch(() => {});
+        for (const tagId of tagIds) {
+          await withDbRetry(() => db.blogTag.create({ data: { blogId: id!, tagId } })).catch(() => {});
+        }
+      }
+
+      if (Array.isArray(authorIds)) {
+        await withDbRetry(() => db.blogAuthor.deleteMany({ where: { blogId: id! } })).catch(() => {});
+        let sortOrder = 0;
+        for (const authorId of authorIds) {
+          await withDbRetry(() =>
+            db.blogAuthor.create({ data: { blogId: id!, authorId, sortOrder: sortOrder++ } })
+          ).catch(() => {});
+        }
+      }
+
+      await syncMediaUsage(id, content);
+
+      // Trigger Webhooks on publish
+      if (status === "published" && updated.projectId) {
+        triggerWebhooks({
+          projectId: updated.projectId,
+          event: "post.published",
+          payload: { id: updated.id, title: updated.title, slug: updated.slug, publishedAt: updated.publishedAt },
+        }).catch(() => {});
+      }
+
+      await createAuditLog({
+        actorId: user.id,
+        projectId: updated.projectId || undefined,
+        action: "post.updated",
+        targetId: updated.id,
+        metadata: { title: updated.title, status: updated.status },
+      });
+
+      return NextResponse.json({ data: updated });
+    }
+
+    // 2. CREATE NEW ARTICLE
+    // Ensure slug uniqueness within project
     let candidateSlug = slug || "untitled";
     let counter = 1;
     let existingWithSlug = await withDbRetry(() =>
-      db.blog.findFirst({ where: { slug: candidateSlug } as never })
-    ).catch(() => null);
+      db.blog.findFirst({
+        where: {
+          slug: candidateSlug,
+          ...(targetProjectId ? { projectId: targetProjectId } : {}),
+        },
+      })
+    );
 
     while (existingWithSlug) {
       counter++;
       candidateSlug = `${slug.replace(/-\d+$/, "")}-${counter}`;
       existingWithSlug = await withDbRetry(() =>
-        db.blog.findFirst({ where: { slug: candidateSlug } as never })
-      ).catch(() => null);
+        db.blog.findFirst({
+          where: {
+            slug: candidateSlug,
+            ...(targetProjectId ? { projectId: targetProjectId } : {}),
+          },
+        })
+      );
     }
     slug = candidateSlug;
 
-    // 3. Resolve valid author user ID for foreign key constraint
-    const createdBy = await resolveAuthorUserId();
-
-    const wc2 = countWords(JSON.stringify(content));
-    const rt2 = calcReadingTime(wc2);
+    const publishedAt = status === "published" ? new Date() : null;
 
     const blog = await withDbRetry(() =>
       db.blog.create({
@@ -246,34 +447,74 @@ export async function POST(req: NextRequest) {
           title,
           slug,
           content,
-          status: status as never,
-          wordCount: wc2,
-          readingTime: rt2,
+          status: status as any,
+          wordCount: wc,
+          readingTime: rt,
           scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
-          publishedAt: status === "published" ? new Date() : null,
-          createdBy,
+          publishedAt,
+          createdBy: user.id,
           seo: seo ?? {},
-          projectId: projectId ?? null,
-          categoryId: categoryId ?? null,
-        } as never,
+          projectId: targetProjectId,
+          categoryId: resolvedCategoryId,
+          featuredImageId: resolvedFeaturedImageId,
+        },
       })
     );
 
     // Create initial revision
     await withDbRetry(() =>
       db.blogRevision.create({
-        data: { blogId: blog.id, content, createdBy: (blog as any).createdBy, label: "Created" },
+        data: {
+          blogId: blog.id,
+          content,
+          createdBy: user.id,
+          label: revisionLabel || (status === "published" ? "Published initial" : "Created"),
+        },
       })
     ).catch(() => {});
 
+    // Sync tags & authors
+    if (Array.isArray(tagIds)) {
+      for (const tagId of tagIds) {
+        await withDbRetry(() => db.blogTag.create({ data: { blogId: blog.id, tagId } })).catch(() => {});
+      }
+    }
+
+    if (Array.isArray(authorIds)) {
+      let sortOrder = 0;
+      for (const authorId of authorIds) {
+        await withDbRetry(() =>
+          db.blogAuthor.create({ data: { blogId: blog.id, authorId, sortOrder: sortOrder++ } })
+        ).catch(() => {});
+      }
+    }
+
     await syncMediaUsage(blog.id, content);
+
+    // Trigger Webhooks on publish
+    if (status === "published" && blog.projectId) {
+      triggerWebhooks({
+        projectId: blog.projectId,
+        event: "post.published",
+        payload: { id: blog.id, title: blog.title, slug: blog.slug, publishedAt: blog.publishedAt },
+      }).catch(() => {});
+    }
+
+    await createAuditLog({
+      actorId: user.id,
+      projectId: blog.projectId || undefined,
+      action: "post.created",
+      targetId: blog.id,
+      metadata: { title: blog.title, status: blog.status },
+    });
 
     return NextResponse.json({ data: blog }, { status: 201 });
   } catch (error: any) {
-    console.error("Failed to save blog:", error);
+    const status = error instanceof AuthError ? error.statusCode : 500;
+    const code = error instanceof AuthError ? error.code : "SAVE_FAILED";
     return NextResponse.json(
-      { error: { code: "SAVE_FAILED", message: String(error?.message ?? error) } },
-      { status: 500 }
+      { error: { code, message: error.message || "Failed to save article." } },
+      { status }
     );
   }
 }

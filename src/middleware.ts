@@ -4,72 +4,49 @@ import { createServerClient } from "@supabase/ssr";
 export async function middleware(request: NextRequest) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  // Allow build without real Supabase (placeholders)
+
   if (!url || !key || url.includes("placeholder")) {
     return NextResponse.next();
   }
 
   let supabaseResponse = NextResponse.next({ request });
 
-  const supabase = createServerClient(url, key,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => request.cookies.set(name, value));
-          supabaseResponse = NextResponse.next({ request });
-          cookiesToSet.forEach(({ name, value, options }) => supabaseResponse.cookies.set(name, value, options));
-        },
+  const supabase = createServerClient(url, key, {
+    cookies: {
+      getAll() {
+        return request.cookies.getAll();
       },
-    }
-  );
+      setAll(cookiesToSet) {
+        cookiesToSet.forEach(({ name, value, options }) => request.cookies.set(name, value));
+        supabaseResponse = NextResponse.next({ request });
+        cookiesToSet.forEach(({ name, value, options }) => supabaseResponse.cookies.set(name, value, options));
+      },
+    },
+  });
 
   // Refresh session
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const isAuthRoute = request.nextUrl.pathname.startsWith("/login") || request.nextUrl.pathname.startsWith("/signup");
-  const isDashboardRoute = request.nextUrl.pathname.startsWith("/dashboard");
-  const isPublicRoute =
-    ["/", "/about", "/contact", "/docs", "/blog", "/changelog", "/roadmap", "/privacy", "/terms"].some((p) => request.nextUrl.pathname === p || request.nextUrl.pathname.startsWith("/blog/")) ||
-    request.nextUrl.pathname.startsWith("/api/v1/") ||
-    request.nextUrl.pathname.startsWith("/api/webhooks");
+  const pathname = request.nextUrl.pathname;
+  const isAuthRoute = pathname.startsWith("/login") || pathname.startsWith("/signup");
+  const isDashboardRoute = pathname.startsWith("/dashboard");
+  const isPendingApprovalRoute = pathname === "/pending-approval";
 
-  // RBAC for CMS mutations — POST /api/blogs requires authenticated WRITER+ (ADMIN/EDITOR/WRITER)
-  const isBlogsMutation = request.nextUrl.pathname === "/api/blogs" && (request.method === "POST" || request.method === "PUT" || request.method === "DELETE" || request.method === "PATCH");
-  const isCategoriesMutation = request.nextUrl.pathname.startsWith("/api/v1/categories") && request.method !== "GET";
-  const isTagsMutation = request.nextUrl.pathname.startsWith("/api/v1/tags") && request.method !== "GET";
-  const isAuthorsMutation = request.nextUrl.pathname.startsWith("/api/v1/authors") && request.method !== "GET";
-  const isProtectedMutation = isBlogsMutation || isCategoriesMutation || isTagsMutation || isAuthorsMutation;
-  if (isProtectedMutation) {
-    if (!user) {
-      return NextResponse.json({ error: { code: "UNAUTHORIZED", message: "Authentication required" } }, { status: 401 });
-    }
-    // Role check is deferred to API route (Prisma user_role) for full hierarchy, but block obviously forged roles in JWT
-    const jwtRole = (user.app_metadata as any)?.role ?? (user.user_metadata as any)?.role;
-    if (jwtRole && !["ADMIN", "EDITOR", "WRITER", "owner", "admin", "editor", "author", "contributor"].includes(String(jwtRole).toUpperCase()) && !["ADMIN","EDITOR","WRITER"].includes(String(jwtRole).toUpperCase())) {
-      // still allow — API will enforce strict hierarchy via db.user.role
-    }
-    // Continue to API handler which calls requireRole/getCurrentUser
-    return supabaseResponse;
-  }
-
-  // If not logged in and trying to access dashboard → redirect to login
+  // Unauthenticated user trying to access dashboard -> redirect to login
   if (!user && isDashboardRoute) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    url.searchParams.set("next", request.nextUrl.pathname);
-    return NextResponse.redirect(url);
+    const redirectUrl = request.nextUrl.clone();
+    redirectUrl.pathname = "/login";
+    redirectUrl.searchParams.set("next", pathname);
+    return NextResponse.redirect(redirectUrl);
   }
 
-  // If logged in and on login/signup → redirect to dashboard
+  // Authenticated user on login/signup -> redirect to dashboard
   if (user && isAuthRoute) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/dashboard";
-    return NextResponse.redirect(url);
+    const redirectUrl = request.nextUrl.clone();
+    redirectUrl.pathname = "/dashboard";
+    return NextResponse.redirect(redirectUrl);
   }
 
   return supabaseResponse;

@@ -1,54 +1,115 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { db, withDbRetry } from "@/lib/db";
 import { z } from "zod";
 import { slugify } from "@/lib/slug";
+import { requirePermission, AuthError } from "@/lib/auth";
+import { resolveProjectContext } from "@/lib/apiToken";
 
-const createSchema = z.object({
-  name: z.string().min(1).max(100),
+const createTagSchema = z.object({
+  name: z.string().min(1, "Name is required").max(100),
   slug: z.string().min(1).max(100).optional(),
   description: z.string().max(500).nullable().optional(),
+  projectId: z.string().uuid().optional(),
 });
 
 export async function GET(req: NextRequest) {
   try {
+    const projectContext = await resolveProjectContext(req);
     const { searchParams } = new URL(req.url);
     const search = searchParams.get("search")?.trim();
-    const where: Record<string, unknown> = {};
+
+    const where: any = {};
+    if (projectContext?.projectId) {
+      where.projectId = projectContext.projectId;
+    }
     if (search) {
-      (where as any).OR = [
+      where.OR = [
         { name: { contains: search, mode: "insensitive" } },
         { slug: { contains: search, mode: "insensitive" } },
       ];
     }
-    const data = await db.tag.findMany({
-      where: where as never,
-      orderBy: { name: "asc" },
-      select: { id: true, name: true, slug: true, description: true },
-    });
-    return NextResponse.json({ data, meta: { hasMore: false } }, { headers: { "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600" } });
-  } catch {
-    return NextResponse.json({ data: [], meta: { hasMore: false } });
+
+    const data = await withDbRetry(() =>
+      db.tag.findMany({
+        where,
+        orderBy: { name: "asc" },
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          description: true,
+          projectId: true,
+          _count: {
+            select: { blogs: true },
+          },
+        },
+      })
+    );
+
+    const formatted = data.map((t: any) => ({
+      ...t,
+      postCount: t._count?.blogs ?? 0,
+    }));
+
+    return NextResponse.json(
+      { data: formatted, meta: { total: formatted.length } },
+      { headers: { "Cache-Control": "public, s-maxage=120, stale-while-revalidate=300" } }
+    );
+  } catch (error: any) {
+    console.error("GET /api/v1/tags error:", error);
+    return NextResponse.json({ error: { code: "FETCH_FAILED", message: "Failed to fetch tags." } }, { status: 500 });
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
-    try { const user = await getCurrentUser().catch(()=>null); if (process.env.NODE_ENV === "production" && !user) return NextResponse.json({ error: { code: "UNAUTHORIZED" } }, { status: 401 }); if (user && ["WRITER","CONTRIBUTOR","author","contributor"].includes(user.role)) return NextResponse.json({ error: { code: "FORBIDDEN" } }, { status: 403 }); } catch {}
-    const body = await req.json();
-    const parsed = createSchema.safeParse(body);
+    const body = await req.json().catch(() => ({}));
+    const parsed = createTagSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json({ error: { code: "VALIDATION_ERROR", message: parsed.error.message } }, { status: 400 });
     }
-    const { name, slug: rawSlug, description } = parsed.data;
+
+    const { name, slug: rawSlug, description, projectId } = parsed.data;
+
+    const projectContext = await resolveProjectContext(req);
+    const targetProjectId = projectId || projectContext?.projectId;
+
+    if (!targetProjectId) {
+      return NextResponse.json({ error: { code: "PROJECT_REQUIRED", message: "Project ID is required." } }, { status: 400 });
+    }
+
+    await requirePermission(targetProjectId, "taxonomy.manage");
+
     const slug = slugify(rawSlug || name);
-    if (!slug) return NextResponse.json({ error: { code: "VALIDATION_ERROR", message: "Invalid slug" } }, { status: 400 });
-    const existing = await db.tag.findFirst({ where: { slug } as never });
-    if (existing) return NextResponse.json({ error: { code: "SLUG_EXISTS", message: "Slug already exists", details: { slug } } }, { status: 409 });
-    const created = await db.tag.create({ data: { name, slug, description: description ?? null } as never });
+    if (!slug) {
+      return NextResponse.json({ error: { code: "VALIDATION_ERROR", message: "Invalid slug." } }, { status: 400 });
+    }
+
+    const existing = await withDbRetry(() =>
+      db.tag.findFirst({
+        where: { slug, projectId: targetProjectId },
+      })
+    );
+
+    if (existing) {
+      return NextResponse.json({ error: { code: "SLUG_EXISTS", message: "Tag slug already exists in this project." } }, { status: 409 });
+    }
+
+    const created = await withDbRetry(() =>
+      db.tag.create({
+        data: {
+          name: name.trim(),
+          slug,
+          description: description || null,
+          projectId: targetProjectId,
+        },
+      })
+    );
+
     return NextResponse.json({ data: created }, { status: 201 });
-  } catch (e) {
-    console.error(e);
-    return NextResponse.json({ error: { code: "DB_ERROR", message: String(e) } }, { status: 500 });
+  } catch (error: any) {
+    const status = error instanceof AuthError ? error.statusCode : 500;
+    const code = error instanceof AuthError ? error.code : "CREATE_FAILED";
+    return NextResponse.json({ error: { code, message: error.message || "Failed to create tag." } }, { status });
   }
 }

@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { db, withDbRetry } from "@/lib/db";
 import { z } from "zod";
 import { slugify } from "@/lib/slug";
+import { requirePermission, AuthError } from "@/lib/auth";
 
 const updateSchema = z.object({
   name: z.string().min(1).max(100).optional(),
@@ -16,68 +16,103 @@ const updateSchema = z.object({
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    try { const user = await getCurrentUser().catch(()=>null); if (process.env.NODE_ENV === "production" && !user) return NextResponse.json({ error: { code: "UNAUTHORIZED" } }, { status: 401 }); if (user && ["WRITER","CONTRIBUTOR","author","contributor"].includes(user.role)) return NextResponse.json({ error: { code: "FORBIDDEN" } }, { status: 403 }); } catch {}
-
     const { id } = await params;
-    const body = await req.json();
+    const body = await req.json().catch(() => ({}));
     const parsed = updateSchema.safeParse(body);
-    if (!parsed.success) return NextResponse.json({ error: { code: "VALIDATION_ERROR", message: parsed.error.message } }, { status: 400 });
+    if (!parsed.success) {
+      return NextResponse.json({ error: { code: "VALIDATION_ERROR", message: parsed.error.message } }, { status: 400 });
+    }
 
-    const existing = await db.category.findUnique({ where: { id } as never });
-    if (!existing) return NextResponse.json({ error: { code: "NOT_FOUND", message: "Category not found" } }, { status: 404 });
+    const existing = await withDbRetry(() => db.category.findUnique({ where: { id } }));
+    if (!existing) {
+      return NextResponse.json({ error: { code: "NOT_FOUND", message: "Category not found." } }, { status: 404 });
+    }
+
+    if (existing.projectId) {
+      await requirePermission(existing.projectId, "taxonomy.manage");
+    }
 
     const data: Record<string, unknown> = {};
-    if (parsed.data.name !== undefined) data.name = parsed.data.name;
+    if (parsed.data.name !== undefined) data.name = parsed.data.name.trim();
     if (parsed.data.slug !== undefined || parsed.data.name !== undefined) {
-      const raw = parsed.data.slug ?? (parsed.data.name as string) ?? (existing as any).slug;
+      const raw = parsed.data.slug ?? (parsed.data.name as string) ?? existing.slug;
       const slug = slugify(raw);
-      if (!slug) return NextResponse.json({ error: { code: "VALIDATION_ERROR", message: "Invalid slug" } }, { status: 400 });
-      const dup = await db.category.findFirst({ where: { slug, id: { not: id } } as never });
-      if (dup) return NextResponse.json({ error: { code: "SLUG_EXISTS", message: "Slug already exists" } }, { status: 409 });
+      if (!slug) return NextResponse.json({ error: { code: "VALIDATION_ERROR", message: "Invalid slug." } }, { status: 400 });
+
+      if (existing.projectId) {
+        const dup = await withDbRetry(() =>
+          db.category.findFirst({
+            where: { slug, projectId: existing.projectId, id: { not: id } },
+          })
+        );
+        if (dup) return NextResponse.json({ error: { code: "SLUG_EXISTS", message: "Category slug already exists in project." } }, { status: 409 });
+      }
       data.slug = slug;
     }
+
     if (parsed.data.description !== undefined) data.description = parsed.data.description;
     if (parsed.data.parentId !== undefined) {
       const parentId = parsed.data.parentId;
       if (parentId) {
-        if (parentId === id) return NextResponse.json({ error: { code: "VALIDATION_ERROR", message: "Category cannot be its own parent" } }, { status: 400 });
-        const parent = await db.category.findUnique({ where: { id: parentId } as never });
-        if (!parent) return NextResponse.json({ error: { code: "NOT_FOUND", message: "Parent not found" } }, { status: 404 });
-        if ((parent as any).parentId) return NextResponse.json({ error: { code: "VALIDATION_ERROR", message: "Only top-level categories can be parents" } }, { status: 400 });
+        if (parentId === id) return NextResponse.json({ error: { code: "VALIDATION_ERROR", message: "Category cannot be its own parent." } }, { status: 400 });
+        const parent = await withDbRetry(() => db.category.findUnique({ where: { id: parentId } }));
+        if (!parent) return NextResponse.json({ error: { code: "NOT_FOUND", message: "Parent category not found." } }, { status: 404 });
+        if (parent.parentId) return NextResponse.json({ error: { code: "VALIDATION_ERROR", message: "Only top-level categories can be parents." } }, { status: 400 });
       }
       data.parentId = parentId;
     }
+
     if (parsed.data.seo !== undefined) data.seo = parsed.data.seo;
     else if (parsed.data.seoTitle !== undefined || parsed.data.seoDesc !== undefined) {
-      const currentSeo = (existing as any).seo ?? {};
-      data.seo = { ...currentSeo, ...(parsed.data.seoTitle !== undefined ? { title: parsed.data.seoTitle } : {}), ...(parsed.data.seoDesc !== undefined ? { description: parsed.data.seoDesc } : {}) };
+      const currentSeo = (existing.seo as any) ?? {};
+      data.seo = {
+        ...currentSeo,
+        ...(parsed.data.seoTitle !== undefined ? { title: parsed.data.seoTitle } : {}),
+        ...(parsed.data.seoDesc !== undefined ? { description: parsed.data.seoDesc } : {}),
+      };
     }
 
-    const updated = await db.category.update({ where: { id } as never, data: data as never });
+    const updated = await withDbRetry(() =>
+      db.category.update({
+        where: { id },
+        data: data as never,
+      })
+    );
+
     return NextResponse.json({ data: updated });
-  } catch (e) {
-    console.error(e);
-    return NextResponse.json({ error: { code: "DB_ERROR", message: String(e) } }, { status: 500 });
+  } catch (error: any) {
+    const status = error instanceof AuthError ? error.statusCode : 500;
+    const code = error instanceof AuthError ? error.code : "UPDATE_FAILED";
+    return NextResponse.json({ error: { code, message: error.message || "Failed to update category." } }, { status });
   }
 }
 
-export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    try { const user = await getCurrentUser().catch(()=>null); if (process.env.NODE_ENV === "production" && !user) return NextResponse.json({ error: { code: "UNAUTHORIZED" } }, { status: 401 }); if (user && ["WRITER","CONTRIBUTOR","author","contributor"].includes(user.role)) return NextResponse.json({ error: { code: "FORBIDDEN" } }, { status: 403 }); } catch {}
-
     const { id } = await params;
-    const existing = await db.category.findUnique({ where: { id } as never });
-    if (!existing) return NextResponse.json({ error: { code: "NOT_FOUND", message: "Category not found" } }, { status: 404 });
-
-    // Safe-delete: check usage
-    const usage = await db.blog.count({ where: { categoryId: id } as never }).catch(() => 0);
-    if (usage > 0) {
-      return NextResponse.json({ error: { code: "IN_USE", message: `Category in use by ${usage} post(s)`, details: { count: usage } } }, { status: 409 });
+    const existing = await withDbRetry(() => db.category.findUnique({ where: { id } }));
+    if (!existing) {
+      return NextResponse.json({ error: { code: "NOT_FOUND", message: "Category not found." } }, { status: 404 });
     }
-    await db.category.delete({ where: { id } as never });
-    return NextResponse.json({ data: { ok: true } });
-  } catch (e) {
-    console.error(e);
-    return NextResponse.json({ error: { code: "DB_ERROR", message: String(e) } }, { status: 500 });
+
+    if (existing.projectId) {
+      await requirePermission(existing.projectId, "taxonomy.manage");
+    }
+
+    // Check usage
+    const usage = await withDbRetry(() => db.blog.count({ where: { categoryId: id } })).catch(() => 0);
+    if (usage > 0) {
+      return NextResponse.json(
+        { error: { code: "IN_USE", message: `Category in use by ${usage} post(s).` } },
+        { status: 409 }
+      );
+    }
+
+    await withDbRetry(() => db.category.delete({ where: { id } }));
+    return NextResponse.json({ data: { success: true } });
+  } catch (error: any) {
+    const status = error instanceof AuthError ? error.statusCode : 500;
+    const code = error instanceof AuthError ? error.code : "DELETE_FAILED";
+    return NextResponse.json({ error: { code, message: error.message || "Failed to delete category." } }, { status });
   }
 }

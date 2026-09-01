@@ -22,6 +22,7 @@ import {
   RefreshCw,
   ExternalLink,
   Loader2,
+  X,
 } from "lucide-react";
 
 const TABS = [
@@ -102,6 +103,48 @@ export default function SettingsPage() {
     }
   };
 
+  // Update User Status (pending -> approved, approved -> suspended, etc.)
+  const handleUpdateStatus = async (id: string, status: string) => {
+    try {
+      const activeProjId = typeof window !== "undefined" ? localStorage.getItem("openpost_active_project_id") : null;
+      const res = await fetch("/api/settings/users", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, status, projectId: activeProjId || undefined }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error?.message || "Failed to update status");
+      setTeamUsers((prev) => prev.map((u) => (u.id === id ? { ...u, status } : u)));
+      setSaveStatus(`User status updated to ${status}!`);
+      setTimeout(() => setSaveStatus(null), 3000);
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  // Update User Role (ADMIN, EDITOR, WRITER)
+  const handleUpdateRole = async (id: string, role: string) => {
+    try {
+      const activeProjId = typeof window !== "undefined" ? localStorage.getItem("openpost_active_project_id") : null;
+      if (!activeProjId) {
+        alert("Please select an active website project first.");
+        return;
+      }
+      const res = await fetch("/api/settings/users", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, role, projectId: activeProjId }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error?.message || "Failed to update role");
+      setTeamUsers((prev) => prev.map((u) => (u.id === id ? { ...u, role } : u)));
+      setSaveStatus(`User role updated to ${role}!`);
+      setTimeout(() => setSaveStatus(null), 3000);
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
   // Invite Team Member
   const handleInviteUser = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -109,6 +152,10 @@ export default function SettingsPage() {
 
     try {
       setInviting(true);
+      const activeProjId = typeof window !== "undefined" ? localStorage.getItem("openpost_active_project_id") : null;
+      if (!activeProjId) {
+        throw new Error("Active website project ID not found. Select a project in the sidebar.");
+      }
       const res = await fetch("/api/settings/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -116,12 +163,13 @@ export default function SettingsPage() {
           email: inviteEmail.trim(),
           name: inviteName.trim(),
           role: inviteRole,
+          projectId: activeProjId,
         }),
       });
 
-      if (!res.ok) throw new Error("Failed to add team member");
       const json = await res.json();
-      setTeamUsers((prev) => [...prev, json.data]);
+      if (!res.ok) throw new Error(json.error?.message || "Failed to add team member");
+      await loadAllSettings();
       setInviteEmail("");
       setInviteName("");
       setSaveStatus("Team member added!");
@@ -137,10 +185,16 @@ export default function SettingsPage() {
   const handleDeleteUser = async (id: string) => {
     if (!confirm("Are you sure you want to remove this team member?")) return;
     try {
-      await fetch(`/api/settings/users?id=${id}`, { method: "DELETE" });
+      const activeProjId = typeof window !== "undefined" ? localStorage.getItem("openpost_active_project_id") : null;
+      const url = activeProjId ? `/api/settings/users?id=${id}&projectId=${activeProjId}` : `/api/settings/users?id=${id}`;
+      const res = await fetch(url, { method: "DELETE" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error?.message || "Failed to remove user");
       setTeamUsers((prev) => prev.filter((u) => u.id !== id));
-    } catch (err) {
-      alert("Failed to remove user");
+      setSaveStatus("User removed from project.");
+      setTimeout(() => setSaveStatus(null), 3000);
+    } catch (err: any) {
+      alert(err.message || "Failed to remove user");
     }
   };
 
@@ -157,13 +211,16 @@ export default function SettingsPage() {
         body: JSON.stringify({ name: newTokenName.trim() }),
       });
 
-      if (!res.ok) throw new Error("Failed to create token");
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error?.message || "Failed to create token");
+      }
       const json = await res.json();
       setCreatedRawToken(json.data.rawToken);
       setTokens((prev) => [json.data, ...prev]);
       setNewTokenName("");
     } catch (err: any) {
-      alert(err.message);
+      alert(err.message || "Could not generate API token");
     } finally {
       setCreatingToken(false);
     }
@@ -358,13 +415,54 @@ export default function SettingsPage() {
           {/* TAB 2: TEAM & USERS */}
           {activeTab === "users" && (
             <div className="space-y-6">
+              {/* Pending Approval Queue */}
+              {teamUsers.some((u) => u.status === "pending") && (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-6 shadow-xs">
+                  <div className="flex items-center gap-2 text-amber-900 mb-2">
+                    <Clock className="h-5 w-5 text-amber-600" />
+                    <h2 className="text-sm font-bold uppercase tracking-wider">
+                      Pending Account Approvals ({teamUsers.filter((u) => u.status === "pending").length})
+                    </h2>
+                  </div>
+                  <p className="text-xs text-amber-800/80 mb-4">
+                    New signups require administrator approval before gaining access to any OpenPost CMS features.
+                  </p>
+                  <div className="divide-y divide-amber-200/60">
+                    {teamUsers
+                      .filter((u) => u.status === "pending")
+                      .map((u) => (
+                        <div key={u.id} className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                          <div>
+                            <p className="text-xs font-bold text-navy">{u.name || "New User"}</p>
+                            <p className="text-[11px] font-mono text-text-secondary">{u.email}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => handleUpdateStatus(u.id, "approved")}
+                              className="inline-flex items-center gap-1 rounded-xl bg-emerald-600 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-emerald-700 transition shadow-xs"
+                            >
+                              <Check className="h-3.5 w-3.5" /> Approve
+                            </button>
+                            <button
+                              onClick={() => handleUpdateStatus(u.id, "rejected")}
+                              className="inline-flex items-center gap-1 rounded-xl bg-rose-600 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-rose-700 transition shadow-xs"
+                            >
+                              <X className="h-3.5 w-3.5" /> Reject
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
+
               {/* Invite User Box */}
               <div className="rounded-2xl border border-border bg-white p-6 shadow-xs">
                 <h2 className="text-sm font-bold uppercase tracking-wider text-navy mb-2">
-                  Invite Team Member
+                  Invite / Add Team Member
                 </h2>
                 <p className="text-xs text-text-secondary mb-4">
-                  Add collaborators with granular permissions: Admin, Editor, Writer, or Contributor.
+                  Add collaborators to the active project with canonical roles: Admin, Editor, or Writer.
                 </p>
                 <form onSubmit={handleInviteUser} className="grid gap-3 sm:grid-cols-12 items-end">
                   <div className="sm:col-span-4">
@@ -398,7 +496,6 @@ export default function SettingsPage() {
                       <option value="ADMIN">Admin</option>
                       <option value="EDITOR">Editor</option>
                       <option value="WRITER">Writer</option>
-                      <option value="CONTRIBUTOR">Contributor</option>
                     </select>
                   </div>
                   <div className="sm:col-span-2">
@@ -408,45 +505,103 @@ export default function SettingsPage() {
                       className="w-full inline-flex items-center justify-center gap-1 rounded-xl bg-brand px-3 py-2 text-xs font-bold text-navy hover:bg-brand-hover hover:text-white transition shadow-xs disabled:opacity-50"
                     >
                       {inviting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
-                      Add
+                      Add Member
                     </button>
                   </div>
                 </form>
               </div>
 
-              {/* Active Users Table */}
+              {/* All Users & Team Table */}
               <div className="rounded-2xl border border-border bg-white p-6 shadow-xs">
-                <h3 className="text-sm font-bold text-navy mb-4">Active Team Members</h3>
+                <h3 className="text-sm font-bold text-navy mb-4">All Users &amp; Collaborators</h3>
                 <div className="divide-y divide-border">
                   {teamUsers.length === 0 ? (
                     <p className="text-xs text-text-tertiary py-4 text-center">No team members registered yet.</p>
                   ) : (
-                    teamUsers.map((user) => (
-                      <div key={user.id} className="py-3 flex items-center justify-between gap-4">
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand/20 text-xs font-bold text-navy">
-                            {user.name ? user.name.slice(0, 2).toUpperCase() : user.email.slice(0, 2).toUpperCase()}
-                          </div>
-                          <div>
-                            <p className="text-xs font-bold text-navy">{user.name || "Member"}</p>
-                            <p className="text-[11px] text-text-tertiary font-mono">{user.email}</p>
-                          </div>
-                        </div>
+                    teamUsers.map((user) => {
+                      const isApproved = user.status === "approved";
+                      const isSuspended = user.status === "suspended";
+                      const isPending = user.status === "pending";
+                      const isRejected = user.status === "rejected";
 
-                        <div className="flex items-center gap-3">
-                          <span className="rounded-full bg-surface-dim border border-border px-2.5 py-0.5 text-[10px] font-bold text-navy">
-                            {user.role}
-                          </span>
-                          <button
-                            onClick={() => handleDeleteUser(user.id)}
-                            className="text-text-tertiary hover:text-red-600 p-1 transition"
-                            title="Remove User"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
+                      return (
+                        <div key={user.id} className="py-3 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand/20 text-xs font-bold text-navy">
+                              {user.name ? user.name.slice(0, 2).toUpperCase() : user.email.slice(0, 2).toUpperCase()}
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <p className="text-xs font-bold text-navy">{user.name || "Member"}</p>
+                                <span
+                                  className={`rounded-full px-2 py-0.5 text-[9px] font-extrabold uppercase ${
+                                    isApproved
+                                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                      : isPending
+                                      ? "bg-amber-50 text-amber-700 border border-amber-200"
+                                      : isSuspended
+                                      ? "bg-slate-100 text-slate-700 border border-slate-300"
+                                      : "bg-rose-50 text-rose-700 border border-rose-200"
+                                  }`}
+                                >
+                                  {user.status || "approved"}
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-text-tertiary font-mono">{user.email}</p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <select
+                              value={user.role || "WRITER"}
+                              onChange={(e) => handleUpdateRole(user.id, e.target.value)}
+                              className="rounded-lg border border-border bg-white px-2.5 py-1 text-xs font-bold text-navy focus:border-brand focus:outline-none"
+                            >
+                              <option value="ADMIN">ADMIN</option>
+                              <option value="EDITOR">EDITOR</option>
+                              <option value="WRITER">WRITER</option>
+                            </select>
+
+                            {isApproved && (
+                              <button
+                                onClick={() => handleUpdateStatus(user.id, "suspended")}
+                                className="rounded-lg border border-border px-2.5 py-1 text-[11px] font-semibold text-text-secondary hover:bg-surface-dim transition"
+                                title="Suspend user access"
+                              >
+                                Suspend
+                              </button>
+                            )}
+
+                            {isSuspended && (
+                              <button
+                                onClick={() => handleUpdateStatus(user.id, "approved")}
+                                className="rounded-lg border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-100 transition"
+                                title="Reactivate user access"
+                              >
+                                Reactivate
+                              </button>
+                            )}
+
+                            {isPending && (
+                              <button
+                                onClick={() => handleUpdateStatus(user.id, "approved")}
+                                className="rounded-lg bg-emerald-600 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-emerald-700 transition"
+                              >
+                                Approve
+                              </button>
+                            )}
+
+                            <button
+                              onClick={() => handleDeleteUser(user.id)}
+                              className="text-text-tertiary hover:text-red-600 p-1.5 transition"
+                              title="Remove from Project"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                    ))
+                      );
+                    })
                   )}
                 </div>
               </div>

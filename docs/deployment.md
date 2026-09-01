@@ -1,3 +1,3 @@
-# Deployment
+# Deployment Guide
 
-Netlify + Supabase + R2. See README.
+See the full [Deployment & Self-Hosting Guide](/docs/deployment) for Vercel deployment, Docker Compose configuration, and production checklists.

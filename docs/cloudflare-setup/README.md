@@ -1,6 +1,6 @@
 # Cloudflare R2 Setup — for OpenPost Media
 
-OpenPost stores all uploads (images, PDFs, video posters) in **Cloudflare R2** (S3-compatible, free egress via custom domain). This guide creates your own bucket + folder `Openpost-images` + domain `media.typely.in` so uploads go to *your* R2, not ours.
+OpenPost stores all uploads (images, PDFs, video posters) in **Cloudflare R2** (S3-compatible, free egress via custom domain). This guide creates your own bucket + folder `Openpost-images` + domain `media.yourdomain.com` so uploads go to *your* R2.
 
 ## 1. Create Bucket
 
@@ -10,16 +10,16 @@ OpenPost stores all uploads (images, PDFs, video posters) in **Cloudflare R2** (
 
 Inside the bucket, click **+ Create folder** → `Openpost-images` → **Create**. Leave it empty — first upload from `/dashboard/media` will appear here.
 
-## 2. Custom Domain (for `https://media.typely.in/...` public URLs)
+## 2. Custom Domain (for `https://media.yourdomain.com/...` public URLs)
 
 1. Bucket → **Settings** → **Custom Domains** → **Connect Domain**
-2. Enter `media.typely.in` (or `cdn.yourdomain.com`) → **Continue** → Cloudflare adds DNS automatically
+2. Enter `media.yourdomain.com` (or `cdn.yourdomain.com`) → **Continue** → Cloudflare adds DNS automatically
 3. Wait until **Status: Active** (1–2 min). Keep **Public Development URL** `https://pub-7091…r2.dev` **Enabled** as fallback — it works even before custom domain.
 
 Set in `.env` and Vercel/Netlify:
 ```env
 R2_BUCKET_NAME=openpost-media
-R2_PUBLIC_URL=https://media.typely.in   # exactly the Custom Domain https:// URL, no trailing slash, no /openpost-media
+R2_PUBLIC_URL=https://media.yourdomain.com   # exactly the Custom Domain https:// URL, no trailing slash, no /openpost-media
 ```
 
 ## 3. CORS (required for browser upload from localhost + production)
@@ -28,7 +28,7 @@ Bucket → **Settings** → **CORS Policy** → **Add CORS Policy** → paste:
 ```json
 [
   {
-    "AllowedOrigins": ["https://typely.in", "https://www.typely.in", "https://media.typely.in", "http://localhost:3000"],
+    "AllowedOrigins": ["https://yourdomain.com", "https://www.yourdomain.com", "https://media.yourdomain.com", "http://localhost:3000"],
     "AllowedMethods": ["GET", "PUT", "POST", "DELETE", "HEAD"],
     "AllowedHeaders": ["*"],
     "ExposeHeaders": ["ETag", "Content-Length"],
@@ -48,9 +48,9 @@ Without this, browser `POST https://<account>.r2.cloudflarestorage.com` is block
 
 Set in `.env`:
 ```env
-R2_ACCOUNT_ID=94219d85ba0cf03385c37bfd095c3839
-R2_ACCESS_KEY_ID=d3e1ec2c3cd797ad73bb6cad81cefcdd
-R2_SECRET_ACCESS_KEY=970af9be111dfdc0fe4ae3deb1dd03ba0e278549d4c7a7db91bb77a6b99250ea
+R2_ACCOUNT_ID="your-r2-account-id"
+R2_ACCESS_KEY_ID="your-r2-access-key-id"
+R2_SECRET_ACCESS_KEY="your-r2-secret-access-key"
 ```
 
 ## 5. Verify
@@ -59,7 +59,7 @@ R2_SECRET_ACCESS_KEY=970af9be111dfdc0fe4ae3deb1dd03ba0e278549d4c7a7db91bb77a6b99
 git pull origin main
 npx prisma generate
 npm run dev
-# login as devasishpalhkp@gmail.com → /dashboard/media → drag image
+# login as admin@yourdomain.com → /dashboard/media → drag image
 ```
 - `F12 → Network` → `POST https://<account>.r2.cloudflarestorage.com` → **204**
 - R2 → `openpost-media/Openpost-images/` → new `.webp` appears

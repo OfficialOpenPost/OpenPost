@@ -1,3 +1,3 @@
-# CLI
+# OpenPost CLI Reference
 
-npx create-openpost@latest -> enter CMS URL -> browser auth -> select project -> generate.
+See the full [OpenPost CLI Guide](/docs/cli) for interactive walkthroughs, browser code handshake, and project scaffolding.

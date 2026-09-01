@@ -1,84 +1,88 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
-import { db } from "@/lib/db";
+import { db, withDbRetry } from "@/lib/db";
+import { requireApprovedUser, requirePermission, createAuditLog, AuthError } from "@/lib/auth";
+import { uploadBuffer, getPublicUrl, validateMagicBytes } from "@/lib/storage";
 import crypto from "crypto";
 
-function getS3Client() {
-  const accountId = process.env.R2_ACCOUNT_ID || process.env.CLOUDFLARE_ACCOUNT_ID;
-  const accessKeyId = process.env.R2_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID;
-  const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY;
-  const endpoint = process.env.R2_ENDPOINT || (accountId ? `https://${accountId}.r2.cloudflarestorage.com` : undefined);
-
-  if (!accessKeyId || !secretAccessKey || !endpoint) return null;
-
-  return new S3Client({
-    region: "auto",
-    endpoint,
-    credentials: { accessKeyId, secretAccessKey },
-    forcePathStyle: true,
-  });
-}
+const allowedMimes = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+  "image/svg+xml",
+  "image/avif",
+  "application/pdf",
+  "video/mp4",
+];
 
 export async function POST(req: NextRequest) {
   try {
-    const form = await req.formData();
+    const user = await requireApprovedUser();
+
+    const form = await req.formData().catch(() => null);
+    if (!form) {
+      return NextResponse.json({ error: { code: "BAD_REQUEST", message: "Multipart form data required." } }, { status: 400 });
+    }
+
     const file = form.get("file") as File | null;
+    const projectId = (form.get("projectId") as string) || undefined;
+
+    if (projectId) {
+      await requirePermission(projectId, "media.upload");
+    }
 
     if (!file) {
-      return NextResponse.json({ error: { code: "NO_FILE", message: "No file provided" } }, { status: 400 });
+      return NextResponse.json({ error: { code: "NO_FILE", message: "No file provided for upload." } }, { status: 400 });
     }
 
     if (file.size > 25 * 1024 * 1024) {
-      return NextResponse.json({ error: { code: "TOO_LARGE", message: "File exceeds 25MB limit" } }, { status: 400 });
+      return NextResponse.json({ error: { code: "TOO_LARGE", message: "File exceeds 25MB maximum limit." } }, { status: 400 });
     }
 
-    const ext = (file.name.split(".").pop() ?? "jpg").toLowerCase();
-    const key = `openpost-media/${Date.now()}-${crypto.randomUUID()}.${ext}`;
+    const mimeType = file.type || "application/octet-stream";
+    if (!allowedMimes.includes(mimeType.toLowerCase())) {
+      return NextResponse.json(
+        { error: { code: "INVALID_TYPE", message: `Unsupported media format: ${mimeType}` } },
+        { status: 400 }
+      );
+    }
+
     const arrayBuf = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuf);
+
+    // Validate magic bytes against MIME type (SSRF / Polyglot prevention)
+    if (!validateMagicBytes(buffer, mimeType)) {
+      return NextResponse.json(
+        { error: { code: "INVALID_PAYLOAD", message: "File header magic bytes do not match declared MIME type." } },
+        { status: 400 }
+      );
+    }
+
     const checksum = crypto.createHash("sha256").update(buffer).digest("hex");
+    const ext = (file.name.split(".").pop() || "bin").toLowerCase().replace(/[^a-z0-9]/g, "");
+    const key = `openpost-media/${Date.now()}-${crypto.randomUUID()}.${ext}`;
 
-    const s3 = getS3Client();
-    const bucket = process.env.R2_BUCKET_NAME || process.env.AWS_BUCKET_NAME;
+    // Upload to Cloudflare R2
     let publicUrl = "";
-
-    if (s3 && bucket) {
-      try {
-        await s3.send(
-          new PutObjectCommand({
-            Bucket: bucket,
-            Key: key,
-            Body: buffer,
-            ContentType: file.type || "application/octet-stream",
-          })
-        );
-        const baseUrl = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || process.env.R2_PUBLIC_URL || `https://${bucket}.r2.dev`;
-        publicUrl = `${baseUrl.replace(/\/$/, "")}/${key}`;
-      } catch (r2Err) {
-        console.warn("R2 upload attempt failed, falling back to data URL:", r2Err);
-      }
-    }
-
-    // If R2 wasn't configured or failed, fallback to Data URL for instant, seamless authoring
-    if (!publicUrl) {
-      const base64 = buffer.toString("base64");
-      publicUrl = `data:${file.type || "image/jpeg"};base64,${base64}`;
-    }
-
-    // Register media in database
-    let mediaRecord = null;
     try {
-      const firstUser = await db.user.findFirst().catch(() => null);
-      const userId = firstUser?.id ?? "00000000-0000-0000-0000-000000000000";
+      const uploadResult = await uploadBuffer(key, buffer, mimeType);
+      publicUrl = uploadResult.url;
+    } catch (storageErr) {
+      console.warn("Direct R2 upload failed, falling back to data URL for dev preview:", storageErr);
+      const base64 = buffer.toString("base64");
+      publicUrl = `data:${mimeType};base64,${base64}`;
+    }
 
-      mediaRecord = await db.media.create({
+    // Save media record to DB
+    const mediaRecord = await withDbRetry(() =>
+      db.media.create({
         data: {
           originalFilename: file.name,
-          mimeType: file.type || "image/jpeg",
+          mimeType,
           sizeBytes: BigInt(file.size),
           checksum,
-          uploadedBy: userId,
+          uploadedBy: user.id,
+          projectId: projectId || null,
           variants: {
             publicUrl,
             key,
@@ -86,26 +90,34 @@ export async function POST(req: NextRequest) {
           },
           altTextDefault: file.name.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " "),
         },
-      });
-    } catch (dbErr) {
-      console.warn("Could not save media record to DB:", dbErr);
-    }
-
-    return NextResponse.json({
-      data: {
-        id: mediaRecord?.id ?? crypto.randomUUID(),
-        key,
-        publicUrl,
-        size: file.size,
-        type: file.type,
-        name: file.name,
-      },
-    });
-  } catch (e: any) {
-    console.error("Media upload error:", e);
-    return NextResponse.json(
-      { error: { code: "UPLOAD_FAILED", message: String(e.message ?? e) } },
-      { status: 500 }
+      })
     );
+
+    await createAuditLog({
+      actorId: user.id,
+      projectId,
+      action: "media.uploaded",
+      targetId: mediaRecord.id,
+      metadata: { filename: file.name, size: file.size, mimeType },
+    });
+
+    return NextResponse.json(
+      {
+        data: {
+          id: mediaRecord.id,
+          key,
+          publicUrl,
+          size: file.size,
+          type: mimeType,
+          name: file.name,
+          projectId: mediaRecord.projectId,
+        },
+      },
+      { status: 201 }
+    );
+  } catch (error: any) {
+    const status = error instanceof AuthError ? error.statusCode : 500;
+    const code = error instanceof AuthError ? error.code : "UPLOAD_FAILED";
+    return NextResponse.json({ error: { code, message: error.message || "Media upload failed." } }, { status });
   }
 }

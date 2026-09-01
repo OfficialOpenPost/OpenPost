@@ -13,39 +13,77 @@ interface UseAutosaveOptions {
   safetyIntervalMs?: number;
 }
 
-export function useAutosave({ id, data, onSave, debounceMs = 2000, safetyIntervalMs = 30000 }: UseAutosaveOptions) {
+export function useAutosave({
+  id,
+  data,
+  onSave,
+  debounceMs = 3000,
+  safetyIntervalMs = 60000,
+}: UseAutosaveOptions) {
   const [status, setStatus] = useState<SaveStatus>("saved");
   const dataRef = useRef(data);
+  const lastSavedJsonRef = useRef<string>("");
+  const isInitialMount = useRef(true);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   dataRef.current = data;
 
   const save = useCallback(async () => {
+    const currentJson = JSON.stringify(dataRef.current);
+    // If nothing changed since last save, do not hit the database
+    if (currentJson === lastSavedJsonRef.current) {
+      return;
+    }
+
+    // If document is completely empty untitled draft on initial load, skip save
+    const parsed: any = dataRef.current || {};
+    if (!parsed.title && (!parsed.html || parsed.html === "<p></p>")) {
+      return;
+    }
+
     setStatus("saving");
     try {
-      // Mirror to IndexedDB for crash recovery (fire-and-forget)
       saveDraftLocal(id, dataRef.current).catch(() => {});
       await onSave(dataRef.current);
+      lastSavedJsonRef.current = currentJson;
       setStatus("saved");
     } catch {
       setStatus("error");
     }
   }, [id, onSave]);
 
-  // Debounced save on change
+  // Debounced save only when data actually changes
   useEffect(() => {
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      lastSavedJsonRef.current = JSON.stringify(data);
+      return;
+    }
+
+    const currentJson = JSON.stringify(data);
+    if (currentJson === lastSavedJsonRef.current) {
+      return;
+    }
+
     setStatus("unsaved");
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
     timeoutRef.current = setTimeout(save, debounceMs);
+
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
   }, [data, debounceMs, save]);
 
-  // Safety net every 30s
+  // Periodic safety save every 60s (only if dirty)
   useEffect(() => {
-    intervalRef.current = setInterval(save, safetyIntervalMs);
+    intervalRef.current = setInterval(() => {
+      const currentJson = JSON.stringify(dataRef.current);
+      if (currentJson !== lastSavedJsonRef.current) {
+        save();
+      }
+    }, safetyIntervalMs);
+
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
@@ -53,22 +91,19 @@ export function useAutosave({ id, data, onSave, debounceMs = 2000, safetyInterva
 
   // Save on blur
   useEffect(() => {
-    const handler = () => save();
+    const handler = () => {
+      const currentJson = JSON.stringify(dataRef.current);
+      if (currentJson !== lastSavedJsonRef.current) {
+        save();
+      }
+    };
     window.addEventListener("blur", handler);
     return () => window.removeEventListener("blur", handler);
   }, [save]);
 
-  // Save before unload with sendBeacon fallback
+  // Save before unload
   useEffect(() => {
     const handler = () => {
-      try {
-        const payload = JSON.stringify(dataRef.current);
-        if (navigator.sendBeacon) {
-          const blob = new Blob([payload], { type: "application/json" });
-          navigator.sendBeacon("/api/blogs/autosave", blob);
-        }
-      } catch {}
-      // Also try sync save to IDB
       try {
         saveDraftLocal(id, dataRef.current);
       } catch {}

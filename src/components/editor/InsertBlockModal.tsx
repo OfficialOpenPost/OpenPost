@@ -22,6 +22,10 @@ import {
   Library,
   Video,
   FileText,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  Maximize2,
 } from "lucide-react";
 
 export type BlockModalType =
@@ -54,6 +58,7 @@ export function InsertBlockModal({
   const [imageUrl, setImageUrl] = useState("");
   const [imageAlt, setImageAlt] = useState("");
   const [imageCaption, setImageCaption] = useState("");
+  const [imageLayout, setImageLayout] = useState<"left" | "center" | "right" | "wide">("center");
   const [uploadingImage, setUploadingImage] = useState(false);
   const [mediaLibrary, setMediaLibrary] = useState<any[]>([]);
   const [loadingMedia, setLoadingMedia] = useState(false);
@@ -105,24 +110,15 @@ export function InsertBlockModal({
 
   if (!isOpen || !type || !editor) return null;
 
-  // Handle File Upload for Image
+  // Handle File Upload: Client-side convert to WebP before upload!
   const handleFileUpload = async (file: File) => {
     try {
       setUploadingImage(true);
-      const formData = new FormData();
-      formData.append("file", file);
-
-      const res = await fetch("/api/media/upload", {
-        method: "POST",
-        body: formData,
-      });
-
-      const json = await res.json();
-      if (json.data?.publicUrl) {
-        setImageUrl(json.data.publicUrl);
-        if (!imageAlt) setImageAlt(file.name.replace(/\.[^/.]+$/, ""));
-      } else {
-        throw new Error(json.error?.message || "Upload failed");
+      const { uploadImageWithWebP } = await import("@/lib/uploadMedia");
+      const { url } = await uploadImageWithWebP(file);
+      setImageUrl(url);
+      if (!imageAlt) {
+        setImageAlt(file.name.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " "));
       }
     } catch (err: any) {
       alert("Image upload error: " + err.message);
@@ -140,8 +136,10 @@ export function InsertBlockModal({
       .setImage({
         src: imageUrl,
         alt: imageAlt || undefined,
-        title: imageCaption || undefined,
-      })
+        caption: imageCaption || undefined,
+        layout: imageLayout,
+        align: imageLayout,
+      } as any)
       .run();
     onClose();
   };
@@ -155,7 +153,10 @@ export function InsertBlockModal({
     }
 
     const optionsHtml = cleanOpts
-      .map((opt) => `<li style="margin: 4px 0; padding: 6px 12px; background: #F4F5F7; border-radius: 8px; font-size: 13px;">${opt}</li>`)
+      .map(
+        (opt) =>
+          `<li style="margin: 4px 0; padding: 6px 12px; background: #F4F5F7; border-radius: 8px; font-size: 13px;">${opt}</li>`
+      )
       .join("");
 
     const pollHtml = `
@@ -212,8 +213,9 @@ export function InsertBlockModal({
     if (!videoUrl) return;
     let embedUrl = videoUrl;
 
-    // YouTube regex converter
-    const ytMatch = videoUrl.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
+    const ytMatch = videoUrl.match(
+      /(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/
+    );
     if (ytMatch && ytMatch[1]) {
       embedUrl = `https://www.youtube-nocookie.com/embed/${ytMatch[1]}`;
     }
@@ -233,7 +235,8 @@ export function InsertBlockModal({
     const styles = {
       primary: "background: #FEA611; color: #2D3440; font-weight: 800;",
       dark: "background: #2D3440; color: #FFFFFF; font-weight: 700;",
-      outline: "background: transparent; color: #2D3440; border: 2px solid #2D3440; font-weight: 700;",
+      outline:
+        "background: transparent; color: #2D3440; border: 2px solid #2D3440; font-weight: 700;",
     };
 
     const btnHtml = `
@@ -256,7 +259,7 @@ export function InsertBlockModal({
   const handleInsertDownload = () => {
     if (!downloadName || !downloadUrl) return;
     const downloadHtml = `
-      <div style="display: flex; items-center; justify-content: space-between; padding: 14px 20px; border-radius: 14px; border: 1px solid #E2E8F0; background: #F8FAFC; margin: 20px 0;">
+      <div style="display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; border-radius: 14px; border: 1px solid #E2E8F0; background: #F8FAFC; margin: 20px 0;">
         <div style="display: flex; align-items: center; gap: 12px;">
           <span style="font-size: 20px;">📁</span>
           <div>
@@ -291,7 +294,7 @@ export function InsertBlockModal({
               {type === "download" && <Download className="h-4 w-4" />}
             </span>
             <h3 className="text-sm font-extrabold text-navy capitalize">
-              {type === "image" && "Insert Image"}
+              {type === "image" && "Insert Image Asset (Auto WebP)"}
               {type === "poll" && "Create Interactive Reader Poll"}
               {type === "callout" && "Insert Editorial Callout Box"}
               {type === "table" && "Insert Data Table"}
@@ -320,7 +323,9 @@ export function InsertBlockModal({
                   type="button"
                   onClick={() => setImageTab("upload")}
                   className={`py-1.5 rounded-lg transition ${
-                    imageTab === "upload" ? "bg-white text-navy shadow-xs" : "text-text-tertiary"
+                    imageTab === "upload"
+                      ? "bg-white text-navy shadow-xs"
+                      : "text-text-tertiary"
                   }`}
                 >
                   Upload File
@@ -329,7 +334,9 @@ export function InsertBlockModal({
                   type="button"
                   onClick={() => setImageTab("url")}
                   className={`py-1.5 rounded-lg transition ${
-                    imageTab === "url" ? "bg-white text-navy shadow-xs" : "text-text-tertiary"
+                    imageTab === "url"
+                      ? "bg-white text-navy shadow-xs"
+                      : "text-text-tertiary"
                   }`}
                 >
                   Image URL
@@ -338,7 +345,9 @@ export function InsertBlockModal({
                   type="button"
                   onClick={() => setImageTab("library")}
                   className={`py-1.5 rounded-lg transition ${
-                    imageTab === "library" ? "bg-white text-navy shadow-xs" : "text-text-tertiary"
+                    imageTab === "library"
+                      ? "bg-white text-navy shadow-xs"
+                      : "text-text-tertiary"
                   }`}
                 >
                   Media Library
@@ -364,15 +373,21 @@ export function InsertBlockModal({
                     {uploadingImage ? (
                       <div className="flex flex-col items-center gap-2">
                         <Loader2 className="h-8 w-8 animate-spin text-brand" />
-                        <p className="font-bold text-navy">Uploading &amp; compressing image...</p>
+                        <p className="font-bold text-navy">
+                          Converting to WebP &amp; uploading...
+                        </p>
                       </div>
                     ) : (
                       <div className="flex flex-col items-center gap-2">
                         <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand/15 text-navy">
                           <Upload className="h-6 w-6" />
                         </div>
-                        <p className="font-bold text-navy text-sm">Click to choose image or drag &amp; drop</p>
-                        <p className="text-text-tertiary text-[11px]">Supports PNG, JPG, WebP, AVIF up to 25MB</p>
+                        <p className="font-bold text-navy text-sm">
+                          Click to choose image or drag &amp; drop
+                        </p>
+                        <p className="text-text-tertiary text-[11px]">
+                          Automatically converted to optimized WebP in browser before upload
+                        </p>
                       </div>
                     )}
                   </div>
@@ -398,7 +413,9 @@ export function InsertBlockModal({
                   {loadingMedia ? (
                     <div className="p-8 text-center text-text-tertiary">Loading library...</div>
                   ) : mediaLibrary.length === 0 ? (
-                    <p className="p-6 text-center text-text-tertiary border rounded-xl">No media items found. Upload one first!</p>
+                    <p className="p-6 text-center text-text-tertiary border rounded-xl">
+                      No media items found. Upload one first!
+                    </p>
                   ) : (
                     <div className="grid grid-cols-4 gap-2 max-h-48 overflow-y-auto p-1">
                       {mediaLibrary.map((item) => {
@@ -412,10 +429,16 @@ export function InsertBlockModal({
                               if (item.altTextDefault) setImageAlt(item.altTextDefault);
                             }}
                             className={`cursor-pointer relative rounded-xl overflow-hidden border aspect-video transition ${
-                              isSelected ? "border-brand ring-2 ring-brand" : "border-border hover:opacity-80"
+                              isSelected
+                                ? "border-brand ring-2 ring-brand"
+                                : "border-border hover:opacity-80"
                             }`}
                           >
-                            <img src={url} alt={item.originalFilename} className="w-full h-full object-cover" />
+                            <img
+                              src={url}
+                              alt={item.originalFilename}
+                              className="w-full h-full object-cover"
+                            />
                             {isSelected && (
                               <div className="absolute inset-0 bg-brand/20 flex items-center justify-center">
                                 <Check className="h-4 w-4 text-navy font-bold" />
@@ -429,10 +452,46 @@ export function InsertBlockModal({
                 </div>
               )}
 
+              {/* Layout Alignment Selector (Left, Center, Right, Wide) */}
+              <div>
+                <label className="block font-bold text-navy mb-1.5">
+                  Text Wrapping &amp; Alignment
+                </label>
+                <div className="grid grid-cols-4 gap-1.5">
+                  {[
+                    { id: "left", label: "Left (Wrap)", icon: AlignLeft },
+                    { id: "center", label: "Center", icon: AlignCenter },
+                    { id: "right", label: "Right (Wrap)", icon: AlignRight },
+                    { id: "wide", label: "Wide Card", icon: Maximize2 },
+                  ].map((pos) => (
+                    <button
+                      key={pos.id}
+                      type="button"
+                      onClick={() => setImageLayout(pos.id as any)}
+                      className={`flex items-center justify-center gap-1 py-2 rounded-xl border text-[11px] font-bold transition ${
+                        imageLayout === pos.id
+                          ? "border-brand bg-brand/15 text-navy shadow-xs"
+                          : "border-border hover:bg-surface-dim text-text-secondary"
+                      }`}
+                    >
+                      <pos.icon className="h-3 w-3" />
+                      <span>{pos.label}</span>
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[10px] text-text-tertiary mt-1">
+                  Left &amp; Right modes wrap surrounding paragraphs around the image like MS Word.
+                </p>
+              </div>
+
               {imageUrl && (
                 <div className="space-y-3 pt-2 border-t border-border">
                   <div className="flex items-center gap-3">
-                    <img src={imageUrl} alt="Preview" className="h-14 w-20 object-cover rounded-lg border" />
+                    <img
+                      src={imageUrl}
+                      alt="Preview"
+                      className="h-14 w-20 object-cover rounded-lg border"
+                    />
                     <div className="flex-1 min-w-0">
                       <p className="font-bold text-navy truncate">{imageUrl}</p>
                       <p className="text-[11px] text-emerald-600 font-semibold flex items-center gap-1">
@@ -442,7 +501,9 @@ export function InsertBlockModal({
                   </div>
 
                   <div>
-                    <label className="block font-bold text-navy mb-1">Alt Text (Accessibility &amp; SEO)</label>
+                    <label className="block font-bold text-navy mb-1">
+                      Alt Text (SEO &amp; Accessibility)
+                    </label>
                     <input
                       type="text"
                       placeholder="Descriptive explanation of the visual"
@@ -475,7 +536,9 @@ export function InsertBlockModal({
                 <div className="space-y-2">
                   {pollOptions.map((opt, idx) => (
                     <div key={idx} className="flex items-center gap-2">
-                      <span className="text-[11px] font-bold text-text-tertiary w-4">{idx + 1}.</span>
+                      <span className="text-[11px] font-bold text-text-tertiary w-4">
+                        {idx + 1}.
+                      </span>
                       <input
                         type="text"
                         value={opt}
@@ -489,7 +552,9 @@ export function InsertBlockModal({
                       {pollOptions.length > 2 && (
                         <button
                           type="button"
-                          onClick={() => setPollOptions(pollOptions.filter((_, i) => i !== idx))}
+                          onClick={() =>
+                            setPollOptions(pollOptions.filter((_, i) => i !== idx))
+                          }
                           className="text-text-tertiary hover:text-red-500 p-1"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
@@ -500,7 +565,9 @@ export function InsertBlockModal({
                 </div>
                 <button
                   type="button"
-                  onClick={() => setPollOptions([...pollOptions, `Option ${pollOptions.length + 1}`])}
+                  onClick={() =>
+                    setPollOptions([...pollOptions, `Option ${pollOptions.length + 1}`])
+                  }
                   className="mt-2 text-xs font-bold text-brand flex items-center gap-1 hover:underline"
                 >
                   <Plus className="h-3.5 w-3.5" /> Add Option
@@ -526,7 +593,9 @@ export function InsertBlockModal({
                       type="button"
                       onClick={() => setCalloutTone(t.id as any)}
                       className={`py-2 rounded-xl border text-xs font-bold transition ${
-                        calloutTone === t.id ? "border-brand bg-brand/10 text-navy" : "border-border hover:bg-surface-dim"
+                        calloutTone === t.id
+                          ? "border-brand bg-brand/10 text-navy"
+                          : "border-border hover:bg-surface-dim"
                       }`}
                     >
                       {t.label}
@@ -584,7 +653,9 @@ export function InsertBlockModal({
           {type === "video" && (
             <div className="space-y-3">
               <div>
-                <label className="block font-bold text-navy mb-1">YouTube or Vimeo Video Link</label>
+                <label className="block font-bold text-navy mb-1">
+                  YouTube or Vimeo Video Link
+                </label>
                 <input
                   type="url"
                   placeholder="https://www.youtube.com/watch?v=..."
@@ -632,7 +703,9 @@ export function InsertBlockModal({
                       type="button"
                       onClick={() => setButtonVariant(s.id as any)}
                       className={`py-2 rounded-xl border text-xs font-bold transition ${
-                        buttonVariant === s.id ? "border-brand bg-brand/10 text-navy" : "border-border hover:bg-surface-dim"
+                        buttonVariant === s.id
+                          ? "border-brand bg-brand/10 text-navy"
+                          : "border-border hover:bg-surface-dim"
                       }`}
                     >
                       {s.label}
@@ -650,7 +723,10 @@ export function InsertBlockModal({
                 Creates accordion Q&amp;A pairs and structured Schema.org FAQPage data.
               </p>
               {faqItems.map((item, idx) => (
-                <div key={idx} className="p-3 rounded-xl border border-border bg-[#F9FAFB] space-y-2">
+                <div
+                  key={idx}
+                  className="p-3 rounded-xl border border-border bg-[#F9FAFB] space-y-2"
+                >
                   <div className="flex justify-between items-center">
                     <span className="font-bold text-navy text-xs">Question {idx + 1}</span>
                     {faqItems.length > 1 && (

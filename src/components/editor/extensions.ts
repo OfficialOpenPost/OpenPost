@@ -34,7 +34,6 @@ const HeadingShortcuts = Extension.create({
       "Mod-Alt-1": () => this.editor.chain().focus().toggleHeading({ level: 1 }).run(),
       "Mod-Alt-2": () => this.editor.chain().focus().toggleHeading({ level: 2 }).run(),
       "Mod-Alt-3": () => this.editor.chain().focus().toggleHeading({ level: 3 }).run(),
-      // Ctrl+Alt variants for Windows
       "Ctrl-Alt-1": () => this.editor.chain().focus().toggleHeading({ level: 1 }).run(),
       "Ctrl-Alt-2": () => this.editor.chain().focus().toggleHeading({ level: 2 }).run(),
       "Ctrl-Alt-3": () => this.editor.chain().focus().toggleHeading({ level: 3 }).run(),
@@ -46,7 +45,7 @@ export const editorExtensions = [
   HeadingShortcuts,
   StarterKit.configure({
     heading: {
-      levels: [1, 2, 3],
+      levels: [1, 2, 3, 4],
     },
     codeBlock: {
       HTMLAttributes: {
@@ -75,7 +74,7 @@ export const editorExtensions = [
     },
     paragraph: {
       HTMLAttributes: {
-        class: "leading-7 text-text-primary my-3",
+        class: "leading-relaxed text-text-primary my-3",
       },
     },
   }),
@@ -146,7 +145,7 @@ export const editorExtensions = [
   Placeholder.configure({
     placeholder: ({ node }) => {
       if (node.type.name === "heading") return "Heading";
-      return "Start writing, or type '/' for blocks…";
+      return "Start typing your post or click '+ Add Block' above...";
     },
     showOnlyWhenEditable: true,
     showOnlyCurrent: false,
@@ -171,6 +170,7 @@ export const EDITOR_STYLES = `
     letter-spacing: -0.02em;
     margin: 2rem 0 1rem;
     color: #111827;
+    clear: both;
   }
   .tiptap h2 {
     font-size: 1.75rem;
@@ -179,6 +179,7 @@ export const EDITOR_STYLES = `
     letter-spacing: -0.015em;
     margin: 1.75rem 0 0.85rem;
     color: #111827;
+    clear: both;
   }
   .tiptap h3 {
     font-size: 1.35rem;
@@ -186,6 +187,7 @@ export const EDITOR_STYLES = `
     line-height: 1.4;
     margin: 1.5rem 0 0.75rem;
     color: #1F2937;
+    clear: both;
   }
   .tiptap a {
     color: #FE4F01;
@@ -211,6 +213,7 @@ export const EDITOR_STYLES = `
     border-radius: 12px;
     overflow-x: auto;
     margin: 1.5rem 0;
+    clear: both;
   }
   .tiptap pre code {
     background: transparent;
@@ -223,19 +226,6 @@ export const EDITOR_STYLES = `
     max-width: 100%;
     height: auto;
   }
-  .tiptap img.ProseMirror-selectednode {
-    outline: 3px solid #FEA611;
-    outline-offset: 2px;
-  }
-  .tiptap ul[data-type="taskList"] {
-    list-style: none;
-    padding: 0;
-  }
-  .tiptap ul[data-type="taskList"] li {
-    display: flex;
-    align-items: flex-start;
-    gap: 0.5rem;
-  }
   .tiptap table {
     border-collapse: collapse;
     width: 100%;
@@ -243,8 +233,55 @@ export const EDITOR_STYLES = `
     border-radius: 12px;
     overflow: hidden;
     border: 1px solid #E5E7EB;
+    clear: both;
+  }
+  .tiptap hr {
+    clear: both;
   }
   .tiptap ::selection {
     background: rgba(254,166,17,0.25);
+  }
+
+  /* Microsoft Word-style Image Float & Text Wrapping Rules */
+  .tiptap div[data-node-view-wrapper].image-align-left,
+  .tiptap .image-align-left {
+    float: left !important;
+    margin: 0.5rem 1.75rem 1.25rem 0 !important;
+    max-width: 48% !important;
+    clear: none !important;
+    display: inline-block !important;
+  }
+
+  .tiptap div[data-node-view-wrapper].image-align-right,
+  .tiptap .image-align-right {
+    float: right !important;
+    margin: 0.5rem 0 1.25rem 1.75rem !important;
+    max-width: 48% !important;
+    clear: none !important;
+    display: inline-block !important;
+  }
+
+  .tiptap div[data-node-view-wrapper].image-align-center,
+  .tiptap .image-align-center {
+    display: block !important;
+    margin: 1.75rem auto !important;
+    max-width: 780px !important;
+    clear: both !important;
+  }
+
+  .tiptap div[data-node-view-wrapper].image-align-wide,
+  .tiptap .image-align-wide {
+    display: block !important;
+    width: 100% !important;
+    margin: 2.25rem 0 !important;
+    clear: both !important;
+  }
+
+  .tiptap div[data-node-view-wrapper].image-align-full,
+  .tiptap .image-align-full {
+    display: block !important;
+    width: 100% !important;
+    margin: 2.5rem 0 !important;
+    clear: both !important;
   }
 `;

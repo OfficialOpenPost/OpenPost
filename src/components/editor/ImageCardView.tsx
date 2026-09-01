@@ -142,13 +142,9 @@ export function ImageCardView({
 
   const wrapperClass = `image-align-${layout}`;
 
+  // Preserve the user's width across any alignment!
   const currentWidthVal = width || "100%";
-  const widthStyle =
-    layout === "left" || layout === "right"
-      ? { width: currentWidthVal === "100%" ? "48%" : currentWidthVal, maxWidth: "55%" }
-      : layout === "wide"
-      ? { width: "100%" }
-      : { width: currentWidthVal, maxWidth: "100%" };
+  const widthStyle = { width: currentWidthVal, maxWidth: "100%" };
 
   return (
     <NodeViewWrapper
@@ -176,15 +172,14 @@ export function ImageCardView({
             <span>Move</span>
           </div>
 
-          {/* Quick Layout Buttons */}
+          {/* Quick Layout Buttons (Preserves current image width) */}
           <div className="flex items-center gap-1 rounded-full bg-white/95 backdrop-blur-md p-1 border border-border shadow-xs">
             {layouts.map((l) => (
               <button
                 key={l.key}
                 type="button"
                 onClick={() => {
-                  const defaultW = l.key === "left" || l.key === "right" ? "48%" : "100%";
-                  updateAttributes({ layout: l.key, align: l.key, width: defaultW });
+                  updateAttributes({ layout: l.key, align: l.key });
                 }}
                 title={l.label}
                 className={`flex h-6 items-center gap-1 rounded-full px-2 text-[11px] font-bold transition ${
@@ -239,46 +234,32 @@ export function ImageCardView({
             draggable={false}
           />
 
-          {/* ======================================================== */}
           {/* VISIBLE SQUARE RESIZE BLOCKS (Figma / Word / Canva style) */}
-          {/* ======================================================== */}
-
-          {/* 1. Top-Left Square Block */}
           <div
             onMouseDown={onResizeLeft}
             className="absolute -top-1.5 -left-1.5 h-3.5 w-3.5 bg-white border-2 border-brand shadow-md z-30 cursor-nwse-resize rounded-xs hover:scale-125 hover:bg-brand transition-transform select-none"
             title="Drag to resize"
           />
-
-          {/* 2. Top-Right Square Block */}
           <div
             onMouseDown={onResizeRight}
             className="absolute -top-1.5 -right-1.5 h-3.5 w-3.5 bg-white border-2 border-brand shadow-md z-30 cursor-nesw-resize rounded-xs hover:scale-125 hover:bg-brand transition-transform select-none"
             title="Drag to resize"
           />
-
-          {/* 3. Bottom-Left Square Block */}
           <div
             onMouseDown={onResizeLeft}
             className="absolute -bottom-1.5 -left-1.5 h-3.5 w-3.5 bg-white border-2 border-brand shadow-md z-30 cursor-nesw-resize rounded-xs hover:scale-125 hover:bg-brand transition-transform select-none"
             title="Drag to resize"
           />
-
-          {/* 4. Bottom-Right Square Block */}
           <div
             onMouseDown={onResizeRight}
             className="absolute -bottom-1.5 -right-1.5 h-3.5 w-3.5 bg-white border-2 border-brand shadow-md z-30 cursor-nwse-resize rounded-xs hover:scale-125 hover:bg-brand transition-transform select-none"
             title="Drag to resize"
           />
-
-          {/* 5. Middle-Left Square Block */}
           <div
             onMouseDown={onResizeLeft}
             className="absolute top-1/2 -left-1.5 -translate-y-1/2 h-3.5 w-3.5 bg-white border-2 border-brand shadow-md z-30 cursor-ew-resize rounded-xs hover:scale-125 hover:bg-brand transition-transform select-none"
             title="Drag to resize width"
           />
-
-          {/* 6. Middle-Right Square Block */}
           <div
             onMouseDown={onResizeRight}
             className="absolute top-1/2 -right-1.5 -translate-y-1/2 h-3.5 w-3.5 bg-white border-2 border-brand shadow-md z-30 cursor-ew-resize rounded-xs hover:scale-125 hover:bg-brand transition-transform select-none"

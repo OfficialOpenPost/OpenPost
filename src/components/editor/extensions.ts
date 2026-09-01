@@ -247,7 +247,6 @@ export const EDITOR_STYLES = `
   .tiptap .image-align-left {
     float: left !important;
     margin: 0.5rem 1.75rem 1.25rem 0 !important;
-    max-width: 48% !important;
     clear: none !important;
     display: inline-block !important;
   }
@@ -256,7 +255,6 @@ export const EDITOR_STYLES = `
   .tiptap .image-align-right {
     float: right !important;
     margin: 0.5rem 0 1.25rem 1.75rem !important;
-    max-width: 48% !important;
     clear: none !important;
     display: inline-block !important;
   }
@@ -265,7 +263,6 @@ export const EDITOR_STYLES = `
   .tiptap .image-align-center {
     display: block !important;
     margin: 1.75rem auto !important;
-    max-width: 780px !important;
     clear: both !important;
   }
 

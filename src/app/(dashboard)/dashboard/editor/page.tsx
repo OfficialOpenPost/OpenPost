@@ -126,7 +126,7 @@ function EditorInner({ initialBlogId }: EditorPageProps) {
       .finally(() => setLoadingInitial(false));
   }, [effectiveId, editor]);
 
-  // Handle resizable sidebar
+  // Handle resizable sidebar (on right)
   const handleMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
     setIsResizing(true);
@@ -135,7 +135,7 @@ function EditorInner({ initialBlogId }: EditorPageProps) {
   useEffect(() => {
     if (!isResizing) return;
     const onMove = (e: MouseEvent) => {
-      const newWidth = Math.min(480, Math.max(280, e.clientX));
+      const newWidth = Math.min(480, Math.max(280, window.innerWidth - e.clientX));
       setSidebarWidth(newWidth);
     };
     const onUp = () => setIsResizing(false);
@@ -221,16 +221,12 @@ function EditorInner({ initialBlogId }: EditorPageProps) {
 
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
-        if (j?.error?.code === "CONFLICT") {
-          setConflictMsg(j.error.message);
-          throw new Error(j.error.message);
-        }
-        if (j?.error?.code === "SLUG_EXISTS") throw new Error("Slug already exists — choose another");
-        throw new Error("Save failed");
+        throw new Error(j?.error?.message || "Save failed");
       }
 
       const j = await res.json().catch(() => ({}));
       if (j.data?.id && !blogId) setBlogId(j.data.id);
+      if (j.data?.slug) setSlug(j.data.slug);
       setConflictMsg(null);
     },
   });
@@ -268,7 +264,7 @@ function EditorInner({ initialBlogId }: EditorPageProps) {
 
   if (preview) {
     return (
-      <div className="min-h-screen bg-[#FCFCF9]">
+      <div className="min-h-screen bg-[#F4F5F7]">
         <div className="sticky top-0 z-20 flex items-center justify-between border-b border-border bg-white/90 backdrop-blur-md px-6 py-3">
           <button
             onClick={() => setPreview(false)}
@@ -288,11 +284,11 @@ function EditorInner({ initialBlogId }: EditorPageProps) {
   }
 
   return (
-    <div className="min-h-screen bg-[#FCFCF9] flex flex-col text-navy">
+    <div className="min-h-screen bg-[#F4F5F7] flex flex-col text-navy">
       <style>{EDITOR_STYLES}</style>
 
       {/* Top Application Bar */}
-      <header className="fixed top-0 left-0 right-0 h-16 border-b border-border bg-white z-30 flex items-center justify-between px-4 sm:px-6 shadow-xs">
+      <header className="fixed top-0 left-0 right-0 h-16 border-b border-border bg-white z-30 flex items-center justify-between px-4 sm:px-8 shadow-xs">
         <div className="flex items-center gap-3 min-w-0">
           <Link
             href="/dashboard/blogs"
@@ -302,8 +298,8 @@ function EditorInner({ initialBlogId }: EditorPageProps) {
             <ArrowLeft className="h-4 w-4 text-navy" />
           </Link>
           <div className="min-w-0 hidden sm:block">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-text-tertiary leading-none">Article</p>
-            <p className="text-xs sm:text-sm font-bold text-navy truncate leading-none mt-1 max-w-[200px] md:max-w-[280px]">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-text-tertiary leading-none">WordPress-Style Studio</p>
+            <p className="text-xs sm:text-sm font-bold text-navy truncate leading-none mt-1 max-w-[240px] md:max-w-[340px]">
               {title || "Untitled Article"}
             </p>
           </div>
@@ -314,7 +310,7 @@ function EditorInner({ initialBlogId }: EditorPageProps) {
 
         <div className="flex items-center gap-2 shrink-0">
           <span className="hidden xl:inline text-xs text-text-tertiary font-mono">
-            {words} words · {minutes} min
+            {words} words · {minutes} min read
           </span>
 
           <button
@@ -337,14 +333,16 @@ function EditorInner({ initialBlogId }: EditorPageProps) {
             className="inline-flex items-center gap-1.5 rounded-xl bg-brand px-4 sm:px-5 py-1.5 text-xs font-bold text-navy shadow-xs hover:bg-brand-hover hover:text-white transition"
           >
             <Sparkles className="h-3.5 w-3.5" />
-            {status === "published" ? "Update Article" : status === "scheduled" ? "Scheduled" : "Publish Article"}
+            {status === "published" ? "Update Post" : status === "scheduled" ? "Scheduled" : "Publish Post"}
           </button>
 
           <button
             onClick={() => setShowSidebar(!showSidebar)}
-            className="flex h-8 w-8 items-center justify-center rounded-xl border border-border bg-white hover:bg-surface-raised shrink-0 text-navy"
+            className={`flex h-8 w-8 items-center justify-center rounded-xl border border-border transition shrink-0 ${
+              showSidebar ? "bg-navy text-white" : "bg-white text-navy hover:bg-surface-raised"
+            }`}
             aria-label="Toggle inspector"
-            title="Toggle Sidebar Inspector"
+            title="Toggle Settings Sidebar"
           >
             <Settings2 className="h-4 w-4" />
           </button>
@@ -353,11 +351,53 @@ function EditorInner({ initialBlogId }: EditorPageProps) {
 
       {/* Editor Body */}
       <div className="flex-1 flex pt-16">
-        {/* Left Inspector Sidebar (All 5 Tabs) */}
+        {/* Main Canvas Area (Generous ~1060px Fixed Card Width) */}
+        <main
+          className="flex-1 flex flex-col items-center py-6 px-4 sm:px-8 overflow-y-auto transition-all"
+          style={{ marginRight: showSidebar ? `${sidebarWidth}px` : "0" }}
+        >
+          {/* Full-width Responsive Sticky Toolbar */}
+          <div className="sticky top-0 z-10 w-full max-w-5xl mb-4">
+            <Toolbar editor={editor} />
+          </div>
+
+          {/* Generous Document Card (WordPress Style) */}
+          <div className="w-full max-w-5xl bg-white rounded-2xl border border-border shadow-sm p-8 sm:p-14 min-h-[850px] mb-20 transition-all">
+            {/* Title Input */}
+            <input
+              type="text"
+              placeholder="Add post title..."
+              value={title}
+              onChange={(e) => handleTitleChange(e.target.value)}
+              className="w-full text-3xl sm:text-5xl font-black text-navy placeholder:text-text-tertiary focus:outline-none border-b border-border pb-5 mb-8 leading-tight tracking-tight"
+            />
+
+            {/* Floating Bubble Menus */}
+            <SelectionBubbleMenu editor={editor} />
+            <ImageBubbleMenu editor={editor} />
+
+            {/* Tiptap ProseMirror Canvas */}
+            <EditorContent
+              editor={editor}
+              className="prose prose-lg prose-navy max-w-none focus:outline-none min-h-[500px]"
+            />
+          </div>
+        </main>
+
+        {/* Resizer Handle */}
+        {showSidebar && (
+          <div
+            onMouseDown={handleMouseDown}
+            className="hidden lg:block w-1 hover:w-1.5 bg-border hover:bg-brand cursor-col-resize fixed top-16 bottom-0 z-20 transition-colors"
+            style={{ right: `${sidebarWidth}px` }}
+          />
+        )}
+
+        {/* Right-hand Inspector Sidebar (WordPress Style) */}
         {showSidebar && (
           <aside
             style={{ width: `${sidebarWidth}px` }}
-            className="flex flex-col border-r border-border bg-white fixed left-0 top-16 bottom-0 z-20 overflow-y-auto shadow-xs"
+            className="flex flex-col border-l border-border bg-white fixed right-0 top-16 bottom-0 z-20 overflow-y-auto shadow-xs"
           >
             {/* 5 Inspector Tabs */}
             <div className="grid grid-cols-5 p-1.5 border-b border-border bg-[#F9FAFB] gap-1 text-[11px] font-bold text-center">
@@ -368,7 +408,7 @@ function EditorInner({ initialBlogId }: EditorPageProps) {
                 }`}
                 title="Slug, Category & Tags"
               >
-                Organize
+                Post
               </button>
               <button
                 onClick={() => setActiveTab("seo")}
@@ -425,7 +465,7 @@ function EditorInner({ initialBlogId }: EditorPageProps) {
                       className="w-full rounded-lg border border-border bg-[#FCFCF9] px-3 py-2 text-xs font-mono text-navy focus:border-brand focus:outline-none"
                     />
                     <p className="text-[10px] text-text-tertiary mt-1">
-                      https://yourdomain.com/blog/{slug}
+                      /blog/{slug}
                     </p>
                   </div>
 
@@ -632,45 +672,6 @@ function EditorInner({ initialBlogId }: EditorPageProps) {
             </div>
           </aside>
         )}
-
-        {/* Resizer Handle */}
-        {showSidebar && (
-          <div
-            onMouseDown={handleMouseDown}
-            className="hidden lg:block w-1 hover:w-1.5 bg-border hover:bg-brand cursor-col-resize fixed top-16 bottom-0 z-20 transition-colors"
-            style={{ left: `${sidebarWidth}px` }}
-          />
-        )}
-
-        {/* Main Canvas Area */}
-        <main
-          className="flex-1 flex flex-col items-center p-4 sm:p-8 overflow-y-auto transition-all"
-          style={{ marginLeft: showSidebar ? `${sidebarWidth}px` : "0" }}
-        >
-          {/* Tiptap Sticky Toolbar */}
-          <div className="sticky top-0 z-10 w-full max-w-3xl mb-4">
-            <Toolbar editor={editor} />
-          </div>
-
-          {/* Document Canvas Card */}
-          <div className="w-full max-w-3xl bg-white rounded-2xl border border-border shadow-md p-6 sm:p-12 min-h-[700px] mb-20">
-            {/* Title Input */}
-            <input
-              type="text"
-              placeholder="Article Title..."
-              value={title}
-              onChange={(e) => handleTitleChange(e.target.value)}
-              className="w-full text-2xl sm:text-4xl font-extrabold text-navy placeholder:text-text-tertiary focus:outline-none border-b border-border pb-4 mb-6 leading-tight"
-            />
-
-            {/* Bubble Menus */}
-            <SelectionBubbleMenu editor={editor} />
-            <ImageBubbleMenu editor={editor} />
-
-            {/* Tiptap ProseMirror Canvas */}
-            <EditorContent editor={editor} className="prose prose-navy max-w-none focus:outline-none min-h-[400px]" />
-          </div>
-        </main>
       </div>
     </div>
   );

@@ -23,7 +23,6 @@ import {
   Code2,
   Undo2,
   Redo2,
-  MoreHorizontal,
   AlignLeft,
   AlignCenter,
   AlignRight,
@@ -74,11 +73,10 @@ function ToolbarButton({
 }
 
 function Divider() {
-  return <div className="mx-1 h-5 w-px bg-border shrink-0" />;
+  return <div className="mx-1 h-5 w-px bg-border shrink-0 self-center" />;
 }
 
 export function Toolbar({ editor }: ToolbarProps) {
-  const [showMore, setShowMore] = useState(false);
   const [showInsertDropdown, setShowInsertDropdown] = useState(false);
   const [showHeadingsDropdown, setShowHeadingsDropdown] = useState(false);
   const insertMenuRef = useRef<HTMLDivElement>(null);
@@ -120,7 +118,7 @@ export function Toolbar({ editor }: ToolbarProps) {
 
   const addLink = () => {
     const previousUrl = editor.getAttributes("link").href;
-    const url = window.prompt("Enter URL:", previousUrl);
+    const url = window.prompt("Enter destination URL:", previousUrl || "https://");
     if (url === null) return;
     if (url === "") {
       editor.chain().focus().extendMarkRange("link").unsetLink().run();
@@ -135,40 +133,40 @@ export function Toolbar({ editor }: ToolbarProps) {
 
   const insertItems = [
     {
-      label: "Image",
+      label: "Image Asset",
       icon: ImageIcon,
       action: () => addImage(),
-      desc: "Upload or insert image",
+      desc: "Upload or insert responsive WebP",
     },
     {
-      label: "Interactive Poll",
+      label: "Interactive Reader Poll",
       icon: BarChart3,
       action: () => editor.chain().focus().insertContent("<p>[Poll: Reader survey block]</p>").run(),
-      desc: "Live reader voting block",
+      desc: "Live reader voting with deduplication",
     },
     {
-      label: "Callout Box",
+      label: "Callout Highlight Box",
       icon: Sparkles,
       action: () => editor.chain().focus().insertContent('<blockquote data-type="callout">💡 <strong>Pro Tip:</strong> Key editorial callout.</blockquote>').run(),
-      desc: "Highlighted advisory note",
+      desc: "Highlighted advisory tip or note",
     },
     {
-      label: "Data Table",
+      label: "Data Table (3×3)",
       icon: TableIcon,
       action: () => addTable(),
-      desc: "3x3 table with headers",
+      desc: "Data table with header row",
     },
     {
-      label: "FAQ Accordion",
+      label: "FAQ Accordion (JSON-LD)",
       icon: HelpCircle,
       action: () => editor.chain().focus().setFaq({ items: [{ question: "Frequently Asked Question?", answer: "Clear, detailed response." }] }).run(),
-      desc: "Schema.org structured FAQ",
+      desc: "Schema.org structured FAQ section",
     },
     {
-      label: "Collapsible Section",
+      label: "Collapsible Accordion",
       icon: Layers,
-      action: () => editor.chain().focus().setAccordion({ items: [{ title: "Collapsible Title", content: "Details and expandable content..." }] }).run(),
-      desc: "Expandable text accordion",
+      action: () => editor.chain().focus().setAccordion({ items: [{ title: "Collapsible Title", content: "Expandable content details..." }] }).run(),
+      desc: "Expandable toggle section",
     },
     {
       label: "Video Embed",
@@ -177,41 +175,41 @@ export function Toolbar({ editor }: ToolbarProps) {
         const url = window.prompt("Enter YouTube or Vimeo URL:");
         if (url) editor.chain().focus().insertContent(`<p>[Embed: ${url}]</p>`).run();
       },
-      desc: "YouTube / Vimeo embed",
+      desc: "YouTube / Vimeo player embed",
     },
     {
-      label: "CTA Button",
+      label: "Call-to-Action Button",
       icon: ArrowUpRight,
       action: () => {
         const url = window.prompt("Button destination URL:", "https://");
-        const label = window.prompt("Button text:", "Get Started");
+        const label = window.prompt("Button label:", "Learn More");
         if (url && label) editor.chain().focus().insertContent(`<p><a href="${url}" class="openpost-button">${label}</a></p>`).run();
       },
-      desc: "Call-to-action button link",
+      desc: "Styled call-to-action button",
     },
     {
-      label: "Download Attachment",
+      label: "File Attachment",
       icon: Download,
       action: () => {
-        const name = window.prompt("File name (e.g. guide.pdf):", "Whitepaper.pdf");
+        const name = window.prompt("File name (e.g. guide.pdf):", "Report.pdf");
         if (name) editor.chain().focus().insertContent(`<p>📁 <strong>Download:</strong> ${name}</p>`).run();
       },
-      desc: "Linked downloadable asset",
+      desc: "Downloadable PDF / file block",
     },
   ];
 
   return (
-    <div className="bg-white border border-border rounded-2xl shadow-xs">
-      <div className="flex items-center gap-1 overflow-x-auto px-3 py-2 scrollbar-none">
+    <div className="w-full bg-white border border-border rounded-2xl p-2 shadow-sm">
+      <div className="flex flex-wrap items-center gap-1.5">
         {/* + Insert Block Dropdown */}
         <div className="relative shrink-0" ref={insertMenuRef}>
           <button
             type="button"
             onClick={() => setShowInsertDropdown(!showInsertDropdown)}
-            className="flex items-center gap-1 rounded-xl bg-brand px-3 py-1.5 text-xs font-bold text-navy hover:bg-brand-hover hover:text-white transition shadow-xs"
+            className="flex items-center gap-1.5 rounded-xl bg-brand px-3 py-1.5 text-xs font-bold text-navy hover:bg-brand-hover hover:text-white transition shadow-xs"
           >
             <Plus className="h-3.5 w-3.5" />
-            <span>Insert Block</span>
+            <span>Add Block</span>
             <ChevronDown className="h-3 w-3 opacity-70" />
           </button>
 
@@ -220,7 +218,7 @@ export function Toolbar({ editor }: ToolbarProps) {
               <p className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-text-tertiary">
                 Insert Content Block
               </p>
-              <div className="space-y-1">
+              <div className="space-y-0.5">
                 {insertItems.map((item) => (
                   <button
                     key={item.label}
@@ -252,7 +250,7 @@ export function Toolbar({ editor }: ToolbarProps) {
           <button
             type="button"
             onClick={() => setShowHeadingsDropdown(!showHeadingsDropdown)}
-            className="flex items-center gap-1 rounded-lg border border-border bg-surface-dim px-2.5 py-1.5 text-xs font-bold text-navy hover:bg-surface-raised transition"
+            className="flex items-center gap-1 rounded-xl border border-border bg-surface-dim px-2.5 py-1.5 text-xs font-bold text-navy hover:bg-surface-raised transition"
           >
             <span>
               {editor.isActive("heading", { level: 1 })
@@ -336,8 +334,8 @@ export function Toolbar({ editor }: ToolbarProps) {
 
         <Divider />
 
-        {/* Text Formatting */}
-        <div className="flex items-center gap-0.5 shrink-0">
+        {/* Text Styling */}
+        <div className="flex items-center gap-1 shrink-0">
           <ToolbarButton
             active={editor.isActive("bold")}
             onClick={() => editor.chain().focus().toggleBold().run()}
@@ -369,7 +367,7 @@ export function Toolbar({ editor }: ToolbarProps) {
           <ToolbarButton
             active={editor.isActive("highlight")}
             onClick={() => editor.chain().focus().toggleHighlight().run()}
-            title="Highlight Text"
+            title="Highlight"
           >
             <Highlighter className="h-3.5 w-3.5" />
           </ToolbarButton>
@@ -383,8 +381,8 @@ export function Toolbar({ editor }: ToolbarProps) {
 
         <Divider />
 
-        {/* Alignment */}
-        <div className="hidden sm:flex items-center gap-0.5 shrink-0">
+        {/* Text Alignment */}
+        <div className="flex items-center gap-1 shrink-0">
           <ToolbarButton
             active={editor.isActive({ textAlign: "left" })}
             onClick={() => editor.chain().focus().setTextAlign("left").run()}
@@ -418,7 +416,7 @@ export function Toolbar({ editor }: ToolbarProps) {
         <Divider />
 
         {/* Lists & Quotes */}
-        <div className="flex items-center gap-0.5 shrink-0">
+        <div className="flex items-center gap-1 shrink-0">
           <ToolbarButton
             active={editor.isActive("bulletList")}
             onClick={() => editor.chain().focus().toggleBulletList().run()}
@@ -436,7 +434,7 @@ export function Toolbar({ editor }: ToolbarProps) {
           <ToolbarButton
             active={editor.isActive("taskList")}
             onClick={() => editor.chain().focus().toggleTaskList().run()}
-            title="Checklist / Tasks"
+            title="Task Checklist"
           >
             <ListChecks className="h-3.5 w-3.5" />
           </ToolbarButton>
@@ -451,15 +449,15 @@ export function Toolbar({ editor }: ToolbarProps) {
 
         <Divider />
 
-        {/* Direct Insertion Tools */}
-        <div className="flex items-center gap-0.5 shrink-0">
-          <ToolbarButton onClick={addLink} active={editor.isActive("link")} title="Link (Ctrl+K)">
+        {/* Block Insertions */}
+        <div className="flex items-center gap-1 shrink-0">
+          <ToolbarButton onClick={addLink} active={editor.isActive("link")} title="Insert Link (Ctrl+K)">
             <Link2 className="h-3.5 w-3.5" />
           </ToolbarButton>
-          <ToolbarButton onClick={addImage} title="Upload Image">
+          <ToolbarButton onClick={addImage} title="Upload Image Asset">
             <ImageIcon className="h-3.5 w-3.5" />
           </ToolbarButton>
-          <ToolbarButton onClick={addTable} title="Insert Table">
+          <ToolbarButton onClick={addTable} title="Insert Table (3×3)">
             <TableIcon className="h-3.5 w-3.5" />
           </ToolbarButton>
           <ToolbarButton
@@ -480,7 +478,7 @@ export function Toolbar({ editor }: ToolbarProps) {
         <Divider />
 
         {/* Undo / Redo */}
-        <div className="flex items-center gap-0.5 shrink-0">
+        <div className="flex items-center gap-1 shrink-0 ml-auto">
           <ToolbarButton onClick={() => editor.chain().focus().undo().run()} title="Undo (Ctrl+Z)">
             <Undo2 className="h-3.5 w-3.5" />
           </ToolbarButton>
@@ -488,46 +486,7 @@ export function Toolbar({ editor }: ToolbarProps) {
             <Redo2 className="h-3.5 w-3.5" />
           </ToolbarButton>
         </div>
-
-        {/* Overflow for mobile */}
-        <button
-          type="button"
-          onClick={() => setShowMore(!showMore)}
-          className="ml-auto flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border bg-surface-dim text-navy hover:bg-surface-raised sm:hidden"
-          aria-label="More options"
-        >
-          <MoreHorizontal className="h-3.5 w-3.5" />
-        </button>
       </div>
-
-      {showMore && (
-        <div className="border-t border-border bg-surface-dim px-3 py-2 flex flex-wrap gap-1 sm:hidden">
-          <ToolbarButton
-            onClick={() => editor.chain().focus().setTextAlign("left").run()}
-            title="Align Left"
-          >
-            <AlignLeft className="h-3.5 w-3.5" />
-          </ToolbarButton>
-          <ToolbarButton
-            onClick={() => editor.chain().focus().setTextAlign("center").run()}
-            title="Align Center"
-          >
-            <AlignCenter className="h-3.5 w-3.5" />
-          </ToolbarButton>
-          <ToolbarButton
-            onClick={() => editor.chain().focus().setTextAlign("right").run()}
-            title="Align Right"
-          >
-            <AlignRight className="h-3.5 w-3.5" />
-          </ToolbarButton>
-          <ToolbarButton
-            onClick={() => editor.chain().focus().setTextAlign("justify").run()}
-            title="Justify"
-          >
-            <AlignJustify className="h-3.5 w-3.5" />
-          </ToolbarButton>
-        </div>
-      )}
     </div>
   );
 }

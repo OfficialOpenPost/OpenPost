@@ -12,7 +12,7 @@ import { FeaturedImagePicker } from "@/components/editor/FeaturedImagePicker";
 import { useAutosave } from "@/hooks/useAutosave";
 import { countWords, readingTime } from "@/lib/publish";
 import { slugify } from "@/lib/slug";
-import { ArrowLeft, Eye, Sparkles, Settings2, Image as ImageIcon, Tag, Folder, X, Check, Clock } from "lucide-react";
+import { ArrowLeft, Eye, Sparkles, Settings2, Image as ImageIcon, Tag, Folder, X, Check, Clock, Search, AlertTriangle, History, Calendar, Globe, Bookmark } from "lucide-react";
 import { InsertMenu } from "@/components/editor/InsertMenu";
 import Link from "next/link";
 
@@ -22,7 +22,7 @@ export default function EditorPage() {
   const [html, setHtml] = useState("<p></p>");
   const [json, setJson] = useState<Record<string, unknown> | null>(null);
   const [preview, setPreview] = useState(false);
-  const [status, setStatus] = useState<"draft" | "published">("draft");
+  const [status, setStatus] = useState<"draft" | "published" | "scheduled" | "trash">("draft");
   const [showSidebar, setShowSidebar] = useState(true);
   const [sidebarWidth, setSidebarWidth] = useState(320);
   const [isResizing, setIsResizing] = useState(false);
@@ -31,6 +31,18 @@ export default function EditorPage() {
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
   const [slugEdited, setSlugEdited] = useState(false);
+  const [activeTab, setActiveTab] = useState<"seo" | "organize" | "featured" | "publishing" | "history">("organize");
+  const [seoTitle, setSeoTitle] = useState("");
+  const [seoDesc, setSeoDesc] = useState("");
+  const [canonical, setCanonical] = useState("");
+  const [ogTitle, setOgTitle] = useState("");
+  const [ogDesc, setOgDesc] = useState("");
+  const [ogImage, setOgImage] = useState("");
+  const [scheduledAt, setScheduledAt] = useState("");
+  const [revisions, setRevisions] = useState<Array<{ id: string; label: string | null; createdAt: string; createdBy: string }>>([]);
+  const [blogId, setBlogId] = useState<string | null>(null);
+  const [catOptions, setCatOptions] = useState<Array<{ id: string; name: string; slug: string }>>([]);
+  const [conflictMsg, setConflictMsg] = useState<string | null>(null);
 
   const editor = useOpenPostEditor({
     content: "",
@@ -75,20 +87,68 @@ export default function EditorPage() {
     })();
   }, []);
 
+  // Fetch categories for Organize tab
+  useEffect(() => {
+    fetch("/api/v1/categories").then(r=>r.json()).then(j=>{ if(Array.isArray(j.data)) setCatOptions(j.data); }).catch(()=>{});
+  }, []);
+
+  // Fetch revisions if blogId exists
+  useEffect(() => {
+    if (!blogId) return;
+    fetch(`/api/blogs/${blogId}/revisions`).then(r=>r.json()).then(j=>{ if(Array.isArray(j.data)) setRevisions(j.data); }).catch(()=>{});
+  }, [blogId, activeTab]);
+
+  // SEO warnings derivation
+  const seoWarnings = useMemo(() => {
+    const w: string[] = [];
+    const sTitle = seoTitle || title;
+    if (!sTitle) w.push("Missing SEO title");
+    else if (sTitle.length > 60) w.push(`SEO title too long (${sTitle.length}/60)`);
+    else if (sTitle.length < 30) w.push(`SEO title short (${sTitle.length}/60)`);
+    if (!seoDesc) w.push("Missing meta description");
+    else if (seoDesc.length > 155) w.push(`Meta description too long (${seoDesc.length}/155)`);
+    else if (seoDesc.length < 70) w.push(`Meta description short (${seoDesc.length}/155)`);
+    if (!featuredImage && !ogImage) w.push("Missing featured/OG image");
+    // alt text check
+    const hasImages = JSON.stringify(json ?? {}).includes('"type":"image"');
+    const hasAlt = JSON.stringify(json ?? {}).includes('"alt"');
+    if (hasImages && !hasAlt) w.push("Images missing alt text");
+    // H1 check: title is H1, body should not contain H1 level 1
+    const hasH1InBody = JSON.stringify(json ?? {}).includes('"level":1');
+    if (hasH1InBody) w.push("Body contains H1 — title is already H1");
+    if (!html.includes("<a ")) w.push("No internal links detected");
+    return w;
+  }, [seoTitle, seoDesc, featuredImage, ogImage, title, json, html]);
+
   const { status: saveStatus, save } = useAutosave({
     id: "new-post",
-    data: { title, slug, html, featuredImage, category, tags },
+    data: { title, slug, html, json, featuredImage, category, tags, seoTitle, seoDesc, canonical, ogTitle, ogDesc, ogImage, scheduledAt, status },
     onSave: async (data) => {
+      const payload: any = {
+        title: (data as any).title || "Untitled",
+        slug: (data as any).slug,
+        content: (data as any).json ?? { html: (data as any).html },
+        status: (data as any).status ?? "draft",
+        categoryId: catOptions.find(c=>c.name===(data as any).category)?.id ?? null,
+        scheduledAt: (data as any).scheduledAt || null,
+        seo: { title: (data as any).seoTitle, description: (data as any).seoDesc, canonical: (data as any).canonical, ogTitle: (data as any).ogTitle, ogDesc: (data as any).ogDesc, ogImage: (data as any).ogImage },
+      };
+      // include updatedAt for conflict check if we have blogId
+      if (blogId) payload.id = blogId;
       const res = await fetch("/api/blogs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: (data as { title: string }).title || "Untitled", slug: (data as { slug: string }).slug, content: { html: (data as { html: string }).html }, status: "draft" }),
+        body: JSON.stringify(payload),
       });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
+        if (j?.error?.code === "CONFLICT") { setConflictMsg(j.error.message); throw new Error(j.error.message); }
         if (j?.error?.code === "SLUG_EXISTS") throw new Error("Slug already exists — try another");
         throw new Error("Save failed");
       }
+      const j = await res.json().catch(()=>({}));
+      if (j.data?.id && !blogId) setBlogId(j.data.id);
+      setConflictMsg(null);
     },
   });
 
@@ -118,7 +178,6 @@ export default function EditorPage() {
     <div className="min-h-screen bg-[#FCFCF9] flex flex-col">
       <style>{EDITOR_STYLES}</style>
 
-      {/* Premium top bar — Dribbble-inspired, minimal, soft */}
       <div className="sticky top-0 z-30 bg-white/80 backdrop-blur-xl border-b border-border">
         <div className="flex h-[64px] items-center justify-between px-6">
           <div className="flex items-center gap-4">
@@ -127,7 +186,7 @@ export default function EditorPage() {
             </Link>
             <div className="hidden sm:block h-6 w-px bg-border" />
             <div className="hidden md:flex items-center gap-3">
-              <span className="text-sm font-semibold text-navy tracking-tight">Untitled Post</span>
+              <span className="text-sm font-semibold text-navy tracking-tight">{title || "Untitled Post"}</span>
               <StatusIndicator status={saveStatus} />
             </div>
           </div>
@@ -139,12 +198,12 @@ export default function EditorPage() {
             </button>
             <button
               onClick={async () => {
-                await save();
-                setStatus("published");
+                if (scheduledAt && new Date(scheduledAt) > new Date()) { await save(); setStatus("scheduled"); }
+                else { await save(); setStatus("published"); }
               }}
               className="inline-flex items-center gap-2 rounded-full bg-brand px-6 py-2.5 text-sm font-bold text-navy shadow-lg shadow-brand/20 hover:bg-[#E89400] hover:shadow-xl hover:shadow-brand/30 transition"
             >
-              <Sparkles className="h-4 w-4" /> {status === "published" ? "Update" : "Publish"}
+              <Sparkles className="h-4 w-4" /> {status === "published" ? "Update" : status === "scheduled" ? "Scheduled" : "Publish"}
             </button>
             <button
               onClick={() => setShowSidebar(!showSidebar)}
@@ -155,11 +214,17 @@ export default function EditorPage() {
           </div>
         </div>
 
-        {/* Toolbar — sticked, centered, pill-style, Dribbble polish */}
         <div className="border-t border-border bg-white">
           <Toolbar editor={editor} />
         </div>
       </div>
+
+      {conflictMsg && (
+        <div className="mx-4 mt-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 flex items-center justify-between">
+          <p className="text-sm text-amber-900"><AlertTriangle className="inline h-4 w-4 mr-2" />{conflictMsg} — your changes not saved. Copy your content, reload, and merge.</p>
+          <button onClick={()=>setConflictMsg(null)} className="rounded-full border border-amber-200 bg-white px-3 py-1 text-xs font-semibold">Dismiss</button>
+        </div>
+      )}
 
       {restorePrompt && (
         <div className="mx-4 mt-4 rounded-xl border border-brand/20 bg-brand/10 px-4 py-3 flex items-center justify-between">
@@ -197,10 +262,8 @@ export default function EditorPage() {
       )}
 
       <div className="flex flex-1 min-h-0 overflow-hidden">
-        {/* Left inspector — fixed, does not scroll with content */}
         {showSidebar && (
           <aside style={{ width: sidebarWidth }} className="hidden lg:flex shrink-0 flex-col bg-[#FCFCF9] border-r border-border h-[calc(100vh-105px)] sticky top-[105px] overflow-hidden relative">
-            {/* Drag handle — always visible */}
             <div
               onMouseDown={handleMouseDown}
               className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize hover:bg-brand/20 active:bg-brand/30 transition group flex items-center justify-center z-10"
@@ -208,130 +271,196 @@ export default function EditorPage() {
             >
               <div className="h-10 w-1 rounded-full bg-border group-hover:bg-brand transition" />
             </div>
-            <div className="flex-1 overflow-y-auto p-5 space-y-5">
-              {/* Publish — premium, brand accent */}
-              <div className="rounded-2xl bg-white border border-border shadow-sm overflow-hidden">
-                <div className="px-5 py-4 flex items-center justify-between">
-                  <h3 className="text-sm font-bold text-navy">Publish</h3>
-                  <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold border ${status === "published" ? "bg-success/10 text-success border-success/20" : "bg-brand/10 text-brand border-brand/20"}`}>
-                    <span className="h-1.5 w-1.5 rounded-full bg-current" /> {status}
-                  </span>
-                </div>
-                <div className="px-5 pb-5 space-y-3">
-                  <div className="rounded-xl bg-[#FCFCF9] border border-border p-3 space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-text-tertiary">Visibility</span>
-                      <span className="font-medium text-navy">Public</span>
+            {/* Tabs — Sanity-like minimal */}
+            <div className="flex border-b border-border bg-white sticky top-0 z-10">
+              {([
+                ["seo", "SEO"],
+                ["organize", "Organize"],
+                ["featured", "Featured"],
+                ["publishing", "Publish"],
+                ["history", "History"],
+              ] as const).map(([k, label]) => (
+                <button
+                  key={k}
+                  onClick={() => setActiveTab(k)}
+                  className={`flex-1 px-2 py-2.5 text-[11px] font-semibold uppercase tracking-widest border-b-2 transition ${activeTab===k ? "border-navy text-navy" : "border-transparent text-text-tertiary hover:text-text-primary"}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {activeTab==="seo" && (
+                <div className="space-y-3">
+                  <div className="rounded-xl bg-white border border-border p-4 space-y-3">
+                    <h3 className="text-xs font-bold uppercase tracking-widest text-navy flex items-center gap-2"><Search className="h-3.5 w-3.5 text-text-tertiary" /> SEO</h3>
+                    <p className="text-[11px] text-text-tertiary leading-relaxed border-b border-border pb-3">Honest checks — <b>not a ranking guarantee</b>.</p>
+                    <div>
+                      <label className="text-xs font-medium text-text-primary">SEO Title <span className={seoTitle.length>60 ? "text-flame" : seoTitle.length<30 && seoTitle ? "text-amber-600" : "text-text-tertiary"}>({(seoTitle||title).length}/60)</span></label>
+                      <input value={seoTitle} onChange={e=>setSeoTitle(e.target.value)} placeholder={title || "SEO title"} className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm focus:border-navy focus:outline-none" />
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-text-tertiary">Publish</span>
-                      <span className="font-medium text-navy">Immediately</span>
+                    <div>
+                      <label className="text-xs font-medium text-text-primary">Meta description <span className={seoDesc.length>155 ? "text-flame" : seoDesc.length<70 && seoDesc ? "text-amber-600" : "text-text-tertiary"}>({seoDesc.length}/155)</span></label>
+                      <textarea value={seoDesc} onChange={e=>setSeoDesc(e.target.value)} rows={2} placeholder="Compelling summary..." className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm focus:border-navy focus:outline-none resize-none" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-text-primary">Canonical</label>
+                      <input value={canonical} onChange={e=>setCanonical(e.target.value)} placeholder="https://example.com/blog/slug" className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-xs font-mono focus:border-navy focus:outline-none" />
+                    </div>
+                    <details className="rounded-lg border border-border bg-[#FCFCF9] p-3">
+                      <summary className="text-xs font-semibold cursor-pointer">Open Graph / Twitter</summary>
+                      <div className="mt-3 grid gap-2">
+                        <input value={ogTitle} onChange={e=>setOgTitle(e.target.value)} placeholder="OG title" className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm focus:border-navy focus:outline-none" />
+                        <input value={ogDesc} onChange={e=>setOgDesc(e.target.value)} placeholder="OG desc" className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm focus:border-navy focus:outline-none" />
+                        <input value={ogImage} onChange={e=>setOgImage(e.target.value)} placeholder="OG image URL" className="w-full rounded-lg border border-border bg-white px-3 py-2 text-xs font-mono focus:border-navy focus:outline-none" />
+                      </div>
+                    </details>
+                    <div className={`rounded-lg p-3 text-xs ${seoWarnings.length===0 ? "bg-green-50 border border-green-200 text-green-800" : "bg-amber-50 border border-amber-200 text-amber-900"}`}>
+                      <p className="font-semibold flex items-center gap-1.5"><AlertTriangle className="h-3 w-3" /> {seoWarnings.length===0 ? "All checks pass" : `${seoWarnings.length} warning${seoWarnings.length>1?"s":""}`}</p>
+                      {seoWarnings.map(w=><p key={w} className="mt-1">• {w}</p>)}
                     </div>
                   </div>
-                  <button
-                    onClick={async () => {
-                      await save();
-                      setStatus("published");
-                    }}
-                    className="w-full inline-flex items-center justify-center gap-2 rounded-full bg-brand py-3 text-sm font-bold text-navy shadow-md shadow-brand/20 hover:bg-[#E89400] transition"
-                  >
-                    <Check className="h-4 w-4" /> {status === "published" ? "Update" : "Publish"}
-                  </button>
-                  <button className="w-full rounded-full border border-border bg-white py-2.5 text-sm font-medium hover:bg-surface-raised">Move to Trash</button>
                 </div>
-              </div>
-
-              {/* Categories — pill radios */}
-              <div className="rounded-2xl bg-white border border-border shadow-sm overflow-hidden">
-                <div className="px-5 py-4 flex items-center gap-2 border-b border-border/50">
-                  <Folder className="h-4 w-4 text-brand" />
-                  <h3 className="text-sm font-bold text-navy">Categories</h3>
-                </div>
-                <div className="p-5 space-y-2.5">
-                  {["Uncategorized", "SEO", "Tutorials", "Updates"].map((cat) => (
-                    <label key={cat} className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 text-sm cursor-pointer transition ${category === cat ? "bg-navy text-white border-navy" : "bg-white border-border hover:border-brand/20 hover:bg-brand/5"}`}>
-                      <input type="radio" name="category" checked={category === cat} onChange={() => setCategory(cat)} className="sr-only" />
-                      <span className={`h-4 w-4 rounded-full border flex items-center justify-center ${category === cat ? "border-white bg-white" : "border-border bg-white"}`}>
-                        {category === cat && <span className="h-2 w-2 rounded-full bg-navy" />}
-                      </span>
-                      <span className={category === cat ? "font-semibold" : "text-text-primary"}>{cat}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              {/* Tags — soft chips */}
-              <div className="rounded-2xl bg-white border border-border shadow-sm overflow-hidden">
-                <div className="px-5 py-4 flex items-center gap-2 border-b border-border/50">
-                  <Tag className="h-4 w-4 text-brand" />
-                  <h3 className="text-sm font-bold text-navy">Tags</h3>
-                </div>
-                <div className="p-5">
-                  <div className="flex gap-2">
-                    <input
-                      value={tagInput}
-                      onChange={(e) => setTagInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && tagInput.trim()) {
-                          e.preventDefault();
-                          if (!tags.includes(tagInput.trim())) setTags([...tags, tagInput.trim()]);
-                          setTagInput("");
-                        }
-                      }}
-                      placeholder="Add tag and press Enter"
-                      className="flex-1 rounded-full border border-border bg-[#FCFCF9] px-4 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
-                    />
-                  </div>
-                  {tags.length > 0 ? (
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      {tags.map((t) => (
-                        <span key={t} className="inline-flex items-center gap-1.5 rounded-full bg-navy px-3 py-1.5 text-xs font-semibold text-white">
-                          {t}
-                          <button onClick={() => setTags(tags.filter((x) => x !== t))} className="hover:text-brand">
-                            <X className="h-3 w-3" />
-                          </button>
-                        </span>
+              )}
+              {activeTab==="organize" && (
+                <div className="space-y-4">
+                  <div className="rounded-xl bg-white border border-border overflow-hidden">
+                    <div className="px-3 py-2.5 flex items-center gap-2 border-b border-border bg-[#FCFCF9]">
+                      <Folder className="h-3.5 w-3.5 text-text-tertiary" />
+                      <h3 className="text-xs font-bold uppercase tracking-widest text-navy">Category</h3>
+                      <Link href="/dashboard/categories" className="ml-auto text-[11px] text-brand hover:underline">Manage</Link>
+                    </div>
+                    <div className="p-3 space-y-1">
+                      {catOptions.length===0 ? <p className="text-xs text-text-tertiary">No categories — <Link href="/dashboard/categories" className="text-brand underline">create</Link></p> : catOptions.map((cat) => (
+                        <label key={cat.id} className={`flex items-center gap-2 rounded-lg border px-2.5 py-2 text-sm cursor-pointer transition ${category === cat.name ? "bg-navy text-white border-navy" : "bg-white border-border hover:bg-surface-raised"}`}>
+                          <input type="radio" name="category" checked={category === cat.name} onChange={() => setCategory(cat.name)} className="sr-only" />
+                          <span className={`h-3.5 w-3.5 rounded-full border flex items-center justify-center shrink-0 ${category === cat.name ? "border-white bg-white" : "border-border bg-white"}`}>
+                            {category === cat.name && <span className="h-1.5 w-1.5 rounded-full bg-navy" />}
+                          </span>
+                          <span className="truncate text-sm">{cat.name}</span>
+                        </label>
                       ))}
                     </div>
-                  ) : (
-                    <p className="mt-3 text-xs text-text-tertiary">No tags yet — add up to 5.</p>
-                  )}
+                  </div>
+                  <div className="rounded-xl bg-white border border-border overflow-hidden">
+                    <div className="px-3 py-2.5 flex items-center gap-2 border-b border-border bg-[#FCFCF9]">
+                      <Tag className="h-3.5 w-3.5 text-text-tertiary" />
+                      <h3 className="text-xs font-bold uppercase tracking-widest text-navy">Tags</h3>
+                    </div>
+                    <div className="p-3">
+                      <div className="flex gap-1.5">
+                        <input
+                          value={tagInput}
+                          onChange={(e) => setTagInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && tagInput.trim()) {
+                              e.preventDefault();
+                              if (!tags.includes(tagInput.trim())) setTags([...tags, tagInput.trim()]);
+                              setTagInput("");
+                            }
+                          }}
+                          placeholder="Add tag"
+                          className="flex-1 rounded-lg border border-border bg-white px-3 py-2 text-sm focus:border-navy focus:outline-none"
+                        />
+                        <button onClick={()=>{ if(tagInput.trim() && !tags.includes(tagInput.trim())){ setTags([...tags, tagInput.trim()]); setTagInput(""); } }} className="rounded-lg bg-navy px-3 text-xs font-bold text-white">Add</button>
+                      </div>
+                      {tags.length > 0 ? (
+                        <div className="mt-3 flex flex-wrap gap-1.5">
+                          {tags.map((t) => (
+                            <span key={t} className="inline-flex items-center gap-1 rounded-full bg-[#2D3440] px-2.5 py-1 text-xs font-medium text-white">
+                              {t}
+                              <button onClick={() => setTags(tags.filter((x) => x !== t))} className="ml-1 hover:text-brand">
+                                <X className="h-3 w-3" />
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="mt-2 text-xs text-text-tertiary">No tags yet.</p>
+                      )}
+                    </div>
+                  </div>
                 </div>
-              </div>
-
-              {/* Featured Image — card with dashed */}
-              <div className="rounded-2xl bg-white border border-border shadow-sm overflow-hidden">
-                <div className="px-5 py-4 flex items-center gap-2 border-b border-border/50">
-                  <ImageIcon className="h-4 w-4 text-brand" />
-                  <h3 className="text-sm font-bold text-navy">Featured Image</h3>
+              )}
+              {activeTab==="featured" && (
+                <div className="rounded-xl bg-white border border-border overflow-hidden">
+                  <div className="px-3 py-2.5 flex items-center gap-2 border-b border-border bg-[#FCFCF9]">
+                    <ImageIcon className="h-3.5 w-3.5 text-text-tertiary" />
+                    <h3 className="text-xs font-bold uppercase tracking-widest text-navy">Featured image</h3>
+                  </div>
+                  <div className="p-3">
+                    <FeaturedImagePicker imageUrl={featuredImage} onChange={setFeaturedImage} />
+                    <p className="mt-3 text-[11px] text-text-tertiary">16:9 · 1200×675 · WebP auto-converted.</p>
+                  </div>
                 </div>
-                <div className="p-5">
-                  <FeaturedImagePicker imageUrl={featuredImage} onChange={setFeaturedImage} />
+              )}
+              {activeTab==="publishing" && (
+                <div className="space-y-3">
+                  <div className="rounded-xl bg-white border border-border overflow-hidden">
+                    <div className="px-3 py-2.5 flex items-center justify-between border-b border-border bg-[#FCFCF9]">
+                      <h3 className="text-xs font-bold uppercase tracking-widest text-navy">Publishing</h3>
+                      <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold border ${status === "published" ? "bg-green-50 text-green-700 border-green-200" : status==="scheduled" ? "bg-orange-50 text-orange-700 border-orange-200" : "bg-white text-text-secondary border-border"}`}>
+                        <span className="h-1.5 w-1.5 rounded-full bg-current" /> {status}
+                      </span>
+                    </div>
+                    <div className="p-3 space-y-3">
+                      <div className="rounded-lg bg-[#FCFCF9] border border-border p-2.5 space-y-1.5 text-xs">
+                        <div className="flex justify-between"><span className="text-text-tertiary">Visibility</span><span className="font-medium text-navy">Public</span></div>
+                        <div className="flex justify-between"><span className="text-text-tertiary">When</span><span className="font-medium text-navy">{scheduledAt ? new Date(scheduledAt).toLocaleDateString() : "Now"}</span></div>
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium flex items-center gap-1"><Calendar className="h-3 w-3" /> Schedule</label>
+                        <input type="datetime-local" value={scheduledAt} onChange={e=>setScheduledAt(e.target.value)} className="mt-1 w-full rounded-lg border border-border bg-white px-3 py-2 text-sm focus:border-navy focus:outline-none" />
+                      </div>
+                      <button
+                        onClick={async () => {
+                          if (scheduledAt && new Date(scheduledAt) > new Date()) { await save(); setStatus("scheduled"); }
+                          else { await save(); setStatus("published"); }
+                        }}
+                        className="w-full inline-flex items-center justify-center gap-1.5 rounded-full bg-[#FEA611] py-2.5 text-sm font-bold text-[#2D3440] hover:bg-[#FE990E] transition"
+                      >
+                        <Check className="h-4 w-4" /> {status === "published" ? "Update" : scheduledAt ? "Schedule" : "Publish"}
+                      </button>
+                      <button onClick={async()=>{ await fetch(`/api/blogs/${blogId ?? "new-post"}`,{method:"DELETE"}); setStatus("trash"); }} className="w-full rounded-full border border-border bg-white py-2 text-xs font-medium hover:bg-surface-raised">Move to Trash</button>
+                    </div>
+                  </div>
+                  <div className="rounded-xl bg-white border border-border p-3">
+                    <p className="text-xs font-semibold text-navy">Stats</p>
+                    <p className="mt-1 text-xs text-text-secondary">{words} words · {minutes} min</p>
+                    <p className="mt-1 font-mono text-xs text-brand">/{slug}</p>
+                  </div>
                 </div>
-              </div>
-
-              {/* All pages link — subtle */}
-              <div className="rounded-2xl bg-navy text-white p-5">
-                <p className="text-sm font-bold">All pages editable</p>
-                <p className="mt-1 text-xs text-slate-400">Jump to any section to manage content.</p>
-                <div className="mt-3 flex flex-wrap gap-1.5">
-                  {[
-                    ["Blogs", "/dashboard/blogs"],
-                    ["Categories", "/dashboard/categories"],
-                    ["Tags", "/dashboard/tags"],
-                    ["Authors", "/dashboard/authors"],
-                  ].map(([label, href]) => (
-                    <Link key={label} href={href} className="rounded-full bg-white/10 px-3 py-1 text-xs font-semibold hover:bg-white/15">
-                      {label}
-                    </Link>
-                  ))}
+              )}
+              {activeTab==="history" && (
+                <div className="rounded-xl bg-white border border-border overflow-hidden">
+                  <div className="px-3 py-2.5 flex items-center gap-2 border-b border-border bg-[#FCFCF9]">
+                    <History className="h-3.5 w-3.5 text-text-tertiary" />
+                    <h3 className="text-xs font-bold uppercase tracking-widest text-navy">History</h3>
+                    <span className="ml-auto text-xs text-text-tertiary">{revisions.length}</span>
+                  </div>
+                  <div className="p-3 space-y-2">
+                    {revisions.length===0 ? <p className="text-xs text-text-tertiary leading-relaxed">No revisions yet — autosaves keep last 20. Publish creates a checkpoint. Restore loads into draft.</p> : revisions.map(r=>(
+                      <div key={r.id} className="rounded-lg border border-border bg-white p-2.5">
+                        <div className="flex justify-between text-xs"><span className="font-semibold text-navy">{r.label ?? "Checkpoint"}</span><span className="text-text-tertiary text-[11px]">{new Date(r.createdAt).toLocaleDateString()}</span></div>
+                        <div className="mt-1.5 flex items-center gap-2">
+                          <button onClick={async()=>{
+                            if(!confirm("Restore this version? It will overwrite current draft (not yet published).")) return;
+                            const res = await fetch(`/api/blogs/${blogId}/revisions/${r.id}/restore`,{method:"POST"});
+                            const j = await res.json().catch(()=>({}));
+                            if(!res.ok) alert(j.error?.message ?? "Restore failed");
+                            else { alert("Restored to draft"); location.reload(); }
+                          }} className="rounded-full bg-[#2D3440] px-3 py-1 text-xs font-semibold text-white">Restore</button>
+                          <span className="text-[11px] text-text-tertiary">{new Date(r.createdAt).toLocaleTimeString()}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </aside>
         )}
 
-        {/* Main canvas — open, no card, editorial */}
         <div className="flex-1 min-w-0 overflow-auto bg-[#FCFCF9]">
           <div className="mx-auto max-w-[960px] px-6 md:px-8 py-10 md:py-14">
             <input
@@ -374,7 +503,7 @@ export default function EditorPage() {
 
             <div className="mt-12 flex items-center justify-between border-t border-border/50 pt-4 text-xs text-text-tertiary">
               <span>Slug: <span className="font-mono text-text-primary">/{slug}</span></span>
-              <span className="hidden sm:inline font-medium">{words} words · {minutes} min · <kbd className="rounded bg-white border border-border px-1.5 py-0.5 text-[10px] shadow-sm">/</kbd> for blocks</span>
+              <span className="hidden sm:inline font-medium">{words} words · {minutes} min · <kbd className="rounded bg-white border border-border px-1.5 py-0.5 text-[10px] shadow-sm">/</kbd> for blocks · <kbd className="hidden sm:inline rounded bg-white border border-border px-1.5 py-0.5 text-[10px]">Ctrl+Alt+1/2/3</kbd> headings</span>
             </div>
           </div>
         </div>

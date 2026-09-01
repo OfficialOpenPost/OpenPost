@@ -92,12 +92,19 @@ export default function BlogsPage() {
       const res = await fetch(`/api/blogs/${post.id}`, { method: "DELETE" });
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j.error?.message ?? "Delete failed");
-      // Refresh: move to trash or remove
       const isTrash = j.data?.status === "trash";
       if (isTrash) setPosts((prev) => prev.map((p) => (p.id === post.id ? { ...p, status: "trash" as const } : p)));
       else setPosts((prev) => prev.filter((p) => p.id !== post.id));
       setDeleteTarget(null);
     } catch (e: any) { setDeleteError(e.message); }
+  };
+  const handleRestore = async (post: Post) => {
+    try {
+      const res = await fetch(`/api/blogs/${post.id}/restore`, { method: "POST" });
+      const j = await res.json().catch(()=>({}));
+      if (!res.ok) throw new Error(j.error?.message ?? "Restore failed");
+      setPosts((prev)=>prev.map((p)=>(p.id===post.id ? {...p, status: (j.data?.status ?? "draft") as any } : p)));
+    } catch {}
   };
 
   const handleBulkTrash = async () => {
@@ -280,9 +287,15 @@ export default function BlogsPage() {
                         <Link href={`/blog/${post.slug}`} target="_blank" className="flex h-8 w-8 items-center justify-center rounded-lg border border-border hover:bg-surface-raised">
                           <Eye className="h-4 w-4 text-text-secondary" />
                         </Link>
-                        <button onClick={() => setDeleteTarget(post)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-border hover:bg-flame/10 text-flame">
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+                        {post.status==="trash" ? (
+                          <button onClick={()=>handleRestore(post)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-border hover:bg-success/10 text-success" title="Restore">
+                            <Archive className="h-4 w-4" />
+                          </button>
+                        ) : (
+                          <button onClick={() => setDeleteTarget(post)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-border hover:bg-flame/10 text-flame">
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

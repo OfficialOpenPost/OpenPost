@@ -14,6 +14,7 @@ import TextStyle from "@tiptap/extension-text-style";
 import Color from "@tiptap/extension-color";
 import TextAlign from "@tiptap/extension-text-align";
 import { SlashExtension } from "./SlashMenu";
+import { Extension } from "@tiptap/core";
 import { Callout } from "./blocks/Callout";
 import { Gallery } from "./blocks/Gallery";
 import { Faq } from "./blocks/Faq";
@@ -26,7 +27,23 @@ import { VideoBlock } from "./blocks/Video";
 import { EmbedBlock } from "./blocks/Embed";
 import { FontSize } from "./extensions/FontSize";
 
+const HeadingShortcuts = Extension.create({
+  name: "headingShortcuts",
+  addKeyboardShortcuts() {
+    return {
+      "Mod-Alt-1": () => this.editor.chain().focus().toggleHeading({ level: 1 }).run(),
+      "Mod-Alt-2": () => this.editor.chain().focus().toggleHeading({ level: 2 }).run(),
+      "Mod-Alt-3": () => this.editor.chain().focus().toggleHeading({ level: 3 }).run(),
+      // Ctrl+Alt variants for Windows
+      "Ctrl-Alt-1": () => this.editor.chain().focus().toggleHeading({ level: 1 }).run(),
+      "Ctrl-Alt-2": () => this.editor.chain().focus().toggleHeading({ level: 2 }).run(),
+      "Ctrl-Alt-3": () => this.editor.chain().focus().toggleHeading({ level: 3 }).run(),
+    };
+  },
+});
+
 export const editorExtensions = [
+  HeadingShortcuts,
   StarterKit.configure({
     heading: {
       levels: [1, 2, 3],

@@ -55,7 +55,24 @@ export default function MediaPage() {
   useEffect(() => { fetchMedia(); }, []);
   useEffect(() => { fetchMedia(debouncedSearch || undefined); }, [debouncedSearch]);
 
-  const filtered = items.filter((m) => !debouncedSearch || m.name.toLowerCase().includes(debouncedSearch.toLowerCase()));
+  const [filterType, setFilterType] = useState<"all" | "images" | "documents">("all");
+  const [sortBy, setSortBy] = useState<"date" | "size" | "name">("date");
+  const [page, setPage] = useState(1);
+  const perPage = 50;
+
+  const filteredAll = items.filter((m) => {
+    if (debouncedSearch && !m.name.toLowerCase().includes(debouncedSearch.toLowerCase())) return false;
+    if (filterType === "images" && !m.mimeType?.startsWith("image/")) return false;
+    if (filterType === "documents" && m.mimeType?.startsWith("image/")) return false;
+    return true;
+  }).sort((a,b)=>{
+    if (sortBy==="name") return a.name.localeCompare(b.name);
+    if (sortBy==="size") { const pa = parseFloat(a.size) || 0; const pb = parseFloat(b.size) || 0; return pb-pa; }
+    return 0; // date: keep API order (desc)
+  });
+
+  const totalPages = Math.max(1, Math.ceil(filteredAll.length / perPage));
+  const filtered = filteredAll.slice((page-1)*perPage, page*perPage);
 
   const handleFiles = async (files: FileList | null) => {
     if (!files || !files.length) return;
@@ -171,12 +188,17 @@ export default function MediaPage() {
         <div className="flex gap-2">
           <div className="flex items-center gap-2 rounded-xl border border-border bg-white px-2">
             <Filter className="h-4 w-4 text-text-tertiary" />
-            <select className="h-10 bg-transparent text-sm font-medium focus:outline-none">
-              <option>All types</option>
-              <option>Images</option>
-              <option>Documents</option>
+            <select value={filterType} onChange={e=>{setFilterType(e.target.value as any); setPage(1);}} className="h-10 bg-transparent text-sm font-medium focus:outline-none">
+              <option value="all">All types</option>
+              <option value="images">Images</option>
+              <option value="documents">Documents</option>
             </select>
           </div>
+          <select value={sortBy} onChange={e=>setSortBy(e.target.value as any)} className="h-10 rounded-xl border border-border bg-white px-3 text-sm font-medium">
+            <option value="date">Sort: Date</option>
+            <option value="name">Sort: Name</option>
+            <option value="size">Sort: Size</option>
+          </select>
           <div className="flex rounded-xl border border-border bg-white p-1">
             <button onClick={() => setView("grid")} className={`flex h-8 w-8 items-center justify-center rounded-lg ${view === "grid" ? "bg-navy text-white" : "text-text-tertiary hover:bg-surface-raised"}`}>
               <Grid3X3 className="h-4 w-4" />
@@ -297,9 +319,12 @@ export default function MediaPage() {
 
       <div className="mt-6 flex items-center justify-between text-xs text-text-tertiary">
         <span>
-          {filtered.length} of {items.length} items · 50 per page {loading ? "" : `· WebP auto-conversion ${typeof window !== "undefined" && window.OffscreenCanvas ? "via OffscreenCanvas" : "via canvas"}`}
+          {filteredAll.length} of {items.length} items · {perPage} per page · page {page}/{totalPages} {loading ? "" : `· WebP via ${typeof window !== "undefined" && (window as any).OffscreenCanvas ? "OffscreenCanvas" : "canvas"}`}
         </span>
-        <span className="hidden sm:inline">Tip: Deleting an in-use image shows a warning with all posts using it.</span>
+        <div className="flex gap-2">
+          <button disabled={page<=1} onClick={()=>setPage(p=>p-1)} className="rounded-lg border border-border bg-white px-3 py-1 text-xs font-semibold disabled:opacity-40">Prev</button>
+          <button disabled={page>=totalPages} onClick={()=>setPage(p=>p+1)} className="rounded-lg border border-border bg-white px-3 py-1 text-xs font-semibold disabled:opacity-40">Next</button>
+        </div>
       </div>
     </div>
   );

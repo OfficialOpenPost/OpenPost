@@ -46,13 +46,16 @@ export function SharedRender({ content }: SharedRenderProps) {
             const Tag = `h${node.attrs?.level ?? 2}` as unknown as React.ComponentType<{ children: React.ReactNode }>;
             return <Tag key={i}>{renderInline(node.content ?? []) || node.content?.map((c: any) => c.text).join("")}</Tag>;
           }
-          case "image":
+          case "image": {
+            const src = node.attrs?.src ?? "";
+            const srcSet = src ? `${src}?w=480 480w, ${src}?w=768 768w, ${src}?w=1200 1200w, ${src}?w=1920 1920w` : undefined;
             return (
               <figure key={i} className="my-6">
-                <img src={node.attrs?.src} alt={node.attrs?.alt ?? ""} className="rounded-xl w-full" />
+                <img src={src} srcSet={srcSet} sizes="(max-width: 768px) 100vw, 720px" alt={node.attrs?.alt ?? ""} className="rounded-xl w-full" loading="lazy" />
                 {node.attrs?.caption && <figcaption className="mt-2 text-center text-xs text-text-tertiary">{node.attrs.caption}</figcaption>}
               </figure>
             );
+          }
           case "callout": {
             const tone = node.attrs?.tone ?? "info";
             const toneCls: Record<string, string> = { info: "border-brand bg-brand/5", warning: "border-orange bg-orange/5", success: "border-green-500 bg-green-50", note: "border-navy bg-navy/5 text-white" };
@@ -63,13 +66,14 @@ export function SharedRender({ content }: SharedRenderProps) {
             return <div key={i} className="my-6 rounded-xl border border-border bg-white p-4 text-sm border-l-4 border-l-brand">Poll: {node.attrs?.question ?? "Poll"} <span className="text-text-tertiary">— vote via API</span></div>;
           case "gallery": {
             const images = node.attrs?.images ?? node.attrs?.items ?? [];
-            if (images.length < 2) return <img key={i} src={images[0]?.src} alt="" className="rounded-xl my-6" />;
+            if (images.length < 2) return <img key={i} src={images[0]?.src} alt="" className="rounded-xl my-6" loading="lazy" />;
             const layout = node.attrs?.layout ?? "grid";
             return (
               <div key={i} className={layout === "carousel" ? "my-6 flex gap-4 overflow-x-auto snap-x pb-2" : "my-6 grid grid-cols-2 gap-4"}>
-                {images.map((img: any, idx: number) => (
-                  <img key={idx} src={img.src} alt={img.alt ?? ""} className="rounded-xl w-full object-cover snap-center" />
-                ))}
+                {images.map((img: any, idx: number) => {
+                  const srcSet = img.src ? `${img.src}?w=480 480w, ${img.src}?w=768 768w, ${img.src}?w=1200 1200w` : undefined;
+                  return <img key={idx} src={img.src} srcSet={srcSet} sizes="(max-width: 768px) 50vw, 360px" alt={img.alt ?? ""} className="rounded-xl w-full object-cover snap-center" loading="lazy" />;
+                })}
               </div>
             );
           }

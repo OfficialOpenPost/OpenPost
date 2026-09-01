@@ -7,11 +7,13 @@ const createSchema = z.object({
   title: z.string().min(1).max(200),
   slug: z.string().min(1).max(100),
   content: z.any(),
-  status: z.enum(["draft", "published", "scheduled"]).optional(),
+  status: z.enum(["draft", "published", "scheduled", "trash"]).optional(),
   projectId: z.string().uuid().nullable().optional(),
   categoryId: z.string().uuid().nullable().optional(),
-  updatedAt: z.string().optional(), // for conflict check
-  id: z.string().uuid().optional(), // for update via POST
+  scheduledAt: z.string().nullable().optional(),
+  seo: z.any().optional(),
+  updatedAt: z.string().optional(),
+  id: z.string().uuid().optional(),
 });
 
 function extractMediaUrls(content: any): string[] {
@@ -79,7 +81,10 @@ export async function POST(req: NextRequest) {
     if (!parsed.success) {
       return NextResponse.json({ error: { code: "VALIDATION_ERROR", message: parsed.error.message } }, { status: 400 });
     }
-    const { title, slug, content, status = "draft", projectId, categoryId, updatedAt, id } = parsed.data as any;
+    let { title, slug, content, status = "draft", projectId, categoryId, scheduledAt, seo, updatedAt, id } = parsed.data as any;
+    // Auto-set scheduled if future date
+    if (scheduledAt && new Date(scheduledAt) > new Date()) status = "scheduled";
+    else if (status === "scheduled" && (!scheduledAt || new Date(scheduledAt) <= new Date())) status = "draft";
 
     // RBAC — require WRITER+ (allow without DB for build)
     try {
@@ -102,9 +107,13 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: { code: "CONFLICT", message: "Conflict: post was updated elsewhere", details: { serverUpdatedAt: (existing as any).updatedAt } } }, { status: 409 });
         }
       }
+      // Handle slug change redirect for published
+      if (existing && (existing as any).slug !== slug && (existing as any).status === "published") {
+        await db.redirect.create({ data: { oldSlug: (existing as any).slug, newSlug: slug, blogId: id } as never }).catch(()=>{});
+      }
       const updated = await db.blog.update({
         where: { id } as never,
-        data: { title, slug, content, status: status as never, wordCount: JSON.stringify(content).length, categoryId: categoryId ?? undefined } as never,
+        data: { title, slug, content, status: status as never, wordCount: JSON.stringify(content).length, scheduledAt: scheduledAt ? new Date(scheduledAt) : null, seo: seo ?? undefined, categoryId: categoryId ?? undefined } as never,
       });
       await db.blogRevision.create({ data: { blogId: id, content, createdBy: (existing as any).createdBy, label: "Autosave" } } as never).catch(() => {});
       await syncMediaUsage(id, content);
@@ -131,8 +140,10 @@ export async function POST(req: NextRequest) {
         content,
         status: status as never,
         wordCount: JSON.stringify(content).length,
+        scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
+        publishedAt: status === "published" ? new Date() : null,
         createdBy,
-        seo: {},
+        seo: seo ?? {},
         projectId: projectId ?? null,
         categoryId: categoryId ?? null,
       } as never,

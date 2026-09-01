@@ -11,7 +11,7 @@ const footerLinks = {
     { label: "Documentation", href: "/docs" },
     { label: "API Reference", href: "/docs" },
     { label: "Blog", href: "/blog" },
-    { label: "Community", href: "https://github.com/your-org/openpost" },
+    { label: "Community", href: "https://github.com/OfficialOpenPost/OpenPost.git" },
   ],
   Company: [
     { label: "About", href: "/about" },

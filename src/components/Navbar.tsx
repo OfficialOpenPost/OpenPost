@@ -7,8 +7,8 @@ import { createClient } from "@/lib/supabase/client";
 const navLinks = [
   { label: "Product", href: "#product" },
   { label: "Features", href: "#features" },
-  { label: "Docs", href: "#docs" },
-  { label: "GitHub", href: "#github" },
+  { label: "Docs", href: "/docs" },
+  { label: "GitHub", href: "https://github.com/OfficialOpenPost/OpenPost.git" },
 ];
 
 export function Navbar() {

@@ -39,6 +39,7 @@ import { useState, useEffect } from "react";
 export default function Home() {
   const [recent, setRecent] = useState<Array<{ id: string; title: string; slug: string; publishedAt?: string; readingTime?: number; category?: string }>>([]);
   const [statsReal, setStatsReal] = useState<{ posts: number; categories: number } | null>(null);
+  const [mouse, setMouse] = useState({ x: 0, y: 0 });
   useEffect(() => {
     fetch("/api/v1/posts?limit=6").then(r=>r.json()).then(j=>{ if(Array.isArray(j.data)) setRecent(j.data.slice(0,6)); }).catch(()=>{});
     Promise.all([fetch("/api/v1/posts?limit=1").then(r=>r.json()).catch(()=>({})), fetch("/api/v1/categories").then(r=>r.json()).catch(()=>({}))]).then(([p,c])=>{
@@ -52,20 +53,25 @@ export default function Home() {
       {/* ============================================================
           SECTION 1 — HERO
       ============================================================ */}
-      <section className="relative overflow-hidden bg-gradient-to-br from-[#FEA611] via-[#FE990E] to-[#FE4F01]">
-        {/* 3D grid + radial highlights */}
-        <div
-          className="absolute inset-0 opacity-[0.08]"
-          style={{
-            backgroundImage:
-              "linear-gradient(rgba(45,52,64,0.15) 1px, transparent 1px), linear-gradient(90deg, rgba(45,52,64,0.15) 1px, transparent 1px)",
-            backgroundSize: "56px 56px",
-          }}
-        />
-        <div className="absolute -top-24 left-1/2 -translate-x-1/2 h-[700px] w-[900px] rounded-full bg-white/25 blur-[80px]" />
-        <div className="absolute -bottom-32 -left-20 h-[500px] w-[600px] rounded-full bg-[#2D3440]/10 blur-[90px]" />
-        <div className="absolute top-20 right-0 h-[400px] w-[400px] rounded-full bg-white/20 blur-[70px]" />
-        <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-white/30 to-transparent" />
+      <section
+        className="relative overflow-hidden bg-gradient-to-br from-[#FEA611] via-[#FE990E] to-[#FE4F01]"
+        onMouseMove={(e) => {
+          const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+          setMouse({ x: ((e.clientX - rect.left) / rect.width - 0.5) * 10, y: ((e.clientY - rect.top) / rect.height - 0.5) * 10 });
+        }}
+        onMouseLeave={() => setMouse({ x: 0, y: 0 })}
+      >
+        {/* Dribbble-level 3D — fully loaded, auto drift + mouse parallax */}
+        <div className="absolute inset-0 opacity-[0.07]" style={{ backgroundImage: "linear-gradient(rgba(45,52,64,0.18) 1px, transparent 1px), linear-gradient(90deg, rgba(45,52,64,0.18) 1px, transparent 1px)", backgroundSize: "48px 48px", transform: `translate3d(${mouse.x * 0.25}px, ${mouse.y * 0.25}px, 0)` }} />
+        <div className="absolute inset-0 bg-gradient-to-t from-white/0 via-transparent to-white/10" />
+        {/* Floating orbs — 3D depth */}
+        <div className="absolute -top-20 left-1/2 -translate-x-1/2 h-[800px] w-[1100px] rounded-full bg-white/20 blur-[90px] animate-pulse" style={{ animationDuration: "4s", transform: `translate3d(${mouse.x * 0.9}px, ${mouse.y * 0.7}px, 0)` }} />
+        <div className="absolute -bottom-40 -left-32 h-[600px] w-[700px] rounded-full bg-[#2D3440]/12 blur-[100px] transition-transform duration-700 ease-out" style={{ transform: `translate3d(${mouse.x * -0.7}px, ${mouse.y * -0.5}px, 0)` }} />
+        <div className="absolute top-24 -right-20 h-[500px] w-[500px] rounded-full bg-white/18 blur-[80px] transition-transform duration-500 ease-out" style={{ transform: `translate3d(${mouse.x * 1.1}px, ${mouse.y * 0.9}px, 0)` }} />
+        <div className="absolute top-1/2 left-1/4 h-[300px] w-[400px] rounded-full bg-[#FE4F01]/15 blur-[70px] animate-pulse" style={{ animationDuration: "5s", transform: `translate3d(${mouse.x * -0.4}px, ${mouse.y * 0.6}px, 0)` }} />
+        <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-white via-white/60 to-transparent" />
+        {/* Subtle noise grain for premium feel */}
+        <div className="absolute inset-0 opacity-[0.015]" style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")` }} />
 
         <div className="relative mx-auto max-w-7xl px-6 pb-20 pt-12 md:pt-16">
           <FadeIn delay={0} className="mb-10 flex justify-center">
@@ -140,61 +146,63 @@ export default function Home() {
           </FadeIn>
 
           <ScaleIn delay={0.55}>
-            <div className="mx-auto mt-24 max-w-5xl overflow-hidden rounded-xl border border-slate-700/40 bg-slate-900/60 shadow-2xl shadow-brand/10 backdrop-blur-sm">
-              <div className="flex items-center gap-2 border-b border-slate-700/40 px-4 py-3">
+            <div className="mx-auto mt-24 max-w-5xl overflow-hidden rounded-xl border border-border bg-white shadow-2xl shadow-[#2D3440]/10">
+              <div className="flex items-center gap-2 border-b border-border bg-[#FCFCF9] px-4 py-3">
                 <div className="flex gap-1.5">
-                  <div className="h-3 w-3 rounded-full bg-red-500/70" />
-                  <div className="h-3 w-3 rounded-full bg-yellow-500/70" />
-                  <div className="h-3 w-3 rounded-full bg-green-500/70" />
+                  <div className="h-3 w-3 rounded-full bg-red-400" />
+                  <div className="h-3 w-3 rounded-full bg-[#FEA611]" />
+                  <div className="h-3 w-3 rounded-full bg-green-500" />
                 </div>
-                <div className="ml-4 flex-1 rounded-md bg-slate-800/60 px-3 py-1.5 text-xs text-slate-500">
+                <div className="ml-4 flex-1 rounded-full bg-white border border-border px-3 py-1.5 text-xs font-mono text-text-secondary">
                   openpost.app/editor/my-first-post
                 </div>
               </div>
-              <div className="relative aspect-[16/9] bg-gradient-to-br from-slate-800/40 to-slate-900/40 p-6">
+              <div className="relative aspect-[16/9] bg-gradient-to-br from-[#FCFCF9] to-white p-6">
                 <div className="flex h-full gap-4">
-                  <div className="hidden w-52 flex-col gap-2 rounded-lg bg-slate-800/30 p-3 md:flex">
-                    <div className="h-6 w-24 rounded bg-slate-700/50" />
+                  <div className="hidden w-52 flex-col gap-2 rounded-lg bg-white border border-border p-3 md:flex shadow-sm">
+                    <div className="h-6 w-24 rounded bg-[#2D3440]/10" />
                     <div className="mt-3 space-y-1.5">
-                      <div className="flex items-center gap-2 rounded-md bg-brand/15 px-2.5 py-2">
-                        <div className="h-3 w-3 rounded bg-brand/50" />
-                        <div className="h-3 w-20 rounded bg-brand/30" />
+                      <div className="flex items-center gap-2 rounded-md bg-[#FEA611]/15 border border-[#FEA611]/20 px-2.5 py-2">
+                        <div className="h-3 w-3 rounded bg-[#FEA611]" />
+                        <div className="h-3 w-20 rounded bg-[#2D3440]/15" />
                       </div>
                       <div className="flex items-center gap-2 px-2.5 py-2">
-                        <div className="h-3 w-3 rounded bg-slate-700/40" />
-                        <div className="h-3 w-16 rounded bg-slate-700/30" />
+                        <div className="h-3 w-3 rounded bg-border" />
+                        <div className="h-3 w-16 rounded bg-[#2D3440]/10" />
                       </div>
                       <div className="flex items-center gap-2 px-2.5 py-2">
-                        <div className="h-3 w-3 rounded bg-slate-700/40" />
-                        <div className="h-3 w-14 rounded bg-slate-700/30" />
+                        <div className="h-3 w-3 rounded bg-border" />
+                        <div className="h-3 w-14 rounded bg-[#2D3440]/10" />
                       </div>
                       <div className="flex items-center gap-2 px-2.5 py-2">
-                        <div className="h-3 w-3 rounded bg-slate-700/40" />
-                        <div className="h-3 w-18 rounded bg-slate-700/30" />
+                        <div className="h-3 w-3 rounded bg-border" />
+                        <div className="h-3 w-18 rounded bg-[#2D3440]/10" />
                       </div>
                     </div>
-                    <div className="mt-auto space-y-1.5">
-                      <div className="h-3 w-16 rounded bg-slate-700/30" />
-                      <div className="h-3 w-12 rounded bg-slate-700/30" />
+                    <div className="mt-auto space-y-1.5 pt-3 border-t border-border">
+                      <div className="h-3 w-16 rounded bg-[#2D3440]/10" />
+                      <div className="h-3 w-12 rounded bg-border" />
                     </div>
                   </div>
-                  <div className="flex-1 rounded-lg bg-slate-800/20 p-6">
+                  <div className="flex-1 rounded-lg bg-white border border-border p-6 shadow-sm">
                     <div className="mx-auto max-w-lg space-y-4">
-                      <div className="h-8 w-3/5 rounded bg-slate-700/40" />
+                      <div className="h-8 w-3/5 rounded bg-[#2D3440] " />
                       <div className="space-y-2">
-                        <div className="h-3 w-full rounded bg-slate-700/30" />
-                        <div className="h-3 w-full rounded bg-slate-700/30" />
-                        <div className="h-3 w-4/5 rounded bg-slate-700/30" />
+                        <div className="h-3 w-full rounded bg-[#2D3440]/10" />
+                        <div className="h-3 w-full rounded bg-[#2D3440]/10" />
+                        <div className="h-3 w-4/5 rounded bg-[#2D3440]/10" />
                       </div>
-                      <div className="h-36 rounded-lg border border-slate-700/30 bg-slate-700/10" />
+                      <div className="h-36 rounded-lg border border-border bg-[#FCFCF9] flex items-center justify-center">
+                        <span className="text-xs font-semibold text-text-tertiary">Image • 72% width • drag ↘</span>
+                      </div>
                       <div className="space-y-2">
-                        <div className="h-3 w-full rounded bg-slate-700/30" />
-                        <div className="h-3 w-3/4 rounded bg-slate-700/30" />
+                        <div className="h-3 w-full rounded bg-[#2D3440]/10" />
+                        <div className="h-3 w-3/4 rounded bg-[#2D3440]/10" />
                       </div>
                       <div className="flex gap-2">
-                        <div className="h-5 w-16 rounded-full bg-brand/15" />
-                        <div className="h-5 w-20 rounded-full bg-slate-700/20" />
-                        <div className="h-5 w-14 rounded-full bg-slate-700/20" />
+                        <div className="h-5 w-16 rounded-full bg-[#FEA611] " />
+                        <div className="h-5 w-20 rounded-full bg-border" />
+                        <div className="h-5 w-14 rounded-full bg-border" />
                       </div>
                     </div>
                   </div>
@@ -206,10 +214,11 @@ export default function Home() {
       </section>
 
       {/* ============================================================
-          SECTION 2 — STATS BAR
-      ============================================================ */}
-      <section className="border-b border-border bg-surface py-10">
-        <div className="mx-auto max-w-7xl px-6">
+           SECTION 2 — STATS BAR
+       ============================================================ */}
+       <section className="relative border-b border-border bg-surface py-8 overflow-hidden">
+         <div className="absolute inset-0 bg-gradient-to-r from-[#FE4F01]/[0.02] via-transparent to-[#FEA611]/[0.02]" />
+        <div className="relative mx-auto max-w-7xl px-6">
           <div className="grid grid-cols-2 gap-4 sm:gap-8 md:grid-cols-4">
             {[
               { num: "16+", label: "Content Blocks" },
@@ -270,22 +279,29 @@ export default function Home() {
       {/* ============================================================
            SECTION 3 — TRUST BAR
        ============================================================ */}
-       <section className="bg-surface-raised py-10">
-        <div className="mx-auto max-w-7xl px-6">
+       <section className="relative bg-surface-raised py-10 overflow-hidden border-y border-border">
+        <div className="absolute inset-0 bg-gradient-to-r from-[#FE4F01]/[0.02] via-transparent to-[#FEA611]/[0.02]" />
+        <div className="relative mx-auto max-w-7xl px-6">
           <p className="text-center text-xs font-semibold uppercase tracking-[0.2em] text-text-tertiary">
             Deployed on
           </p>
-          <div className="mt-8 flex flex-wrap items-center justify-center gap-x-14 gap-y-6">
-            {["Vercel", "Supabase", "Cloudflare", "Railway", "Fly.io", "Docker"].map(
-              (name) => (
-                <span
-                  key={name}
-                  className="text-lg font-bold tracking-tight text-text-tertiary/40 transition hover:text-text-tertiary/70"
-                >
-                  {name}
-                </span>
-              )
-            )}
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-x-6 sm:gap-x-10 gap-y-4 sm:gap-y-6">
+            {[
+              { name: "Vercel", icon: "▲" },
+              { name: "Supabase", icon: "⬢" },
+              { name: "Cloudflare", icon: "☁" },
+              { name: "Railway", icon: "🚃" },
+              { name: "Fly.io", icon: "✈" },
+              { name: "Docker", icon: "🐳" },
+            ].map((item) => (
+              <span
+                key={item.name}
+                className="group inline-flex items-center gap-2 text-sm sm:text-base font-bold tracking-tight text-navy transition hover:text-[#FE4F01]"
+              >
+                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white border border-border text-xs shadow-sm group-hover:border-[#FE4F01]/20 group-hover:bg-[#FE4F01]/5 group-hover:text-[#FE4F01] transition">{item.icon}</span>
+                {item.name}
+              </span>
+            ))}
           </div>
         </div>
       </section>

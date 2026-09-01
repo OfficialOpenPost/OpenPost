@@ -17,12 +17,38 @@ export async function GET(req: NextRequest) {
       take: limit + 1,
       cursor: cursor ? { id: cursor } : undefined,
       orderBy: { publishedAt: "desc" },
-      select: { id: true, title: true, slug: true, status: true, publishedAt: true, readingTime: true, categoryId: true },
+      select: {
+        id: true,
+        title: true,
+        slug: true,
+        status: true,
+        publishedAt: true,
+        readingTime: true,
+        categoryId: true,
+        category: { select: { name: true } },
+        seo: true,
+        featuredImage: { select: { id: true, variants: true } },
+      },
     });
 
     const hasMore = blogs.length > limit;
-    const data = hasMore ? blogs.slice(0, -1) : blogs;
-    const nextCursor = hasMore ? data[data.length - 1].id : null;
+    const rawData = hasMore ? blogs.slice(0, -1) : blogs;
+    const nextCursor = hasMore ? rawData[rawData.length - 1].id : null;
+
+    const data = rawData.map((b: any) => ({
+      id: b.id,
+      title: b.title,
+      slug: b.slug,
+      status: b.status,
+      publishedAt: b.publishedAt,
+      readingTime: b.readingTime,
+      category: b.category?.name ?? "Articles",
+      coverImage:
+        (b.featuredImage?.variants as any)?.publicUrl ||
+        (b.seo as any)?.ogImage ||
+        (b.seo as any)?.image ||
+        null,
+    }));
 
     return NextResponse.json(
       { data, meta: { cursor: nextCursor, hasMore, total: data.length } },

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { db, withDbRetry } from "@/lib/db";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/auth";
 import { countWords, readingTime as calcReadingTime } from "@/lib/publish";
@@ -47,7 +47,7 @@ async function syncMediaUsage(blogId: string, content: any) {
   try {
     const urls = extractMediaUrls(content);
     if (!urls.length) {
-      await db.mediaUsage.deleteMany({ where: { blogId } as never }).catch(() => {});
+      await withDbRetry(() => db.mediaUsage.deleteMany({ where: { blogId } as never })).catch(() => {});
       return;
     }
 
@@ -61,16 +61,24 @@ async function syncMediaUsage(blogId: string, content: any) {
     mediaIds = [...new Set(mediaIds)];
     if (!mediaIds.length) return;
 
-    const existing = await db.mediaUsage.findMany({ where: { blogId } as never, select: { mediaId: true } } as never).catch(() => [] as any);
+    const existing = await withDbRetry(() =>
+      db.mediaUsage.findMany({ where: { blogId } as never, select: { mediaId: true } } as never)
+    ).catch(() => [] as any);
     const existingIds = new Set((existing as any[]).map((r) => r.mediaId));
     const newIds = new Set(mediaIds);
     const toDelete = [...existingIds].filter((id) => !newIds.has(id));
     const toAdd = [...newIds].filter((id) => !existingIds.has(id));
 
-    if (toDelete.length) await db.mediaUsage.deleteMany({ where: { blogId, mediaId: { in: toDelete } } as never }).catch(() => {});
+    if (toDelete.length) {
+      await withDbRetry(() =>
+        db.mediaUsage.deleteMany({ where: { blogId, mediaId: { in: toDelete } } as never })
+      ).catch(() => {});
+    }
     for (const mediaId of toAdd) {
-      const exists = await db.media.findUnique({ where: { id: mediaId } as never }).catch(() => null);
-      if (exists) await db.mediaUsage.create({ data: { blogId, mediaId } as never }).catch(() => {});
+      const exists = await withDbRetry(() => db.media.findUnique({ where: { id: mediaId } as never })).catch(() => null);
+      if (exists) {
+        await withDbRetry(() => db.mediaUsage.create({ data: { blogId, mediaId } as never })).catch(() => {});
+      }
     }
   } catch (e) {
     // Non-blocking
@@ -81,23 +89,25 @@ async function resolveAuthorUserId(): Promise<string> {
   try {
     const currentUser = await getCurrentUser().catch(() => null);
     if (currentUser?.id) {
-      const dbUser = await db.user.findUnique({ where: { id: currentUser.id } }).catch(() => null);
+      const dbUser = await withDbRetry(() => db.user.findUnique({ where: { id: currentUser.id } })).catch(() => null);
       if (dbUser) return dbUser.id;
     }
 
     // Fallback to first existing user
-    let existingUser = await db.user.findFirst().catch(() => null);
+    let existingUser = await withDbRetry(() => db.user.findFirst()).catch(() => null);
     if (existingUser) return existingUser.id;
 
     // Create initial admin user if database is fresh
-    existingUser = await db.user.create({
-      data: {
-        email: "admin@openpost.app",
-        name: "OpenPost Admin",
-        passwordHash: "seed-account",
-        role: "ADMIN",
-      },
-    }).catch(() => null);
+    existingUser = await withDbRetry(() =>
+      db.user.create({
+        data: {
+          email: "admin@openpost.app",
+          name: "OpenPost Admin",
+          passwordHash: "seed-account",
+          role: "ADMIN",
+        },
+      })
+    ).catch(() => null);
 
     if (existingUser) return existingUser.id;
   } catch (e) {
@@ -118,16 +128,18 @@ export async function GET(req: NextRequest) {
       where.status = status;
     }
 
-    const blogs = await db.blog.findMany({
-      where: Object.keys(where).length ? where : undefined,
-      take: Math.min(100, Math.max(1, limit)),
-      orderBy: { updatedAt: "desc" },
-      include: {
-        category: true,
-        author: { select: { name: true, email: true } },
-        featuredImage: true,
-      } as never,
-    });
+    const blogs = await withDbRetry(() =>
+      db.blog.findMany({
+        where: Object.keys(where).length ? where : undefined,
+        take: Math.min(100, Math.max(1, limit)),
+        orderBy: { updatedAt: "desc" },
+        include: {
+          category: true,
+          author: { select: { name: true, email: true } },
+          featuredImage: true,
+        } as never,
+      })
+    );
 
     return NextResponse.json({ data: blogs });
   } catch (error: any) {
@@ -158,42 +170,48 @@ export async function POST(req: NextRequest) {
 
     // Verify foreign key references before insert/update
     if (categoryId) {
-      const cat = await db.category.findUnique({ where: { id: categoryId } as never }).catch(() => null);
+      const cat = await withDbRetry(() => db.category.findUnique({ where: { id: categoryId } as never })).catch(() => null);
       if (!cat) categoryId = null;
     }
 
     if (projectId) {
-      const proj = await db.project.findUnique({ where: { id: projectId } as never }).catch(() => null);
+      const proj = await withDbRetry(() => db.project.findUnique({ where: { id: projectId } as never })).catch(() => null);
       if (!proj) projectId = null;
     }
 
     // 1. If ID provided → update existing post
     if (id) {
-      const existing = await db.blog.findUnique({ where: { id } as never }).catch(() => null);
+      const existing = await withDbRetry(() => db.blog.findUnique({ where: { id } as never })).catch(() => null);
       if (existing) {
         if ((existing as any).slug !== slug && (existing as any).status === "published") {
-          await db.redirect.create({ data: { oldSlug: (existing as any).slug, newSlug: slug, blogId: id } as never }).catch(() => {});
+          await withDbRetry(() =>
+            db.redirect.create({ data: { oldSlug: (existing as any).slug, newSlug: slug, blogId: id } as never })
+          ).catch(() => {});
         }
         const wc = countWords(JSON.stringify(content));
         const rt = calcReadingTime(wc);
-        const updated = await db.blog.update({
-          where: { id } as never,
-          data: {
-            title,
-            slug,
-            content,
-            status: status as never,
-            wordCount: wc,
-            readingTime: rt,
-            scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
-            seo: seo ?? undefined,
-            categoryId: categoryId ?? undefined,
-          } as never,
-        });
+        const updated = await withDbRetry(() =>
+          db.blog.update({
+            where: { id } as never,
+            data: {
+              title,
+              slug,
+              content,
+              status: status as never,
+              wordCount: wc,
+              readingTime: rt,
+              scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
+              seo: seo ?? undefined,
+              categoryId: categoryId ?? undefined,
+            } as never,
+          })
+        );
 
-        await db.blogRevision.create({
-          data: { blogId: id, content, createdBy: (existing as any).createdBy, label: "Autosave" },
-        }).catch(() => {});
+        await withDbRetry(() =>
+          db.blogRevision.create({
+            data: { blogId: id, content, createdBy: (existing as any).createdBy, label: "Autosave" },
+          })
+        ).catch(() => {});
 
         await syncMediaUsage(id, content);
         return NextResponse.json({ data: updated });
@@ -203,12 +221,16 @@ export async function POST(req: NextRequest) {
     // 2. Auto-suffix duplicate slugs
     let candidateSlug = slug || "untitled";
     let counter = 1;
-    let existingWithSlug = await db.blog.findFirst({ where: { slug: candidateSlug } as never }).catch(() => null);
+    let existingWithSlug = await withDbRetry(() =>
+      db.blog.findFirst({ where: { slug: candidateSlug } as never })
+    ).catch(() => null);
 
     while (existingWithSlug) {
       counter++;
       candidateSlug = `${slug.replace(/-\d+$/, "")}-${counter}`;
-      existingWithSlug = await db.blog.findFirst({ where: { slug: candidateSlug } as never }).catch(() => null);
+      existingWithSlug = await withDbRetry(() =>
+        db.blog.findFirst({ where: { slug: candidateSlug } as never })
+      ).catch(() => null);
     }
     slug = candidateSlug;
 
@@ -218,27 +240,31 @@ export async function POST(req: NextRequest) {
     const wc2 = countWords(JSON.stringify(content));
     const rt2 = calcReadingTime(wc2);
 
-    const blog = await db.blog.create({
-      data: {
-        title,
-        slug,
-        content,
-        status: status as never,
-        wordCount: wc2,
-        readingTime: rt2,
-        scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
-        publishedAt: status === "published" ? new Date() : null,
-        createdBy,
-        seo: seo ?? {},
-        projectId: projectId ?? null,
-        categoryId: categoryId ?? null,
-      } as never,
-    });
+    const blog = await withDbRetry(() =>
+      db.blog.create({
+        data: {
+          title,
+          slug,
+          content,
+          status: status as never,
+          wordCount: wc2,
+          readingTime: rt2,
+          scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
+          publishedAt: status === "published" ? new Date() : null,
+          createdBy,
+          seo: seo ?? {},
+          projectId: projectId ?? null,
+          categoryId: categoryId ?? null,
+        } as never,
+      })
+    );
 
     // Create initial revision
-    await db.blogRevision.create({
-      data: { blogId: blog.id, content, createdBy: (blog as any).createdBy, label: "Created" },
-    }).catch(() => {});
+    await withDbRetry(() =>
+      db.blogRevision.create({
+        data: { blogId: blog.id, content, createdBy: (blog as any).createdBy, label: "Created" },
+      })
+    ).catch(() => {});
 
     await syncMediaUsage(blog.id, content);
 

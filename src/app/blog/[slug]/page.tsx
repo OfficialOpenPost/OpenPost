@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { Clock, Calendar, ArrowLeft, Share2, Folder, User } from "lucide-react";
+import { Clock, Calendar, ArrowLeft, Share2, Folder, User, AlertTriangle } from "lucide-react";
 import { SharedRender } from "@/components/render/SharedRender";
 import { db } from "@/lib/db";
-import { EDITOR_STYLES } from "@/components/editor/extensions";
+import { EDITOR_STYLES } from "@/components/editor/editor-styles";
 
 const POSTS: Record<
   string,
@@ -43,7 +43,7 @@ export default async function BlogPostPage({
 }) {
   const { slug } = await params;
 
-  // Try DB first (published only)
+  // Try DB first
   let post: any = null;
   try {
     // Check redirects
@@ -54,25 +54,31 @@ export default async function BlogPostPage({
 
     post = await db.blog
       .findFirst({
-        where: { slug, status: "published" } as never,
+        where: { slug } as never,
         select: {
           id: true,
           title: true,
           slug: true,
           content: true,
+          status: true,
           publishedAt: true,
           createdAt: true,
           readingTime: true,
           wordCount: true,
           seo: true,
-          featuredImage: { select: { url: true } },
+          featuredImage: { select: { id: true, variants: true, originalFilename: true } },
           category: { select: { name: true } },
           author: { select: { name: true, email: true } },
           authors: { select: { author: { select: { name: true } } } },
         } as never,
       })
-      .catch(() => null);
-  } catch {}
+      .catch((err) => {
+        console.error("Error fetching blog by slug:", err);
+        return null;
+      });
+  } catch (err) {
+    console.error("BlogPostPage error:", err);
+  }
 
   // Fallback to mock for dev/no-DB or known slugs — ensures build never breaks without DB
   if (!post) {
@@ -116,6 +122,7 @@ export default async function BlogPostPage({
     );
   }
 
+  const isDraft = post.status === "draft";
   const authorName =
     post.authors?.[0]?.author?.name || post.author?.name || "OpenPost Team";
   const categoryName = post.category?.name || "Articles";
@@ -124,14 +131,43 @@ export default async function BlogPostPage({
     day: "numeric",
     year: "numeric",
   });
-  const content = post.content as any;
+  let content = post.content as any;
+  if (typeof content === "string") {
+    try {
+      content = JSON.parse(content);
+    } catch {}
+  }
   const isJson = content && typeof content === "object" && content.type === "doc";
-  const coverUrl = post.featuredImage?.url || null;
+  const coverUrl =
+    (post.featuredImage?.variants as any)?.publicUrl ||
+    (post.featuredImage as any)?.url ||
+    (post.seo as any)?.ogImage ||
+    (post.seo as any)?.image ||
+    null;
 
   return (
-    <div className="min-h-screen bg-[#F4F5F7] py-8 sm:py-12">
+    <div className="min-h-screen bg-[#F4F5F7] py-6 sm:py-10">
       <style dangerouslySetInnerHTML={{ __html: EDITOR_STYLES }} />
-      <div className="mx-auto w-full max-w-[940px] 2xl:max-w-[1040px] px-4 sm:px-8">
+
+      {/* Draft Mode Notice */}
+      {isDraft && (
+        <div className="mx-auto w-full max-w-[1440px] 2xl:max-w-[1680px] px-4 sm:px-8 mb-4">
+          <div className="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs font-bold text-amber-900 flex items-center justify-between shadow-xs">
+            <span className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-amber-600" />
+              Draft Preview Mode — This article is unpublished and only visible to you.
+            </span>
+            <Link
+              href={`/dashboard/editor/${post.id}`}
+              className="underline text-amber-900 hover:text-amber-950 font-semibold"
+            >
+              Edit in Studio
+            </Link>
+          </div>
+        </div>
+      )}
+
+      <div className="mx-auto w-full max-w-[1440px] 2xl:max-w-[1680px] px-4 sm:px-8">
         <div className="bg-white rounded-2xl sm:rounded-3xl border border-slate-200/90 shadow-[0_4px_24px_rgba(0,0,0,0.06)] px-6 sm:px-14 py-8 sm:py-12">
           {/* Navigation Bar */}
           <div className="flex items-center justify-between border-b border-border/80 pb-4 mb-8">
@@ -174,14 +210,16 @@ export default async function BlogPostPage({
             </span>
           </div>
 
-          {/* Optional Featured Cover Image */}
+          {/* Big Uncropped Featured Cover Image just below Title */}
           {coverUrl && (
             // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={coverUrl}
-              alt={post.title}
-              className="w-full h-80 sm:h-96 object-cover rounded-2xl mb-10 shadow-sm border border-border"
-            />
+            <div className="w-full mb-10 rounded-2xl overflow-hidden border border-border shadow-xs bg-slate-50 flex justify-center">
+              <img
+                src={coverUrl}
+                alt={post.title}
+                className="w-full h-auto max-h-[720px] object-contain rounded-2xl block"
+              />
+            </div>
           )}
 
           {/* Article Content Render */}

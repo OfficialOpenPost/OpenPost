@@ -22,6 +22,8 @@ import {
   AlertCircle,
   Clock,
   Save,
+  Image as ImageIcon,
+  Trash2,
 } from "lucide-react";
 
 interface EditorPageProps {
@@ -99,18 +101,30 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
   const [catOptions, setCatOptions] = useState<Array<{ id: string; name: string; slug: string }>>([]);
   const [loadingInitial, setLoadingInitial] = useState(Boolean(effectiveId));
 
+  const [isDirty, setIsDirty] = useState<boolean>(false);
+  const [activeSaveAction, setActiveSaveAction] = useState<"draft" | "publish" | "update" | null>(null);
+  const isInitialLoadRef = useRef<boolean>(Boolean(effectiveId));
+
   const editor = useOpenPostEditor({
     content: "",
     onChange: (h, j) => {
       setHtml(h);
       setJson(j);
+      if (isInitialLoadRef.current) {
+        return;
+      }
+      setIsDirty(true);
+      setSaveStatus("unsaved");
     },
   });
+
+  const loadedContentRef = useRef<any>(null);
 
   // Load existing post if editing
   useEffect(() => {
     if (!effectiveId) return;
     setLoadingInitial(true);
+    isInitialLoadRef.current = true;
     fetch(`/api/blogs/${effectiveId}`)
       .then((r) => r.json())
       .then((res) => {
@@ -132,23 +146,57 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
             setOgDesc(post.seo.ogDesc || "");
             setOgImage(post.seo.ogImage || "");
           }
-          if (post.featuredImage?.variants?.publicUrl || post.featuredImage?.url) {
-            setFeaturedImage(post.featuredImage.variants?.publicUrl || post.featuredImage.url);
-          }
-          if (editor && post.content) {
+          const cover =
+            post.featuredImage?.variants?.publicUrl ||
+            post.featuredImage?.url ||
+            post.seo?.ogImage ||
+            post.seo?.image ||
+            null;
+          if (cover) setFeaturedImage(cover);
+
+          let cnt = post.content;
+          if (typeof cnt === "string") {
             try {
-              queueMicrotask(() => {
-                editor.commands.setContent(post.content);
-              });
+              if (cnt.trim().startsWith("{") || cnt.trim().startsWith("[")) {
+                cnt = JSON.parse(cnt);
+              }
+            } catch {}
+          }
+          loadedContentRef.current = cnt;
+
+          if (editor && cnt) {
+            try {
+              editor.commands.setContent(cnt);
             } catch (err) {
               console.warn("Could not set editor content:", err);
             }
           }
+          setIsDirty(false);
+          setSaveStatus("saved");
+          setTimeout(() => {
+            isInitialLoadRef.current = false;
+          }, 300);
         }
       })
       .catch((err) => console.error("Error loading blog:", err))
       .finally(() => setLoadingInitial(false));
-  }, [effectiveId, editor]);
+  }, [effectiveId]);
+
+  // Sync content into editor once editor instance is available
+  useEffect(() => {
+    if (editor && loadedContentRef.current) {
+      try {
+        editor.commands.setContent(loadedContentRef.current);
+        setTimeout(() => {
+          isInitialLoadRef.current = false;
+          setIsDirty(false);
+          setSaveStatus("saved");
+        }, 150);
+      } catch (err) {
+        console.warn("Could not sync editor content:", err);
+      }
+    }
+  }, [editor, loadingInitial]);
 
   // Native Fullscreen Toggle
   const toggleFullscreen = useCallback(() => {
@@ -269,22 +317,44 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
   };
 
   // Save handler with concurrency lock and immediate blogId reference update
-  const save = async (manualLabel?: string) => {
+  const save = async (
+    manualLabel?: string,
+    overrideStatus?: "draft" | "published" | "scheduled" | "trash",
+    actionType?: "draft" | "publish" | "update"
+  ) => {
+    if (loadingInitial || isInitialLoadRef.current) {
+      console.warn("Cannot save while initial content is loading");
+      return;
+    }
+
     if (isSavingRef.current) {
       pendingSaveRef.current = true;
       return;
     }
 
+    const currentBlogId = blogIdRef.current;
+    const targetStatus = overrideStatus || status;
+    if (overrideStatus && overrideStatus !== status) {
+      setStatus(overrideStatus);
+    }
+
     isSavingRef.current = true;
+    setActiveSaveAction(
+      actionType ||
+        (targetStatus === "published"
+          ? currentBlogId && status === "published"
+            ? "update"
+            : "publish"
+          : "draft")
+    );
     setSaveStatus("saving");
 
     try {
-      const currentBlogId = blogIdRef.current;
       const payload: any = {
         title: title || "Untitled Article",
         slug: slug || "untitled",
         content: editor?.getJSON() || {},
-        status,
+        status: targetStatus,
         featuredImage: featuredImage ? { url: featuredImage } : null,
         category: category ? { name: category } : null,
         tags: tags.map((t) => ({ name: t })),
@@ -332,6 +402,7 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
         window.history.replaceState({}, "", `/dashboard/editor?id=${newId}`);
       }
 
+      setIsDirty(false);
       setSaveStatus("saved");
 
       // Reload revisions
@@ -349,6 +420,7 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
       setSaveStatus("error");
     } finally {
       isSavingRef.current = false;
+      setActiveSaveAction(null);
       if (pendingSaveRef.current) {
         pendingSaveRef.current = false;
         save();
@@ -388,7 +460,7 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
   if (preview) {
     return (
       <div className="fixed inset-0 z-50 overflow-y-auto bg-[#F4F5F7] p-3 sm:p-6 text-navy select-text flex flex-col items-center">
-        <div className="w-full max-w-[940px] 2xl:max-w-[1040px] bg-white rounded-2xl border border-slate-200/90 shadow-[0_4px_24px_rgba(0,0,0,0.06)] px-8 sm:px-14 py-8 sm:py-12 my-4">
+        <div className="w-full max-w-[1440px] 2xl:max-w-[1680px] bg-white rounded-2xl border border-slate-200/90 shadow-[0_4px_24px_rgba(0,0,0,0.06)] px-8 sm:px-14 py-8 sm:py-12 my-4">
           <div className="flex items-center justify-between border-b border-border pb-4 mb-8">
             <button
               onClick={() => setPreview(false)}
@@ -405,11 +477,13 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
           </h1>
           {featuredImage && (
             // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={featuredImage}
-              alt={title}
-              className="w-full h-80 object-cover rounded-2xl mb-8 shadow-sm"
-            />
+            <div className="w-full mb-8 rounded-2xl overflow-hidden border border-border shadow-xs bg-slate-50 flex justify-center">
+              <img
+                src={featuredImage}
+                alt={title}
+                className="w-full h-auto max-h-[720px] object-contain rounded-2xl block"
+              />
+            </div>
           )}
           <style dangerouslySetInnerHTML={{ __html: EDITOR_STYLES }} />
           <div
@@ -422,21 +496,24 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
   }
 
   return (
-    <div className="fixed inset-0 h-screen w-screen overflow-hidden bg-[#F4F5F7] flex flex-col text-navy select-none">
+    <div className="h-screen w-screen flex flex-col bg-[#F4F5F7] text-navy font-sans select-none overflow-hidden relative">
       <style dangerouslySetInnerHTML={{ __html: EDITOR_STYLES }} />
 
-      {/* ── TIER 1: TOP APPLICATION HEADER (Fixed: 56px height) ── */}
-      <header className="h-14 shrink-0 border-b border-border bg-white z-30 flex items-center justify-between px-4 sm:px-6 shadow-xs select-none">
+      {/* ── TOP 56px HEADER ── */}
+      <header className="h-14 bg-white border-b border-border px-3 sm:px-5 flex items-center justify-between z-30 shrink-0 select-none">
+        {/* Left: Back + Doc Title Breadcrumb */}
         <div className="flex items-center gap-3 min-w-0">
           <Link
             href="/dashboard/blogs"
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-surface-dim border border-border hover:bg-surface-raised transition"
+            className="flex h-8 w-8 items-center justify-center rounded-xl border border-border bg-white text-navy hover:bg-surface-raised transition shrink-0"
             title="Back to Articles"
           >
-            <ArrowLeft className="h-4 w-4 text-navy" />
+            <ArrowLeft className="h-4 w-4" />
           </Link>
-          <div className="min-w-0 hidden sm:block">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-text-tertiary leading-none">OpenPost Studio</p>
+          <div className="flex flex-col min-w-0">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-text-tertiary leading-none">
+              Editing Article
+            </span>
             <p className="text-xs sm:text-sm font-bold text-navy truncate leading-none mt-1 max-w-[200px] md:max-w-[320px]">
               {title || "Untitled Article"}
             </p>
@@ -452,6 +529,19 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
             {words} words · {minutes} min read
           </span>
 
+          {/* Status Badge in Header */}
+          <span
+            className={`hidden sm:inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-bold capitalize ${
+              status === "published"
+                ? "bg-success/10 text-success border-success/20"
+                : status === "scheduled"
+                ? "bg-orange/10 text-orange border-orange/20"
+                : "bg-brand/10 text-brand border-brand/20"
+            }`}
+          >
+            {status}
+          </span>
+
           <button
             onClick={() => {
               if (editor) setHtml(editor.getHTML());
@@ -462,32 +552,81 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
             <Eye className="h-3.5 w-3.5 text-text-tertiary" /> Preview
           </button>
 
+          {/* Save Draft Button */}
           <button
-            onClick={async () => {
-              setStatus("draft");
-              await save("Saved draft");
-            }}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-white px-3 py-1.5 text-xs font-bold text-navy hover:bg-surface-raised transition shadow-xs"
+            disabled={
+              (isSavingRef.current || saveStatus === "saving") ||
+              (!isDirty && status === "draft" && Boolean(blogIdRef.current)) ||
+              !Boolean(title.trim().length > 0 || (editor && !editor.isEmpty))
+            }
+            onClick={() => save("Saved draft", "draft", "draft")}
+            className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-bold transition shadow-xs ${
+              !(isSavingRef.current || saveStatus === "saving") &&
+              (isDirty || status !== "draft" || !blogIdRef.current) &&
+              Boolean(title.trim().length > 0 || (editor && !editor.isEmpty))
+                ? "border-border bg-white text-navy hover:bg-surface-raised cursor-pointer"
+                : "border-slate-200 bg-slate-100/80 text-slate-400 cursor-not-allowed opacity-60"
+            }`}
             title="Save as Draft"
           >
-            <Save className="h-3.5 w-3.5 text-text-tertiary" /> Save Draft
+            {activeSaveAction === "draft" ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-brand" />
+            ) : (
+              <Save className="h-3.5 w-3.5 text-text-tertiary" />
+            )}
+            {activeSaveAction === "draft" ? "Saving Draft..." : "Save Draft"}
           </button>
 
-          <button
-            onClick={async () => {
-              if (scheduledAt && new Date(scheduledAt) > new Date()) {
-                setStatus("scheduled");
-                await save();
-              } else {
-                setStatus("published");
-                await save();
+          {/* Publish / Update Button */}
+          {status === "published" ? (
+            /* Update Post Button (Visibly Gray & Disabled until user makes changes) */
+            <button
+              disabled={(isSavingRef.current || saveStatus === "saving") || !isDirty}
+              onClick={() => save("Updated post", "published", "update")}
+              className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-1.5 text-xs font-bold transition ${
+                isDirty && !(isSavingRef.current || saveStatus === "saving")
+                  ? "bg-brand text-navy hover:bg-brand-hover hover:text-white shadow-xs cursor-pointer"
+                  : "bg-slate-200 text-slate-400 border border-slate-300/80 cursor-not-allowed opacity-60"
+              }`}
+              title={isDirty ? "Save changes to live post" : "No unsaved edits to update"}
+            >
+              {activeSaveAction === "update" ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-navy" />
+              ) : (
+                <Sparkles className="h-3.5 w-3.5" />
+              )}
+              {activeSaveAction === "update" ? "Updating..." : "Update Post"}
+            </button>
+          ) : (
+            /* Publish / Schedule Button (Active for drafts and new articles) */
+            <button
+              disabled={
+                (isSavingRef.current || saveStatus === "saving") ||
+                !Boolean(title.trim().length > 0 || (editor && !editor.isEmpty))
               }
-            }}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-brand px-4 py-1.5 text-xs font-bold text-navy shadow-xs hover:bg-brand-hover hover:text-white transition"
-          >
-            <Sparkles className="h-3.5 w-3.5" />
-            {status === "published" ? "Update Post" : status === "scheduled" ? "Scheduled" : "Publish Post"}
-          </button>
+              onClick={() => {
+                const target =
+                  scheduledAt && new Date(scheduledAt) > new Date()
+                    ? "scheduled"
+                    : "published";
+                save("Published post", target, "publish");
+              }}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-brand px-4 py-1.5 text-xs font-bold text-navy shadow-xs hover:bg-brand-hover hover:text-white disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-brand disabled:hover:text-navy transition cursor-pointer"
+            >
+              {activeSaveAction === "publish" ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-navy" />
+              ) : (
+                <Sparkles className="h-3.5 w-3.5" />
+              )}
+              {activeSaveAction === "publish"
+                ? status === "scheduled"
+                  ? "Scheduling..."
+                  : "Publishing..."
+                : status === "scheduled"
+                ? "Schedule Post"
+                : "Publish Post"}
+            </button>
+          )}
 
           {/* Fullscreen Toggle */}
           <button
@@ -526,7 +665,7 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
         <div className="flex-1 flex flex-col h-full overflow-hidden min-h-0 min-w-0">
           {/* FIXED TOP OPTIONS NAVBAR (Directly under header, perfectly above canvas, never hides sidebar) */}
           <div className="w-full shrink-0 border-b border-border bg-white px-3 sm:px-5 py-1.5 flex justify-center z-10 shadow-xs relative">
-            <div className="w-full max-w-[940px] 2xl:max-w-[1040px]">
+            <div className="w-full max-w-[1440px] 2xl:max-w-[1680px]">
               <EditorRibbon
                 editor={editor}
                 onOpenFindReplace={() => setShowFindReplace(true)}
@@ -544,9 +683,19 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
           {/* MAIN DOCUMENT CANVAS AREA */}
           <main className="flex-1 flex flex-col items-center p-3 sm:p-4 h-full overflow-hidden relative min-h-0 w-full">
             {/* Central Document Paper Card — Locked to screen height, ONLY internal content scrolls */}
-            <div className="w-full max-w-[940px] 2xl:max-w-[1040px] h-full flex flex-col bg-white rounded-2xl border border-slate-200/90 shadow-[0_4px_24px_rgba(0,0,0,0.05)] overflow-hidden relative transition-all min-h-0">
+            <div className="w-full max-w-[1440px] 2xl:max-w-[1680px] h-full flex flex-col bg-white rounded-2xl border border-slate-200/90 shadow-[0_4px_24px_rgba(0,0,0,0.05)] overflow-hidden relative transition-all min-h-0">
               {/* Fixed Title Header Section */}
-              <div className="px-8 sm:px-14 pt-7 pb-4 shrink-0 border-b border-slate-100 bg-white">
+              <div className="px-8 sm:px-14 pt-6 pb-4 shrink-0 border-b border-slate-100 bg-white">
+                {/* Add Cover Image trigger when no cover is set */}
+                {!featuredImage && (
+                  <button
+                    type="button"
+                    onClick={() => setShowSidebar(true)}
+                    className="inline-flex items-center gap-1.5 text-xs text-text-tertiary hover:text-brand font-semibold mb-2 transition"
+                  >
+                    <ImageIcon className="h-3.5 w-3.5" /> Add cover image
+                  </button>
+                )}
                 <input
                   type="text"
                   placeholder="Article Title..."
@@ -561,11 +710,50 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
                 {/* Selection Bubble Menu */}
                 {editor && <SelectionBubbleMenu editor={editor} />}
 
+                {/* Big Uncropped Featured Cover Image — Placed just below Title */}
+                {featuredImage && (
+                  <div className="relative group/cover mb-8 w-full rounded-2xl overflow-hidden border border-border shadow-xs bg-slate-50 flex justify-center">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={featuredImage}
+                      alt={title || "Cover image"}
+                      className="w-full h-auto max-h-[720px] object-contain rounded-2xl block"
+                    />
+                    <div className="absolute top-4 right-4 flex items-center gap-2 opacity-0 group-hover/cover:opacity-100 transition-opacity bg-navy/85 backdrop-blur-md p-1.5 rounded-xl text-white shadow-lg z-20">
+                      <button
+                        type="button"
+                        onClick={() => setShowSidebar(true)}
+                        className="px-3 py-1.5 text-xs font-bold bg-white/20 hover:bg-white/30 rounded-lg transition"
+                      >
+                        Change Cover
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFeaturedImage(null);
+                          setSaveStatus("unsaved");
+                        }}
+                        className="p-1.5 text-rose-300 hover:text-rose-100 hover:bg-rose-500/30 rounded-lg transition"
+                        title="Remove Cover Image"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 {/* Tiptap Content */}
-                <EditorContent
-                  editor={editor}
-                  className="prose prose-lg prose-navy max-w-none focus:outline-none min-h-[360px]"
-                />
+                {loadingInitial ? (
+                  <div className="flex flex-col items-center justify-center py-20 gap-3">
+                    <Loader2 className="h-7 w-7 animate-spin text-brand" />
+                    <p className="text-xs font-semibold text-text-tertiary">Loading article content...</p>
+                  </div>
+                ) : (
+                  <EditorContent
+                    editor={editor}
+                    className="prose prose-lg prose-navy max-w-none focus:outline-none min-h-[360px]"
+                  />
+                )}
               </div>
             </div>
           </main>
@@ -588,33 +776,33 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
             <EditorSidePanel
               editor={editor}
               slug={slug}
-              setSlug={setSlug}
+              setSlug={(val: string) => { setSlug(val); setSaveStatus("unsaved"); }}
               setSlugEdited={setSlugEdited}
               category={category}
-              setCategory={setCategory}
+              setCategory={(val: string) => { setCategory(val); setSaveStatus("unsaved"); }}
               catOptions={catOptions}
               tags={tags}
-              setTags={setTags}
+              setTags={(val: any) => { setTags(val); setSaveStatus("unsaved"); }}
               tagInput={tagInput}
               setTagInput={setTagInput}
               featuredImage={featuredImage}
-              setFeaturedImage={setFeaturedImage}
+              setFeaturedImage={(val: string | null) => { setFeaturedImage(val); setSaveStatus("unsaved"); }}
               seoTitle={seoTitle}
-              setSeoTitle={setSeoTitle}
+              setSeoTitle={(val: string) => { setSeoTitle(val); setSaveStatus("unsaved"); }}
               seoDesc={seoDesc}
-              setSeoDesc={setSeoDesc}
+              setSeoDesc={(val: string) => { setSeoDesc(val); setSaveStatus("unsaved"); }}
               canonical={canonical}
-              setCanonical={setCanonical}
+              setCanonical={(val: string) => { setCanonical(val); setSaveStatus("unsaved"); }}
               ogTitle={ogTitle}
-              setOgTitle={setOgTitle}
+              setOgTitle={(val: string) => { setOgTitle(val); setSaveStatus("unsaved"); }}
               ogDesc={ogDesc}
-              setOgDesc={setOgDesc}
+              setOgDesc={(val: string) => { setOgDesc(val); setSaveStatus("unsaved"); }}
               ogImage={ogImage}
-              setOgImage={setOgImage}
+              setOgImage={(val: string) => { setOgImage(val); setSaveStatus("unsaved"); }}
               status={status}
-              setStatus={setStatus}
+              setStatus={(val: any) => { setStatus(val); setSaveStatus("unsaved"); }}
               scheduledAt={scheduledAt}
-              setScheduledAt={setScheduledAt}
+              setScheduledAt={(val: string) => { setScheduledAt(val); setSaveStatus("unsaved"); }}
               revisions={revisions}
               onRestoreRevision={handleRestoreRevision}
               seoWarnings={seoWarnings}

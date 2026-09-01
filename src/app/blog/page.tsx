@@ -14,9 +14,10 @@ async function getPublishedPosts() {
       return posts.map((p) => ({
         slug: p.slug,
         title: p.title,
-        excerpt: p.seo && typeof p.seo === "object" && (p.seo as any).description
-          ? (p.seo as any).description
-          : `Read the full story: ${p.title}`,
+        excerpt:
+          p.seo && typeof p.seo === "object" && (p.seo as any).description
+            ? (p.seo as any).description
+            : `Read the full story: ${p.title}`,
         category: p.category?.name || "Articles",
         date: new Date(p.publishedAt || p.createdAt).toLocaleDateString("en-US", {
           month: "short",
@@ -24,11 +25,16 @@ async function getPublishedPosts() {
           year: "numeric",
         }),
         readingTime: p.readingTime || 4,
-        imageUrl: (p.featuredImage as any)?.variants?.publicUrl || (p.featuredImage as any)?.url || null,
+        imageUrl:
+          (p.featuredImage as any)?.variants?.publicUrl ||
+          (p.featuredImage as any)?.url ||
+          (p.seo as any)?.ogImage ||
+          (p.seo as any)?.image ||
+          null,
       }));
     }
   } catch (e) {
-    // Fallback to sample posts
+    console.error("Error fetching published blog posts:", e);
   }
 
   return [
@@ -66,7 +72,7 @@ export default async function BlogPage() {
                 href={`/blog/${post.slug}`}
                 className="group flex flex-col h-[420px] rounded-2xl border border-border bg-white overflow-hidden shadow-xs hover:border-brand/40 hover:shadow-lg transition-all duration-200"
               >
-                {/* Fixed Height Cover Image (like WordPress/Medium) */}
+                {/* Fixed Height Cover Image */}
                 <div className="h-48 w-full shrink-0 bg-slate-100 overflow-hidden relative">
                   {post.imageUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -85,7 +91,7 @@ export default async function BlogPage() {
                   </span>
                 </div>
 
-                {/* Card Body — Fixed Height with Flex-1 to align footers evenly */}
+                {/* Card Body */}
                 <div className="p-5 flex-1 flex flex-col justify-between">
                   <div>
                     <div className="flex items-center gap-1.5 text-xs text-text-tertiary">
@@ -100,7 +106,7 @@ export default async function BlogPage() {
                     </p>
                   </div>
 
-                  {/* Card Footer pinned at bottom */}
+                  {/* Card Footer */}
                   <div className="pt-3 border-t border-border flex items-center justify-between text-xs text-text-tertiary">
                     <span className="flex items-center gap-1 font-medium">
                       <Clock className="h-3 w-3 text-brand" /> {post.readingTime} min read

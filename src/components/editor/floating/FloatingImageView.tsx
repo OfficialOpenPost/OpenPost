@@ -914,7 +914,7 @@ export function FloatingImageView({
 
         {/* ── TIGHT CARD BOX (Zero extra padding, tight to image boundary) ─── */}
         <div
-          className={`relative bg-white transition-all duration-150 ${
+          className={`relative bg-white transition-[box-shadow,border-color] duration-150 ${
             selected ? "z-10 ring-2 ring-brand/40 shadow-md" : "group-hover/img-wrapper:shadow-sm"
           }`}
           style={{

@@ -1,19 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { db, withDbRetry } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { countWords, readingTime as calcReadingTime } from "@/lib/publish";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const blog = await db.blog.findUnique({
-      where: { id } as never,
-      include: {
-        category: true,
-        featuredImage: true,
-        tags: { include: { tag: true } },
-      } as never,
-    });
+    const blog = await withDbRetry(() =>
+      db.blog.findUnique({
+        where: { id } as never,
+        include: {
+          category: true,
+          featuredImage: true,
+          tags: { include: { tag: true } },
+        } as never,
+      })
+    );
     if (!blog) return NextResponse.json({ error: { code: "NOT_FOUND" } }, { status: 404 });
     return NextResponse.json({ data: blog });
   } catch (e) {
@@ -28,14 +30,14 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: { code: "FORBIDDEN", message: "Only EDITOR+ can delete" } }, { status: 403 });
     }
     const { id } = await params;
-    const existing = await db.blog.findUnique({ where: { id } as never });
+    const existing = await withDbRetry(() => db.blog.findUnique({ where: { id } as never }));
     if (!existing) return NextResponse.json({ error: { code: "NOT_FOUND" } }, { status: 404 });
 
     if ((existing as any).status !== "trash") {
-      const updated = await db.blog.update({ where: { id } as never, data: { status: "trash" as never } });
+      const updated = await withDbRetry(() => db.blog.update({ where: { id } as never, data: { status: "trash" as never } }));
       return NextResponse.json({ data: updated });
     }
-    await db.blog.delete({ where: { id } as never });
+    await withDbRetry(() => db.blog.delete({ where: { id } as never }));
     return NextResponse.json({ data: { ok: true } });
   } catch (e) {
     console.error(e);
@@ -47,7 +49,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   try {
     const { id } = await params;
     const body = await req.json();
-    const existing = await db.blog.findUnique({ where: { id } as never });
+    const existing = await withDbRetry(() => db.blog.findUnique({ where: { id } as never }));
     if (!existing) return NextResponse.json({ error: { code: "NOT_FOUND", message: "Article not found" } }, { status: 404 });
 
     // Extract only valid database scalar fields
@@ -98,7 +100,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     if (categoryId !== undefined) {
       dataToUpdate.categoryId = categoryId || null;
     } else if (category?.name) {
-      const foundCat = await db.category.findFirst({ where: { name: category.name } as never }).catch(() => null);
+      const foundCat = await withDbRetry(() => db.category.findFirst({ where: { name: category.name } as never })).catch(() => null);
       if (foundCat) dataToUpdate.categoryId = (foundCat as any).id;
     }
 
@@ -107,21 +109,25 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       dataToUpdate.featuredImageId = featuredImageId || null;
     }
 
-    const updated = await db.blog.update({
-      where: { id } as never,
-      data: dataToUpdate as never,
-    });
+    const updated = await withDbRetry(() =>
+      db.blog.update({
+        where: { id } as never,
+        data: dataToUpdate as never,
+      })
+    );
 
     // Create revision snapshot
     if (content !== undefined) {
-      await db.blogRevision.create({
-        data: {
-          blogId: id,
-          content,
-          createdBy: (existing as any).createdBy,
-          label: revisionLabel || "Autosave",
-        } as never,
-      }).catch(() => {});
+      await withDbRetry(() =>
+        db.blogRevision.create({
+          data: {
+            blogId: id,
+            content,
+            createdBy: (existing as any).createdBy,
+            label: revisionLabel || "Autosave",
+          } as never,
+        })
+      ).catch(() => {});
     }
 
     return NextResponse.json({ data: updated });

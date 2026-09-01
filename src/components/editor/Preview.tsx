@@ -40,8 +40,8 @@ export function Preview({ title, html, json }: PreviewProps) {
         ))}
       </div>
 
-      <div className="mx-auto p-6 md:p-10 transition-all duration-300">
-        <div className={`mx-auto bg-surface rounded-2xl shadow-xl border border-border overflow-hidden ${widths[viewport]}`}>
+      <div className="mx-auto p-4 sm:p-6 md:p-10 transition-all duration-300">
+        <div className={`mx-auto bg-surface rounded-2xl shadow-xl border border-border overflow-hidden w-full ${widths[viewport]}`}>
           <div className="p-8 md:p-10">
             <h1 className="text-3xl font-extrabold tracking-tight text-navy">{title || "Untitled"}</h1>
             <div className="mt-6">

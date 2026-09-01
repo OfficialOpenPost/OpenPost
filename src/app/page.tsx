@@ -82,7 +82,7 @@ export default function Home() {
           </FadeIn>
 
           <FadeIn delay={0.1}>
-            <h1 className="text-center text-[3rem] font-bold leading-[1.08] tracking-tight text-[#2D3440] sm:text-5xl md:text-7xl lg:text-[5.5rem] drop-shadow-[0_2px_20px_rgba(255,255,255,0.35)]">
+            <h1 className="text-center text-3xl sm:text-5xl md:text-7xl lg:text-[5.5rem] font-bold leading-tight tracking-tight text-[#2D3440] break-words drop-shadow-[0_2px_20px_rgba(255,255,255,0.35)]">
               Write. Publish.
               <br />
               <span className="bg-gradient-to-r from-[#2D3440] to-[#2D3440]/80 bg-clip-text text-transparent">Scale your content.</span>
@@ -210,7 +210,7 @@ export default function Home() {
       ============================================================ */}
       <section className="border-b border-border bg-surface py-10">
         <div className="mx-auto max-w-7xl px-6">
-          <div className="grid grid-cols-2 gap-8 md:grid-cols-4">
+          <div className="grid grid-cols-2 gap-4 sm:gap-8 md:grid-cols-4">
             {[
               { num: "16+", label: "Content Blocks" },
               { num: "99.99%", label: "Uptime SLA" },
@@ -773,7 +773,7 @@ export default function Home() {
                     <div className="h-6 w-36 rounded bg-text-primary/10" />
                     <div className="h-8 w-24 rounded-lg bg-brand/10" />
                   </div>
-                  <div className="mt-6 grid grid-cols-4 gap-3">
+                  <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-3">
                     {[
                       { label: "Published", value: "127", color: "bg-success/10 text-success" },
                       { label: "Drafts", value: "14", color: "bg-brand/10 text-brand" },
@@ -1009,11 +1009,11 @@ export default function Home() {
       </section>
 
       {/* ============================================================
-          SECTION 12 — DEPLOY ANYWHERE (Open Source)
-      ============================================================ */}
-      <section className="bg-surface-raised py-20">
-        <div className="mx-auto max-w-7xl px-6">
-          <div className="grid items-center gap-16 lg:grid-cols-2">
+           SECTION 12 — DEPLOY ANYWHERE (Open Source)
+       ============================================================ */}
+       <section className="bg-surface-raised py-20">
+         <div className="mx-auto max-w-7xl px-6">
+           <div className="grid items-center gap-8 lg:gap-16 lg:grid-cols-2">
             <FadeIn direction="right">
               <div>
                 <p className="text-sm font-semibold uppercase tracking-widest text-brand">
@@ -1317,21 +1317,21 @@ npm run start`}</code>
       </section>
 
       {/* ============================================================
-          SECTION 16 — FINAL CTA
-      ============================================================ */}
-      <section className="relative bg-navy py-20 overflow-hidden">
+           SECTION 16 — FINAL CTA (light — dark only footer)
+       ============================================================ */}
+       <section className="relative bg-white py-20 overflow-hidden border-y border-border">
         <div className="absolute inset-0">
-          <div className="absolute top-0 left-1/2 h-[400px] w-[400px] -translate-x-1/2 rounded-full bg-brand/10 blur-[120px]" />
-          <div className="absolute bottom-0 left-1/4 h-[300px] w-[300px] rounded-full bg-flame/8 blur-[100px]" />
+          <div className="absolute top-0 left-1/2 h-[300px] w-[500px] -translate-x-1/2 rounded-full bg-gradient-to-br from-[#FEA611]/10 to-[#FE4F01]/8 blur-[60px]" />
+          <div className="absolute bottom-0 right-10 h-[200px] w-[300px] rounded-full bg-[#FE990E]/8 blur-[50px]" />
         </div>
         <div className="relative mx-auto max-w-4xl px-6 text-center">
           <FadeIn>
-            <h2 className="text-4xl font-bold tracking-tight text-white md:text-6xl">
+            <h2 className="text-3xl sm:text-4xl md:text-6xl font-bold tracking-tight text-navy">
               Ready to write something
               <br />
-              <span className="text-brand">remarkable?</span>
+              <span className="text-[#FE4F01]">remarkable?</span>
             </h2>
-            <p className="mx-auto mt-6 max-w-xl text-lg text-slate-400">
+            <p className="mx-auto mt-6 max-w-xl text-lg text-text-secondary">
               Join thousands of writers and teams who trust OpenPost. Open
               source, deploy anywhere, no vendor lock-in.
             </p>

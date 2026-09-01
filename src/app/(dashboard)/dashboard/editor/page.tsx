@@ -165,9 +165,8 @@ export default function EditorPage() {
   return (
     <div className="min-h-screen bg-[#FCFCF9] flex flex-col">
       <style>{EDITOR_STYLES}</style>
-      {/* Unified top header — single row, editing context + post, not split */}
-      <header className="flex h-16 border-b border-border bg-white shrink-0">
-        <div className="flex flex-1 items-center justify-between px-4 min-w-0">
+      {/* Fixed top header + toolbar sticked — both not scrolling */}
+      <header className="fixed top-0 left-0 right-0 h-16 border-b border-border bg-white z-30 flex items-center justify-between px-4">
           <div className="flex items-center gap-3 min-w-0">
             <Link href="/dashboard" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#FCFCF9] border border-border hover:bg-white transition" title="Back to dashboard">
               <ArrowLeft className="h-4 w-4 text-text-secondary" />
@@ -207,13 +206,16 @@ export default function EditorPage() {
               <Settings2 className={`h-4 w-4 ${showSidebar ? "text-navy" : "text-text-secondary"}`} />
             </button>
           </div>
-        </div>
       </header>
-      {/* Toolbar — floating pill on right side */}
-      <div className="hidden lg:flex fixed right-6 top-[88px] z-30 rounded-full border border-border bg-white shadow-xl px-2 py-1">
-        <Toolbar editor={editor} />
+      {/* Spacer for fixed header */}
+      <div className="h-16 shrink-0" />
+      {/* Toolbar — floating only over editing content on right side, not left sidebar */}
+      <div className="hidden lg:flex fixed z-30 rounded-full border border-border bg-white shadow-xl px-2 py-1" style={showSidebar ? { right: 24, top: 76, left: sidebarWidth + 16 } : { right: 24, top: 76, left: 16 }}>
+        <div className="mx-auto">
+          <Toolbar editor={editor} />
+        </div>
       </div>
-      {/* Mobile toolbar — still below header */}
+      {/* Mobile toolbar — below header */}
       <div className="border-b border-border bg-white shrink-0 lg:hidden">
         <Toolbar editor={editor} />
       </div>
@@ -225,10 +227,10 @@ export default function EditorPage() {
         </div>
       )}
 
-      <div className="flex flex-1 min-h-0">
-        {/* Left inspector — stays left, not touched */}
+      <div className="flex flex-1 min-h-0 pt-10">
+        {/* Left inspector — fixed, not scrolling, left side only */}
         {showSidebar && (
-          <aside style={{ width: sidebarWidth }} className="hidden lg:flex shrink-0 flex-col bg-white border-r border-border h-[calc(100vh-4rem)] sticky top-16 overflow-hidden">
+          <aside style={{ width: sidebarWidth }} className="hidden lg:flex shrink-0 flex-col bg-white border-r border-border fixed left-0 top-16 bottom-0 z-20 overflow-hidden">
             {/* Tabs — floating pill */}
             <div className="p-2 bg-[#FCFCF9] border-b border-border">
               <div className="flex gap-1 rounded-xl bg-white border border-border p-1 shadow-sm">
@@ -427,15 +429,15 @@ export default function EditorPage() {
             </div>
           </aside>
         )}
-        <div className="flex-1 flex flex-col min-w-0 bg-[#FCFCF9]">
+        <div className="flex-1 flex flex-col min-w-0 bg-[#FCFCF9]" style={showSidebar ? { marginLeft: sidebarWidth } : undefined}>
           <div className="flex-1 overflow-auto">
             <div className="mx-auto max-w-[960px] px-6 md:px-8 py-10 md:py-14">
-              <input
-                value={title}
-                onChange={(e) => handleTitleChange(e.target.value)}
-                placeholder="Post title…"
-                className="w-full bg-transparent text-[2.75rem] font-extrabold tracking-tight text-navy placeholder:text-text-tertiary/40 focus:outline-none leading-[1.05]"
-              />
+            <input
+              value={title}
+              onChange={(e) => handleTitleChange(e.target.value)}
+              placeholder="Post title…"
+              className="w-full bg-transparent text-2xl sm:text-3xl md:text-4xl lg:text-[2.75rem] font-extrabold tracking-tight text-navy placeholder:text-text-tertiary/40 focus:outline-none leading-tight break-words"
+            />
               <div className="mt-3 flex items-center gap-2 text-sm">
                 <span className="text-text-tertiary">Slug</span>
                 <span className="font-mono text-sm text-brand">/{slug}</span>
@@ -453,8 +455,8 @@ export default function EditorPage() {
                 </button>
               </div>
               <div className="mt-4 flex items-center gap-2">
-                <InsertMenu editor={editor} />
-                <span className="text-xs text-text-tertiary">Insert image, gallery, and blocks — like Sanity</span>
+              <InsertMenu editor={editor} />
+              <span className="text-xs text-text-tertiary">Insert image, gallery, and blocks</span>
               </div>
               <div className="mt-6 min-h-[520px]">
                 {editor && (

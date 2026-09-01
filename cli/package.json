@@ -1,8 +1,9 @@
 {
-  "name": "create-openpost",
+  "name": "openpost-cli",
   "version": "0.1.0",
   "description": "Create a blog frontend connected to OpenPost CMS",
   "bin": {
+    "openpost-cli": "./dist/index.js",
     "create-openpost": "./dist/index.js"
   },
   "scripts": {

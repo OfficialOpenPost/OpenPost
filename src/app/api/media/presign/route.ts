@@ -12,6 +12,7 @@ function getS3Client() {
     region: "auto",
     endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
     credentials: { accessKeyId, secretAccessKey },
+    forcePathStyle: true,
   });
 }
 

@@ -66,6 +66,23 @@ npm run dev    # http://localhost:3000
 
 ---
 
+## Connect a Frontend with `openpost-cli` (npm)
+
+**One command to link any Next.js frontend to your CMS — `npx openpost-cli`:**
+
+```bash
+npx openpost-cli
+# → Enter CMS URL: https://cms.typely.in
+# → Browser opens ${cmsUrl}/cli/connect → paste OP-XXXX-XXXX
+# → Project name: my-blog
+# Creates my-blog/.env.local with OPENPOST_URL + PROJECT_ID + TOKEN
+cd my-blog && npm install && npm run dev
+```
+
+Also: `npm i -g openpost-cli && openpost-cli` or `npm i -D openpost-cli`. See `cli/README.md` for details. Requires running CMS at that URL (`/api/health` 200).
+
+---
+
 ## Deploy
 
 **Vercel (recommended):**

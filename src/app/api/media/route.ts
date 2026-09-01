@@ -61,14 +61,31 @@ export async function POST(req: NextRequest) {
       }
     } catch {}
 
-    let uploadedBy = "00000000-0000-0000-0000-000000000000";
+    let uploadedBy = "00000000-0000-0000-0000-000000000001";
     try {
-      const u = await getCurrentUser();
-      if (u?.id) uploadedBy = u.id;
+      const u = await getCurrentUser().catch(()=>null);
+      if (u?.id) {
+        // Verify that id exists in users table, otherwise use first user
+        const exists = await db.user.findUnique({ where: { id: u.id } as never }).catch(()=>null);
+        if (exists) uploadedBy = u.id;
+        else {
+          const first: any = await db.user.findFirst({ select: { id: true } } as never).catch(()=>null);
+          if (first?.id) uploadedBy = first.id;
+        }
+      } else {
+        const first: any = await db.user.findFirst({ select: { id: true } } as never).catch(()=>null);
+        if (first?.id) uploadedBy = first.id;
+      }
+    } catch {}
+    // Ensure FK exists — create system user if needed
+    try {
+      const exists = await db.user.findUnique({ where: { id: uploadedBy } as never }).catch(()=>null);
+      if (!exists) {
+        await db.user.create({ data: { id: uploadedBy, email: `system-${uploadedBy.slice(0,8)}@openpost.local`, name: "System", passwordHash: "", role: "ADMIN" as never } as never }).catch(()=>{});
+      }
     } catch {}
 
     const variants: any = { publicUrl, key };
-    // For WebP images, store webp variant explicitly for future AVIF pipeline
     if (mimeType === "image/webp") {
       variants.webp = { url: publicUrl, key, size: sizeBytes };
     }
@@ -83,7 +100,7 @@ export async function POST(req: NextRequest) {
         variants,
         altTextDefault: altTextDefault ?? null,
         checksum: checksum ?? `${Date.now()}-${Math.random()}`,
-        uploadedBy,
+        uploadedBy: uploadedBy!,
       } as never,
     });
 

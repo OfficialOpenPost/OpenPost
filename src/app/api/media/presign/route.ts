@@ -41,7 +41,14 @@ export async function POST(req: NextRequest) {
   }
 
   const ext = filename.split(".").pop() ?? "bin";
-  const key = `media/${Date.now()}-${crypto.randomUUID()}.${ext}`;
+  // Use your R2 folder Openpost-images (as created in Cloudflare dashboard)
+  const key = `Openpost-images/${Date.now()}-${crypto.randomUUID()}.${ext}`;
+
+  // If R2 not configured (fresh clone without env), return mock presign so upload still succeeds via DB only (dev fallback)
+  const isR2 = Boolean(process.env.R2_ACCOUNT_ID && process.env.R2_ACCESS_KEY_ID && process.env.R2_SECRET_ACCESS_KEY && process.env.R2_BUCKET_NAME);
+  if (!isR2) {
+    return NextResponse.json({ data: { url: "/api/media/mock-upload", fields: {}, key, publicUrl: `/media/${key}` } });
+  }
 
   const s3 = getS3Client();
   const bucket = process.env.R2_BUCKET_NAME!;

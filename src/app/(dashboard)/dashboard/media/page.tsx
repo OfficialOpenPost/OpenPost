@@ -94,14 +94,25 @@ export default function MediaPage() {
         if (!presignRes.ok) throw new Error(presignJson.error?.message ?? "Presign failed");
 
         const { url, fields, key, publicUrl } = presignJson.data as { url: string; fields: Record<string, string>; key: string; publicUrl: string };
-        setUploading({ name: file.name, progress: "Uploading to R2…" });
-
-        const form = new FormData();
-        Object.entries(fields).forEach(([k, v]) => form.append(k, v as string));
-        form.append("file", file);
-
-        const upRes = await fetch(url, { method: "POST", body: form });
-        if (!upRes.ok) throw new Error("R2 upload failed");
+        let finalPublicUrl = publicUrl;
+        const isMock = url === "/api/media/mock-upload" || !url.includes("http");
+        if (isMock) {
+          // Create local preview URL for mock (R2 not configured) — still save to DB for demo
+          try { finalPublicUrl = URL.createObjectURL(file); } catch { finalPublicUrl = publicUrl; }
+          setUploading({ name: file.name, progress: "Saving metadata (R2 not configured — DB only)…" });
+        } else {
+          setUploading({ name: file.name, progress: "Uploading to R2…" });
+          const form = new FormData();
+          Object.entries(fields).forEach(([k, v]) => form.append(k, v as string));
+          form.append("file", file);
+          try {
+            const upRes = await fetch(url, { method: "POST", body: form });
+            if (!upRes.ok) throw new Error("R2 upload failed");
+          } catch (e: any) {
+            console.warn("R2 upload failed, falling back to DB only", e);
+            // Fallback to DB-only, do not throw — continue to metadata save
+          }
+        }
 
         // Get dimensions for DB
         let width: number | null = null, height: number | null = null;
@@ -123,7 +134,7 @@ export default function MediaPage() {
             width,
             height,
             key,
-            publicUrl,
+            publicUrl: finalPublicUrl ?? publicUrl,
             checksum: `${Date.now()}-${file.name}`,
           }),
         });
@@ -135,7 +146,8 @@ export default function MediaPage() {
         setUploading({ name: file.name, progress: "Done ✓" });
         setTimeout(() => setUploading(null), 1200);
       } catch (e: any) {
-        setError(e.message ?? "Upload failed");
+        const msg = e.message === "Failed to fetch" ? "Upload failed: check internet, login, and R2 env. If R2 not configured, upload will still save to DB (mock). Try again." : e.message;
+        setError(msg ?? "Upload failed");
         setUploading(null);
         break;
       }

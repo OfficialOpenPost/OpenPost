@@ -1,26 +1,44 @@
 "use client";
 
+import * as React from "react";
 import { useState } from "react";
 
 interface SharedRenderProps {
   content: any;
 }
 
-function renderInline(content: any[]): string {
-  if (!Array.isArray(content)) return "";
-  return content.map((c: any) => {
+function renderInline(content: any[]): React.ReactNode[] {
+  if (!Array.isArray(content)) return [];
+  return content.map((c: any, idx: number) => {
     if (c.type === "text") {
-      let t = c.text ?? "";
-      if (c.marks) for (const m of c.marks) { if (m.type === "bold") t = `**${t}**`; }
-      return t;
+      let node: React.ReactNode = c.text ?? "";
+      if (c.marks) {
+        for (const m of c.marks) {
+          if (m.type === "bold") node = <strong key={`${idx}-b`} className="font-bold text-navy">{node}</strong>;
+          if (m.type === "italic") node = <em key={`${idx}-i`} className="italic">{node}</em>;
+          if (m.type === "underline") node = <u key={`${idx}-u`}>{node}</u>;
+          if (m.type === "strike") node = <s key={`${idx}-s`}>{node}</s>;
+          if (m.type === "code") node = <code key={`${idx}-c`} className="rounded bg-[#2D3440] px-1 py-0.5 font-mono text-sm text-[#FEA611]">{node}</code>;
+          if (m.type === "highlight") node = <mark key={`${idx}-h`} className="bg-[#FEA611]/20 px-0.5 rounded">{node}</mark>;
+          if (m.type === "link") node = <a key={`${idx}-a`} href={m.attrs?.href ?? "#"} target="_blank" rel="noopener" className="text-[#FE4F01] underline decoration-[#FE4F01]/30 underline-offset-4 hover:decoration-[#FE4F01]">{node}</a>;
+          if (m.type === "textStyle" && m.attrs?.color) node = <span key={`${idx}-color`} style={{ color: m.attrs.color }}>{node}</span>;
+        }
+      }
+      return <React.Fragment key={idx}>{node}</React.Fragment>;
     }
-    if (c.content) return renderInline(c.content);
-    return c.text ?? "";
-  }).join("");
+    if (c.type === "hardBreak") return <br key={idx} />;
+    if (c.content) return <React.Fragment key={idx}>{renderInline(c.content)}</React.Fragment>;
+    return <React.Fragment key={idx}>{c.text ?? ""}</React.Fragment>;
+  });
+}
+
+function renderInlineText(content: any[]): string {
+  if (!Array.isArray(content)) return "";
+  return content.map((c: any) => c.text ?? (c.content ? renderInlineText(c.content) : "")).join("");
 }
 
 // Shared between CMS preview and public frontend — guarantees parity (PRD §17)
-// Renders 16 block types: paragraph, heading, image, gallery(min-2), callout, poll, faq(JSON-LD), accordion, button, download, social, video, embed, codeBlock(copy), blockquote, horizontalRule
+// Renders 16 block types: paragraph, heading, image, gallery(min-2), callout, poll, faq(JSON-LD), accordion, button, download, social, video, embed, codeBlock(copy), blockquote, horizontalRule — no raw markdown
 export function SharedRender({ content }: SharedRenderProps) {
   if (!content || !content.content) return <p className="text-sm text-text-tertiary">No content</p>;
 
@@ -30,7 +48,7 @@ export function SharedRender({ content }: SharedRenderProps) {
         "@context": "https://schema.org",
         "@type": "FAQPage",
         mainEntity: faqNodes.flatMap((n: any) => {
-          const items = n.attrs?.items ?? (n.attrs?.question ? [{ question: n.attrs.question, answer: renderInline(n.content ?? []) }] : []);
+          const items = n.attrs?.items ?? (n.attrs?.question ? [{ question: n.attrs.question, answer: renderInlineText(n.content ?? []) }] : []);
           return items.map((it: any) => ({ "@type": "Question", name: it.question, acceptedAnswer: { "@type": "Answer", text: it.answer } }));
         }),
       }
@@ -41,17 +59,22 @@ export function SharedRender({ content }: SharedRenderProps) {
       {content.content.map((node: any, i: number) => {
         switch (node.type) {
           case "paragraph":
-            return <p key={i}>{renderInline(node.content ?? []) || node.content?.map((c: any) => c.text ?? "").join("")}</p>;
+            return <p key={i} className="leading-7 my-3">{renderInline(node.content ?? [])}</p>;
           case "heading": {
-            const Tag = `h${node.attrs?.level ?? 2}` as unknown as React.ComponentType<{ children: React.ReactNode }>;
-            return <Tag key={i}>{renderInline(node.content ?? []) || node.content?.map((c: any) => c.text).join("")}</Tag>;
+            const lvl = node.attrs?.level ?? 2;
+            const sizeCls = lvl === 1 ? "text-[2rem] font-extrabold" : lvl === 2 ? "text-[1.7rem] font-bold" : "text-[1.3rem] font-bold";
+            const kids = renderInline(node.content ?? []);
+            if (lvl === 1) return <h1 key={i} className={sizeCls}>{kids}</h1>;
+            if (lvl === 3) return <h3 key={i} className={sizeCls}>{kids}</h3>;
+            if (lvl === 4) return <h4 key={i} className={sizeCls}>{kids}</h4>;
+            return <h2 key={i} className={sizeCls}>{kids}</h2>;
           }
           case "image": {
             const src = node.attrs?.src ?? "";
             const srcSet = src ? `${src}?w=480 480w, ${src}?w=768 768w, ${src}?w=1200 1200w, ${src}?w=1920 1920w` : undefined;
             return (
               <figure key={i} className="my-6">
-                <img src={src} srcSet={srcSet} sizes="(max-width: 768px) 100vw, 720px" alt={node.attrs?.alt ?? ""} className="rounded-xl w-full" loading="lazy" />
+                <img src={src} srcSet={srcSet} sizes="(max-width: 768px) 100vw, 960px" alt={node.attrs?.alt ?? ""} className="rounded-xl w-full" loading="lazy" />
                 {node.attrs?.caption && <figcaption className="mt-2 text-center text-xs text-text-tertiary">{node.attrs.caption}</figcaption>}
               </figure>
             );
@@ -72,13 +95,13 @@ export function SharedRender({ content }: SharedRenderProps) {
               <div key={i} className={layout === "carousel" ? "my-6 flex gap-4 overflow-x-auto snap-x pb-2" : "my-6 grid grid-cols-2 gap-4"}>
                 {images.map((img: any, idx: number) => {
                   const srcSet = img.src ? `${img.src}?w=480 480w, ${img.src}?w=768 768w, ${img.src}?w=1200 1200w` : undefined;
-                  return <img key={idx} src={img.src} srcSet={srcSet} sizes="(max-width: 768px) 50vw, 360px" alt={img.alt ?? ""} className="rounded-xl w-full object-cover snap-center" loading="lazy" />;
+                  return <img key={idx} src={img.src} srcSet={srcSet} sizes="(max-width: 768px) 50vw, 440px" alt={img.alt ?? ""} className="rounded-xl w-full object-cover snap-center" loading="lazy" />;
                 })}
               </div>
             );
           }
           case "faq": {
-            const items = node.attrs?.items ?? (node.attrs?.question ? [{ question: node.attrs.question, answer: renderInline(node.content ?? []) || "Answer" }] : []);
+            const items = node.attrs?.items ?? (node.attrs?.question ? [{ question: node.attrs.question, answer: renderInlineText(node.content ?? []) || "Answer" }] : []);
             return (
               <div key={i} className="my-6 rounded-xl border border-border bg-surface overflow-hidden">
                 <div className="bg-navy px-4 py-3 text-sm font-bold text-white">FAQ</div>
@@ -126,7 +149,7 @@ export function SharedRender({ content }: SharedRenderProps) {
             return <div key={i} className="my-6 rounded-xl border border-border bg-surface p-6 text-center text-sm text-text-tertiary">Embed — {node.attrs?.url ?? "no URL"}</div>;
           }
           case "codeBlock": {
-            const code = renderInline(node.content ?? []) || node.content?.map((c: any) => c.text).join("\n") || "";
+            const code = renderInlineText(node.content ?? []) || node.content?.map((c: any) => c.text).join("\n") || "";
             return <CodeBlock key={i} code={code} language={node.attrs?.language} />;
           }
           case "blockquote":

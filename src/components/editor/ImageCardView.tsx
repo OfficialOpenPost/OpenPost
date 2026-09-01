@@ -84,21 +84,40 @@ export function ImageCardView({ node, updateAttributes, deleteNode, selected }: 
     window.addEventListener("mouseup", onUp);
   };
 
+  const layoutCls =
+    layout === "left" ? "float-left mr-6 mb-4 max-w-[45%]" :
+    layout === "right" ? "float-right ml-6 mb-4 max-w-[45%]" :
+    layout === "wide" ? "w-full -mx-8 max-w-[calc(100%+4rem)]" :
+    layout === "full" ? "w-screen -mx-[calc((100vw-100%)/2)] max-w-none" :
+    layout === "inline" ? "inline-block align-middle max-w-[280px] mx-2" :
+    "mx-auto"; // center
+
+  const widthStyle = layout === "left" || layout === "right" ? { width } : layout === "center" ? { width: width === "100%" ? "72%" : width, maxWidth: 640 } : { width };
+
   return (
-    <NodeViewWrapper className="my-6">
-      <div className={`group overflow-hidden rounded-2xl border bg-surface shadow-sm ${selected ? "border-brand ring-2 ring-brand/20" : "border-border"}`}>
-        <div className="relative" style={{ width }}>
-          <img src={src} alt={alt || ""} className="w-full h-auto max-h-[520px] object-cover" />
-          <div className="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition">
-            <button onClick={() => setEditing(true)} className="rounded-full bg-navy/80 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur hover:bg-navy">
-              Edit URL
+    <NodeViewWrapper className={`my-6 ${layout === "left" || layout === "right" ? "clearfix" : ""}`}>
+      <div className={`group overflow-hidden rounded-xl border bg-surface shadow-sm ${selected ? "border-brand ring-2 ring-brand/20" : "border-border"} ${layoutCls}`} style={widthStyle as any}>
+        <div className="relative bg-[#FCFCF9]">
+          <img src={src} alt={alt || ""} className="w-full h-auto max-h-[520px] object-contain bg-white" draggable={false} />
+          {/* Drag handle — Word-like grip to move between text */}
+          <div data-drag-handle draggable className="absolute top-2 left-2 flex h-7 items-center gap-1 rounded-full bg-white/90 border border-border px-2 shadow-sm opacity-0 group-hover:opacity-100 transition cursor-grab active:cursor-grabbing select-none">
+            <span className="grid grid-cols-2 gap-0.5">
+              <span className="h-1 w-1 rounded-full bg-text-tertiary" /><span className="h-1 w-1 rounded-full bg-text-tertiary" />
+              <span className="h-1 w-1 rounded-full bg-text-tertiary" /><span className="h-1 w-1 rounded-full bg-text-tertiary" />
+              <span className="h-1 w-1 rounded-full bg-text-tertiary" /><span className="h-1 w-1 rounded-full bg-text-tertiary" />
+            </span>
+            <span className="text-[11px] font-semibold text-text-secondary">Drag</span>
+          </div>
+          <div className="absolute top-2 right-2 flex gap-1.5 opacity-0 group-hover:opacity-100 transition">
+            <button onClick={() => setEditing(true)} className="rounded-full bg-navy/85 px-3 py-1 text-xs font-semibold text-white backdrop-blur hover:bg-navy">
+              Edit
             </button>
-            <button onClick={() => deleteNode()} className="flex h-8 w-8 items-center justify-center rounded-full bg-flame text-white hover:bg-flame/90">
-              <X className="h-4 w-4" />
+            <button onClick={() => deleteNode()} className="flex h-7 w-7 items-center justify-center rounded-full bg-white border border-border shadow-sm hover:bg-flame hover:text-white hover:border-flame">
+              <X className="h-3.5 w-3.5" />
             </button>
           </div>
-          <div onMouseDown={onResizeMouseDown} className="absolute bottom-1 right-1 h-6 w-6 cursor-nwse-resize rounded bg-white/90 border border-border shadow-sm items-center justify-center hidden group-hover:flex">
-            <span className="text-xs">↘</span>
+          <div onMouseDown={onResizeMouseDown} className="absolute bottom-2 right-2 h-7 w-7 cursor-nwse-resize rounded-lg bg-white border border-border shadow-sm hidden group-hover:flex items-center justify-center hover:bg-navy hover:text-white hover:border-navy transition">
+            <span className="text-xs leading-none">↘</span>
           </div>
         </div>
         <div className="p-4 space-y-3 bg-surface">

@@ -4,31 +4,14 @@ import { convertToWebP } from "./imageConvert";
 
 export async function uploadImageWithWebP(file: File): Promise<{ url: string; key: string; webpFile: File }> {
   const webpFile = await convertToWebP(file, 0.82);
-  const presignRes = await fetch("/api/media/presign", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ filename: webpFile.name, contentType: webpFile.type || "image/webp", size: webpFile.size }),
-  });
-  const presignJson = await presignRes.json();
-  if (!presignRes.ok) throw new Error(presignJson.error?.message ?? "Presign failed");
-  const { url, fields, key, publicUrl } = presignJson.data as { url: string; fields: Record<string, string>; key: string; publicUrl: string };
-  // Mock presign (R2 not configured) — skip R2 upload, use local blob URL for DB
-  const isMock = url === "/api/media/mock-upload" || !url || url.includes("mock-upload");
+  // Upload via server (avoids CORS + presign 501) — server does S3 PutObject directly
+  const form = new FormData();
+  form.append("file", webpFile);
+  const upRes = await fetch("/api/media/upload", { method: "POST", body: form });
+  const upJson = await upRes.json().catch(()=>({}));
+  if (!upRes.ok) throw new Error(upJson.error?.message ?? "Upload failed");
+  const { key, publicUrl } = upJson.data as { key: string; publicUrl: string };
   let finalPublicUrl = publicUrl;
-  if (isMock) {
-    try { finalPublicUrl = URL.createObjectURL(webpFile); } catch { finalPublicUrl = publicUrl; }
-  } else {
-    const form = new FormData();
-    Object.entries(fields).forEach(([k, v]) => form.append(k, v as string));
-    form.append("file", webpFile);
-    try {
-      const upRes = await fetch(url, { method: "POST", body: form });
-      if (!upRes.ok) throw new Error("R2 upload failed");
-    } catch (e: any) {
-      console.warn("R2 upload failed, using fallback", e);
-      try { finalPublicUrl = URL.createObjectURL(webpFile); } catch {}
-    }
-  }
 
   // Save metadata (fire-and-forget, don't block insertion if DB fails)
   let width: number | null = null, height: number | null = null;

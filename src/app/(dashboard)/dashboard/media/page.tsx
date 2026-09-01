@@ -84,35 +84,14 @@ export default function MediaPage() {
         const isWebP = file.type === "image/webp";
         setUploading({ name: file.name, progress: isWebP ? `WebP ${(file.size / 1024).toFixed(1)} KB — requesting upload…` : "Requesting upload…" });
 
-        // Get presigned POST for R2
-        const presignRes = await fetch("/api/media/presign", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ filename: file.name, contentType: file.type || "image/webp", size: file.size }),
-        });
-        const presignJson = await presignRes.json();
-        if (!presignRes.ok) throw new Error(presignJson.error?.message ?? "Presign failed");
-
-        const { url, fields, key, publicUrl } = presignJson.data as { url: string; fields: Record<string, string>; key: string; publicUrl: string };
-        let finalPublicUrl = publicUrl;
-        const isMock = url === "/api/media/mock-upload" || !url.includes("http");
-        if (isMock) {
-          // Create local preview URL for mock (R2 not configured) — still save to DB for demo
-          try { finalPublicUrl = URL.createObjectURL(file); } catch { finalPublicUrl = publicUrl; }
-          setUploading({ name: file.name, progress: "Saving metadata (R2 not configured — DB only)…" });
-        } else {
-          setUploading({ name: file.name, progress: "Uploading to R2…" });
-          const form = new FormData();
-          Object.entries(fields).forEach(([k, v]) => form.append(k, v as string));
-          form.append("file", file);
-          try {
-            const upRes = await fetch(url, { method: "POST", body: form });
-            if (!upRes.ok) throw new Error("R2 upload failed");
-          } catch (e: any) {
-            console.warn("R2 upload failed, falling back to DB only", e);
-            // Fallback to DB-only, do not throw — continue to metadata save
-          }
-        }
+        setUploading({ name: file.name, progress: `WebP ${(file.size/1024).toFixed(1)}KB — uploading…` });
+        const form = new FormData();
+        form.append("file", file);
+        const upRes = await fetch("/api/media/upload", { method: "POST", body: form });
+        const upJson = await upRes.json().catch(()=>({}));
+        if (!upRes.ok) throw new Error(upJson.error?.message ?? "Upload failed");
+        const { key, publicUrl } = upJson.data as { key: string; publicUrl: string };
+        const finalPublicUrl = publicUrl;
 
         // Get dimensions for DB
         let width: number | null = null, height: number | null = null;

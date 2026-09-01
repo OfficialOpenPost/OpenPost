@@ -2,6 +2,11 @@
 
 import type { Editor } from "@tiptap/core";
 import {
+  Bold,
+  Italic,
+  Underline as UnderlineIcon,
+  Link2,
+  Unlink,
   Heading1,
   Heading2,
   Heading3,
@@ -10,7 +15,6 @@ import {
   ListOrdered,
   ListChecks,
   Quote,
-  Link2,
   Image as ImageIcon,
   Table as TableIcon,
   Minus,
@@ -30,6 +34,8 @@ import {
   Download,
   Plus,
   ChevronDown,
+  Check,
+  X,
 } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { InsertBlockModal, type BlockModalType } from "./InsertBlockModal";
@@ -74,10 +80,13 @@ function Divider() {
 export function Toolbar({ editor }: ToolbarProps) {
   const [showInsertDropdown, setShowInsertDropdown] = useState(false);
   const [showHeadingsDropdown, setShowHeadingsDropdown] = useState(false);
+  const [showLinkPopover, setShowLinkPopover] = useState(false);
+  const [linkUrl, setLinkUrl] = useState("");
   const [activeModal, setActiveModal] = useState<BlockModalType>(null);
 
   const insertMenuRef = useRef<HTMLDivElement>(null);
   const headingsMenuRef = useRef<HTMLDivElement>(null);
+  const linkMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -87,12 +96,26 @@ export function Toolbar({ editor }: ToolbarProps) {
       if (headingsMenuRef.current && !headingsMenuRef.current.contains(e.target as Node)) {
         setShowHeadingsDropdown(false);
       }
+      if (linkMenuRef.current && !linkMenuRef.current.contains(e.target as Node)) {
+        setShowLinkPopover(false);
+      }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   if (!editor) return null;
+
+  const handleApplyLink = () => {
+    if (!linkUrl.trim()) {
+      editor.chain().focus().unsetLink().run();
+    } else {
+      let formatted = linkUrl.trim();
+      if (!/^https?:\/\//i.test(formatted)) formatted = `https://${formatted}`;
+      editor.chain().focus().setLink({ href: formatted }).run();
+    }
+    setShowLinkPopover(false);
+  };
 
   const insertItems: Array<{
     label: string;
@@ -283,6 +306,91 @@ export function Toolbar({ editor }: ToolbarProps) {
                 </button>
               </div>
             )}
+          </div>
+
+          <Divider />
+
+          {/* Bold, Italic, Underline, and URL Link in Top Navbar */}
+          <div className="flex items-center gap-1 shrink-0">
+            <ToolbarButton
+              active={editor.isActive("bold")}
+              onClick={() => editor.chain().focus().toggleBold().run()}
+              title="Bold (Ctrl+B)"
+            >
+              <Bold className="h-3.5 w-3.5" />
+            </ToolbarButton>
+            <ToolbarButton
+              active={editor.isActive("italic")}
+              onClick={() => editor.chain().focus().toggleItalic().run()}
+              title="Italic (Ctrl+I)"
+            >
+              <Italic className="h-3.5 w-3.5" />
+            </ToolbarButton>
+            <ToolbarButton
+              active={editor.isActive("underline")}
+              onClick={() => editor.chain().focus().toggleUnderline().run()}
+              title="Underline (Ctrl+U)"
+            >
+              <UnderlineIcon className="h-3.5 w-3.5" />
+            </ToolbarButton>
+
+            {/* URL / Link Popover */}
+            <div className="relative shrink-0" ref={linkMenuRef}>
+              <ToolbarButton
+                active={editor.isActive("link")}
+                onClick={() => {
+                  const currentHref = editor.getAttributes("link").href || "";
+                  setLinkUrl(currentHref);
+                  setShowLinkPopover(!showLinkPopover);
+                }}
+                title="Insert or Edit Link (URL)"
+              >
+                <Link2 className="h-3.5 w-3.5" />
+              </ToolbarButton>
+
+              {showLinkPopover && (
+                <div className="absolute left-0 top-10 z-50 w-72 rounded-2xl border border-border bg-white p-3 shadow-xl animate-in fade-in">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-text-tertiary mb-2">
+                    Enter Web Address (URL)
+                  </p>
+                  <div className="flex gap-1.5">
+                    <input
+                      type="url"
+                      autoFocus
+                      placeholder="https://example.com"
+                      value={linkUrl}
+                      onChange={(e) => setLinkUrl(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleApplyLink();
+                        if (e.key === "Escape") setShowLinkPopover(false);
+                      }}
+                      className="flex-1 rounded-lg border border-border bg-surface-dim px-2.5 py-1.5 text-xs text-navy focus:border-brand focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleApplyLink}
+                      className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand text-navy hover:bg-brand-hover hover:text-white transition"
+                      title="Apply URL"
+                    >
+                      <Check className="h-3.5 w-3.5" />
+                    </button>
+                    {editor.isActive("link") && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          editor.chain().focus().unsetLink().run();
+                          setShowLinkPopover(false);
+                        }}
+                        className="flex h-8 w-8 items-center justify-center rounded-lg border border-border text-red-500 hover:bg-red-50 transition"
+                        title="Remove Link"
+                      >
+                        <Unlink className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           <Divider />

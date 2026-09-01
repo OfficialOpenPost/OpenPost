@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useOpenPostEditor } from "@/components/editor/useOpenPostEditor";
 import { EditorContent } from "@tiptap/react";
@@ -34,6 +34,7 @@ import {
   Share2,
   ExternalLink,
   Plus,
+  Loader2,
 } from "lucide-react";
 import { InsertMenu } from "@/components/editor/InsertMenu";
 import Link from "next/link";
@@ -42,7 +43,7 @@ interface EditorPageProps {
   initialBlogId?: string;
 }
 
-export default function EditorPage({ initialBlogId }: EditorPageProps) {
+function EditorInner({ initialBlogId }: EditorPageProps) {
   const searchParams = useSearchParams();
   const queryId = searchParams?.get("id");
   const effectiveId = initialBlogId || queryId || null;
@@ -499,7 +500,7 @@ export default function EditorPage({ initialBlogId }: EditorPageProps) {
             {/* TAB: FEATURED COVER */}
             {activeTab === "featured" && (
               <div>
-                <FeaturedImagePicker value={featuredImage} onChange={setFeaturedImage} />
+                <FeaturedImagePicker imageUrl={featuredImage} onChange={setFeaturedImage} />
               </div>
             )}
 
@@ -537,7 +538,7 @@ export default function EditorPage({ initialBlogId }: EditorPageProps) {
         {/* Resizer Handle */}
         <div
           onMouseDown={handleMouseDown}
-          className={`hidden lg:block w-1 hover:w-1.5 bg-border hover:bg-brand cursor-col-resize fixed left-[${sidebarWidth}px] top-16 bottom-0 z-20 transition-colors`}
+          className="hidden lg:block w-1 hover:w-1.5 bg-border hover:bg-brand cursor-col-resize fixed top-16 bottom-0 z-20 transition-colors"
           style={{ left: `${sidebarWidth}px` }}
         />
 
@@ -572,5 +573,22 @@ export default function EditorPage({ initialBlogId }: EditorPageProps) {
         </main>
       </div>
     </div>
+  );
+}
+
+export default function EditorPage(props: EditorPageProps) {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex h-screen w-full items-center justify-center bg-white text-navy">
+          <div className="flex items-center gap-2 text-sm font-bold">
+            <Loader2 className="h-5 w-5 animate-spin text-brand" />
+            Loading Writing Studio...
+          </div>
+        </div>
+      }
+    >
+      <EditorInner {...props} />
+    </Suspense>
   );
 }

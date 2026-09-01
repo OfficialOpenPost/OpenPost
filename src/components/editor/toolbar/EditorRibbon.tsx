@@ -213,17 +213,17 @@ export function EditorRibbon({
   return (
     <div
       ref={menuContainerRef}
-      className="w-full rounded-2xl border border-border bg-white shadow-xs select-none transition-all text-navy"
+      className="w-full rounded-2xl border border-border bg-white shadow-sm select-none transition-all text-navy"
     >
       {/* TIER 1: WORD-STYLE TOP MENU BAR (File, Edit, Insert, Format, View, Tools) */}
-      <div className="flex items-center gap-1 px-3 py-1 border-b border-border/80 text-xs font-semibold bg-[#F9FAFB] rounded-t-2xl">
+      <div className="flex items-center gap-1 px-3.5 py-1.5 border-b border-border/70 text-xs font-bold bg-[#F8FAFC] rounded-t-2xl">
         {/* FILE MENU */}
         <div className="relative">
           <button
             type="button"
             onClick={() => setActiveMenu(activeMenu === "file" ? null : "file")}
-            className={`px-2.5 py-1 rounded-md transition ${
-              activeMenu === "file" ? "bg-navy text-white" : "text-text-secondary hover:bg-surface-raised hover:text-navy"
+            className={`px-3 py-1 rounded-lg transition ${
+              activeMenu === "file" ? "bg-navy text-white shadow-xs" : "text-text-secondary hover:bg-surface-raised hover:text-navy"
             }`}
           >
             File

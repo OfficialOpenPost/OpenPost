@@ -399,20 +399,20 @@ function EditorInner({ initialBlogId }: EditorPageProps) {
           style={{ marginRight: showSidebar ? `${sidebarWidth}px` : "0" }}
         >
           {/* Central Document Paper Card — Fixed size, ONLY internal content scrolls */}
-          <div className="w-full max-w-[920px] 2xl:max-w-[1020px] h-full flex flex-col bg-white rounded-2xl border border-border shadow-sm overflow-hidden relative transition-all min-h-0">
+          <div className="w-full max-w-[940px] 2xl:max-w-[1040px] h-full flex flex-col bg-white rounded-2xl border border-slate-200/90 shadow-[0_4px_24px_rgba(0,0,0,0.05)] overflow-hidden relative transition-all min-h-0">
             {/* Title Section (Fixed at top of paper card) */}
-            <div className="px-6 sm:px-12 pt-6 pb-3 shrink-0 border-b border-border/40 bg-white">
+            <div className="px-8 sm:px-14 pt-7 pb-4 shrink-0 border-b border-slate-100 bg-white">
               <input
                 type="text"
                 placeholder="Article Title..."
                 value={title}
                 onChange={(e) => handleTitleChange(e.target.value)}
-                className="w-full text-2xl sm:text-4xl font-black text-navy placeholder:text-text-tertiary focus:outline-none leading-tight tracking-tight bg-transparent"
+                className="w-full text-3xl sm:text-4xl font-extrabold text-navy placeholder:text-slate-300 focus:outline-none leading-tight tracking-tight bg-transparent"
               />
             </div>
 
             {/* Scrollable Document Canvas (ONLY the text/image content inside scrolls) */}
-            <div className="flex-1 overflow-y-auto overflow-x-hidden px-6 sm:px-12 py-6 relative select-text">
+            <div className="flex-1 overflow-y-auto overflow-x-hidden px-8 sm:px-14 py-8 relative select-text">
               {/* Dynamic Editor CSS Injection */}
               <style dangerouslySetInnerHTML={{ __html: EDITOR_STYLES }} />
 

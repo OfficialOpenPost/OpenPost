@@ -15,7 +15,7 @@ const securityHeaders = [
   },
   {
     key: "X-Frame-Options",
-    value: "DENY",
+    value: "SAMEORIGIN",
   },
   {
     key: "X-XSS-Protection",
@@ -29,6 +29,12 @@ const securityHeaders = [
     key: "Permissions-Policy",
     value: "camera=(), microphone=(), geolocation=()",
   },
+];
+
+const corsHeaders = [
+  { key: "Access-Control-Allow-Origin", value: "*" },
+  { key: "Access-Control-Allow-Methods", value: "GET, POST, PUT, DELETE, OPTIONS" },
+  { key: "Access-Control-Allow-Headers", value: "Content-Type, Authorization, X-Requested-With, X-OpenPost-Token" },
 ];
 
 const nextConfig: NextConfig = {
@@ -60,9 +66,10 @@ const nextConfig: NextConfig = {
         headers: securityHeaders,
       },
       {
-        source: "/api/v1/(.*)",
+        source: "/api/v1/:path*",
         headers: [
           ...securityHeaders,
+          ...corsHeaders,
           {
             key: "Cache-Control",
             value: "public, s-maxage=60, stale-while-revalidate=300",
@@ -79,11 +86,8 @@ const nextConfig: NextConfig = {
           },
         ],
       },
-
     ];
   },
-
-
 };
 
 export default nextConfig;

@@ -216,14 +216,14 @@ export function EditorRibbon({
       className="w-full rounded-2xl border border-border bg-white shadow-sm select-none transition-all text-navy"
     >
       {/* TIER 1: WORD-STYLE TOP MENU BAR (File, Edit, Insert, Format, View, Tools) */}
-      <div className="flex items-center gap-1 px-3.5 py-1.5 border-b border-border/70 text-xs font-bold bg-[#F8FAFC] rounded-t-2xl">
+      <div className="flex items-center gap-1.5 px-3.5 py-1.5 border-b border-border/80 text-xs font-bold bg-[#F8FAFC] rounded-t-2xl">
         {/* FILE MENU */}
         <div className="relative">
           <button
             type="button"
             onClick={() => setActiveMenu(activeMenu === "file" ? null : "file")}
             className={`px-3 py-1 rounded-lg transition ${
-              activeMenu === "file" ? "bg-navy text-white shadow-xs" : "text-text-secondary hover:bg-surface-raised hover:text-navy"
+              activeMenu === "file" ? "bg-navy text-white shadow-xs font-bold" : "text-slate-700 hover:bg-white hover:text-navy hover:shadow-xs"
             }`}
           >
             File
@@ -270,8 +270,8 @@ export function EditorRibbon({
           <button
             type="button"
             onClick={() => setActiveMenu(activeMenu === "edit" ? null : "edit")}
-            className={`px-2.5 py-1 rounded-md transition ${
-              activeMenu === "edit" ? "bg-navy text-white" : "text-text-secondary hover:bg-surface-raised hover:text-navy"
+            className={`px-3 py-1 rounded-lg transition ${
+              activeMenu === "edit" ? "bg-navy text-white shadow-xs font-bold" : "text-slate-700 hover:bg-white hover:text-navy hover:shadow-xs"
             }`}
           >
             Edit
@@ -342,8 +342,8 @@ export function EditorRibbon({
           <button
             type="button"
             onClick={() => setActiveMenu(activeMenu === "insert" ? null : "insert")}
-            className={`px-2.5 py-1 rounded-md transition ${
-              activeMenu === "insert" ? "bg-navy text-white" : "text-text-secondary hover:bg-surface-raised hover:text-navy"
+            className={`px-3 py-1 rounded-lg transition ${
+              activeMenu === "insert" ? "bg-navy text-white shadow-xs font-bold" : "text-slate-700 hover:bg-white hover:text-navy hover:shadow-xs"
             }`}
           >
             Insert
@@ -440,8 +440,8 @@ export function EditorRibbon({
           <button
             type="button"
             onClick={() => setActiveMenu(activeMenu === "view" ? null : "view")}
-            className={`px-2.5 py-1 rounded-md transition ${
-              activeMenu === "view" ? "bg-navy text-white" : "text-text-secondary hover:bg-surface-raised hover:text-navy"
+            className={`px-3 py-1 rounded-lg transition ${
+              activeMenu === "view" ? "bg-navy text-white shadow-xs font-bold" : "text-slate-700 hover:bg-white hover:text-navy hover:shadow-xs"
             }`}
           >
             View
@@ -490,45 +490,43 @@ export function EditorRibbon({
         <button
           type="button"
           onClick={onOpenFindReplace}
-          className="ml-auto inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs text-text-secondary hover:bg-surface-raised transition"
+          className="ml-auto inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-white hover:text-navy hover:shadow-xs transition"
           title="Find & Replace (Ctrl+F)"
         >
-          <Search className="h-3.5 w-3.5" />
+          <Search className="h-3.5 w-3.5 text-brand" />
           <span className="hidden sm:inline">Find</span>
-          <kbd className="hidden md:inline rounded bg-surface-overlay px-1.5 py-0.5 font-mono text-[9px] text-text-tertiary">
-            ⌘F
+          <kbd className="hidden md:inline rounded bg-slate-200/80 px-1.5 py-0.5 font-mono text-[9px] text-slate-700">
+            Ctrl+F
           </kbd>
         </button>
       </div>
 
-      {/* TIER 2: PRIMARY RIBBON ACTION BAR (Formatting, Typography, Paragraph, Insert) */}
-      <div className="flex flex-wrap items-center gap-1 p-2 overflow-x-auto text-navy">
-        {/* Undo / Redo */}
-        <div className="flex items-center gap-0.5">
+      {/* TIER 2: PRIMARY RIBBON ACTION BAR (Segmented Tool Cards) */}
+      <div className="flex flex-wrap items-center gap-2 p-2 overflow-x-auto text-navy">
+        {/* Card 1: Undo / Redo */}
+        <div className="flex items-center gap-0.5 bg-[#F8FAFC] border border-border/80 rounded-xl p-1 shadow-2xs">
           <button
             type="button"
             onClick={() => editor.chain().focus().undo().run()}
             disabled={!editor.can().undo()}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-navy hover:bg-surface-raised disabled:opacity-30 transition"
+            className="flex h-7 w-7 items-center justify-center rounded-lg text-navy hover:bg-white hover:shadow-xs disabled:opacity-30 transition"
             title="Undo (Ctrl+Z)"
           >
-            <Undo2 className="h-4 w-4" />
+            <Undo2 className="h-3.5 w-3.5" />
           </button>
           <button
             type="button"
             onClick={() => editor.chain().focus().redo().run()}
             disabled={!editor.can().redo()}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-navy hover:bg-surface-raised disabled:opacity-30 transition"
+            className="flex h-7 w-7 items-center justify-center rounded-lg text-navy hover:bg-white hover:shadow-xs disabled:opacity-30 transition"
             title="Redo (Ctrl+Y)"
           >
-            <Redo2 className="h-4 w-4" />
+            <Redo2 className="h-3.5 w-3.5" />
           </button>
         </div>
 
-        <div className="mx-1 h-5 w-px bg-border shrink-0" />
-
-        {/* Heading Dropdown */}
-        <div className="relative">
+        {/* Card 2: Typography (Headings, Font Family, Font Size) */}
+        <div className="flex items-center gap-1 bg-[#F8FAFC] border border-border/80 rounded-xl p-1 shadow-2xs">
           <select
             value={
               editor.isActive("heading", { level: 1 })
@@ -555,7 +553,7 @@ export function EditorRibbon({
               if (val === "quote") editor.chain().focus().toggleBlockquote().run();
               if (val === "code") editor.chain().focus().toggleCodeBlock().run();
             }}
-            className="h-8 rounded-lg border border-border bg-surface px-2.5 text-xs font-bold text-navy focus:border-brand focus:outline-none cursor-pointer"
+            className="h-7 rounded-lg border border-border/80 bg-white px-2 text-xs font-bold text-navy focus:border-brand focus:outline-none cursor-pointer shadow-2xs"
           >
             <option value="p">Normal Text</option>
             <option value="h1">Heading 1</option>
@@ -565,17 +563,13 @@ export function EditorRibbon({
             <option value="quote">Quote</option>
             <option value="code">Code Block</option>
           </select>
-        </div>
-
-        {/* Font Family Dropdown */}
-        <div className="relative hidden sm:block">
           <select
             onChange={(e) => {
               const val = e.target.value;
               if (!val) (editor.chain().focus() as any).unsetFontFamily?.().run();
               else (editor.chain().focus() as any).setFontFamily?.(val).run();
             }}
-            className="h-8 rounded-lg border border-border bg-surface px-2 text-xs text-navy focus:border-brand focus:outline-none cursor-pointer max-w-[110px]"
+            className="h-7 rounded-lg border border-border/80 bg-white px-2 text-xs text-navy focus:border-brand focus:outline-none cursor-pointer hidden sm:block max-w-[105px] shadow-2xs"
           >
             {FONT_FAMILIES.map((f) => (
               <option key={f.label} value={f.value}>
@@ -583,156 +577,149 @@ export function EditorRibbon({
               </option>
             ))}
           </select>
+          <div className="flex items-center gap-0.5 hidden md:flex">
+            <button
+              type="button"
+              onClick={() => changeFontSizeStep(-2)}
+              title="Decrease Font Size (A−)"
+              className="flex h-7 w-6 items-center justify-center rounded-lg border border-border/80 bg-white text-xs font-bold text-navy hover:bg-surface-raised shadow-2xs"
+            >
+              A−
+            </button>
+            <select
+              value={currentFontSizeStr}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (!val) (editor.chain().focus() as any).unsetFontSize?.().run();
+                else (editor.chain().focus() as any).setFontSize?.(val).run();
+              }}
+              className="h-7 rounded-lg border border-border/80 bg-white px-1.5 text-xs font-mono text-navy focus:border-brand focus:outline-none cursor-pointer shadow-2xs"
+            >
+              {FONT_SIZES.map((sz) => (
+                <option key={sz.value} value={sz.value}>
+                  {sz.label}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => changeFontSizeStep(2)}
+              title="Increase Font Size (A+)"
+              className="flex h-7 w-6 items-center justify-center rounded-lg border border-border/80 bg-white text-xs font-bold text-navy hover:bg-surface-raised shadow-2xs"
+            >
+              A+
+            </button>
+          </div>
         </div>
 
-        {/* Font Size Stepper & Dropdown */}
-        <div className="flex items-center gap-0.5 hidden md:flex">
-          <button
-            type="button"
-            onClick={() => changeFontSizeStep(-2)}
-            title="Decrease Font Size (A−)"
-            className="flex h-8 w-7 items-center justify-center rounded-lg border border-border bg-surface text-xs font-bold text-navy hover:bg-surface-raised"
-          >
-            A−
-          </button>
-          <select
-            value={currentFontSizeStr}
-            onChange={(e) => {
-              const val = e.target.value;
-              if (!val) (editor.chain().focus() as any).unsetFontSize?.().run();
-              else (editor.chain().focus() as any).setFontSize?.(val).run();
-            }}
-            className="h-8 rounded-lg border border-border bg-surface px-1.5 text-xs font-mono text-navy focus:border-brand focus:outline-none cursor-pointer"
-          >
-            {FONT_SIZES.map((sz) => (
-              <option key={sz.value} value={sz.value}>
-                {sz.label}
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            onClick={() => changeFontSizeStep(2)}
-            title="Increase Font Size (A+)"
-            className="flex h-8 w-7 items-center justify-center rounded-lg border border-border bg-surface text-xs font-bold text-navy hover:bg-surface-raised"
-          >
-            A+
-          </button>
-        </div>
-
-        <div className="mx-1 h-5 w-px bg-border shrink-0" />
-
-        {/* Basic Text Formatting: B, I, U, S, X2, X1, Tx */}
-        <div className="flex items-center gap-0.5">
+        {/* Card 3: Formatting (B, I, U, S, Code, Tx) */}
+        <div className="flex items-center gap-0.5 bg-[#F8FAFC] border border-border/80 rounded-xl p-1 shadow-2xs">
           <button
             type="button"
             onClick={() => editor.chain().focus().toggleBold().run()}
-            className={`flex h-8 w-8 items-center justify-center rounded-lg text-xs transition ${
+            className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs transition ${
               editor.isActive("bold")
                 ? "bg-brand text-navy font-bold shadow-xs"
-                : "text-navy hover:bg-surface-raised"
+                : "text-navy hover:bg-white hover:shadow-xs"
             }`}
             title="Bold (Ctrl+B)"
           >
-            <Bold className="h-4 w-4" />
+            <Bold className="h-3.5 w-3.5" />
           </button>
           <button
             type="button"
             onClick={() => editor.chain().focus().toggleItalic().run()}
-            className={`flex h-8 w-8 items-center justify-center rounded-lg text-xs transition ${
+            className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs transition ${
               editor.isActive("italic")
                 ? "bg-brand text-navy font-bold shadow-xs"
-                : "text-navy hover:bg-surface-raised"
+                : "text-navy hover:bg-white hover:shadow-xs"
             }`}
             title="Italic (Ctrl+I)"
           >
-            <Italic className="h-4 w-4" />
+            <Italic className="h-3.5 w-3.5" />
           </button>
           <button
             type="button"
             onClick={() => editor.chain().focus().toggleUnderline().run()}
-            className={`flex h-8 w-8 items-center justify-center rounded-lg text-xs transition ${
+            className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs transition ${
               editor.isActive("underline")
                 ? "bg-brand text-navy font-bold shadow-xs"
-                : "text-navy hover:bg-surface-raised"
+                : "text-navy hover:bg-white hover:shadow-xs"
             }`}
             title="Underline (Ctrl+U)"
           >
-            <UnderlineIcon className="h-4 w-4" />
+            <UnderlineIcon className="h-3.5 w-3.5" />
           </button>
           <button
             type="button"
             onClick={() => editor.chain().focus().toggleStrike().run()}
-            className={`flex h-8 w-8 items-center justify-center rounded-lg text-xs transition ${
+            className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs transition ${
               editor.isActive("strike")
                 ? "bg-brand text-navy font-bold shadow-xs"
-                : "text-navy hover:bg-surface-raised"
+                : "text-navy hover:bg-white hover:shadow-xs"
             }`}
             title="Strikethrough"
           >
-            <Strikethrough className="h-4 w-4" />
+            <Strikethrough className="h-3.5 w-3.5" />
           </button>
           <button
             type="button"
             onClick={() => (editor.chain().focus() as any).toggleSuperscript?.().run()}
-            className={`flex h-8 w-8 items-center justify-center rounded-lg text-xs transition hidden lg:flex ${
+            className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs transition hidden lg:flex ${
               editor.isActive("superscript")
                 ? "bg-brand text-navy font-bold shadow-xs"
-                : "text-navy hover:bg-surface-raised"
+                : "text-navy hover:bg-white hover:shadow-xs"
             }`}
             title="Superscript (X²)"
           >
-            <span className="font-mono text-xs font-bold">X²</span>
+            <span className="font-mono text-[11px] font-bold">X²</span>
           </button>
           <button
             type="button"
             onClick={() => (editor.chain().focus() as any).toggleSubscript?.().run()}
-            className={`flex h-8 w-8 items-center justify-center rounded-lg text-xs transition hidden lg:flex ${
+            className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs transition hidden lg:flex ${
               editor.isActive("subscript")
                 ? "bg-brand text-navy font-bold shadow-xs"
-                : "text-navy hover:bg-surface-raised"
+                : "text-navy hover:bg-white hover:shadow-xs"
             }`}
             title="Subscript (X₁)"
           >
-            <span className="font-mono text-xs font-bold">X₁</span>
+            <span className="font-mono text-[11px] font-bold">X₁</span>
           </button>
           <button
             type="button"
             onClick={() => editor.chain().focus().toggleCode().run()}
-            className={`flex h-8 w-8 items-center justify-center rounded-lg text-xs transition ${
+            className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs transition ${
               editor.isActive("code")
                 ? "bg-brand text-navy font-bold shadow-xs"
-                : "text-navy hover:bg-surface-raised"
+                : "text-navy hover:bg-white hover:shadow-xs"
             }`}
             title="Inline Code"
           >
-            <CodeIcon className="h-4 w-4" />
+            <CodeIcon className="h-3.5 w-3.5" />
           </button>
           <button
             type="button"
             onClick={() => editor.chain().focus().unsetAllMarks().clearNodes().run()}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-xs text-navy hover:bg-surface-raised transition"
+            className="flex h-7 w-7 items-center justify-center rounded-lg text-xs text-navy hover:bg-white hover:shadow-xs transition"
             title="Clear Formatting (Tx)"
           >
-            <RemoveFormatting className="h-4 w-4 text-text-tertiary" />
+            <RemoveFormatting className="h-3.5 w-3.5 text-text-tertiary" />
           </button>
         </div>
 
-        <div className="mx-1 h-5 w-px bg-border shrink-0" />
-
-        {/* Text Color & Highlight Color Pickers */}
-        <div className="flex items-center gap-0.5">
-          {/* Text Color */}
+        {/* Card 4: Colors (Text & Highlight) */}
+        <div className="flex items-center gap-0.5 bg-[#F8FAFC] border border-border/80 rounded-xl p-1 shadow-2xs">
           <div className="relative">
             <button
               type="button"
               onClick={() => setShowTextColorPicker(!showTextColorPicker)}
-              className="flex h-8 w-8 flex-col items-center justify-center rounded-lg text-navy hover:bg-surface-raised transition"
+              className="flex h-7 w-7 flex-col items-center justify-center rounded-lg text-navy hover:bg-white hover:shadow-xs transition"
               title="Text Color"
             >
               <Baseline className="h-3.5 w-3.5" />
               <div
-                className="h-1 w-4 rounded-full mt-0.5"
+                className="h-1 w-3.5 rounded-full mt-0.5"
                 style={{ backgroundColor: editor.getAttributes("textStyle").color || "#FEA611" }}
               />
             </button>
@@ -747,19 +734,15 @@ export function EditorRibbon({
               }}
             />
           </div>
-
-          {/* Highlight Color */}
           <div className="relative">
             <button
               type="button"
               onClick={() => setShowHighlightColorPicker(!showHighlightColorPicker)}
-              className="flex h-8 w-8 flex-col items-center justify-center rounded-lg text-navy hover:bg-surface-raised transition"
+              className="flex h-7 w-7 flex-col items-center justify-center rounded-lg text-navy hover:bg-white hover:shadow-xs transition"
               title="Highlight Color"
             >
               <Highlighter className="h-3.5 w-3.5" />
-              <div
-                className="h-1 w-4 rounded-full mt-0.5 bg-brand"
-              />
+              <div className="h-1 w-3.5 rounded-full mt-0.5 bg-brand" />
             </button>
             <ColorPickerPopover
               isOpen={showHighlightColorPicker}
@@ -774,214 +757,202 @@ export function EditorRibbon({
           </div>
         </div>
 
-        <div className="mx-1 h-5 w-px bg-border shrink-0" />
-
-        {/* Alignment (Text & Floating Image) */}
-        <div className="flex items-center gap-0.5">
+        {/* Card 5: Alignments */}
+        <div className="flex items-center gap-0.5 bg-[#F8FAFC] border border-border/80 rounded-xl p-1 shadow-2xs">
           <button
             type="button"
             onClick={() => handleAlign("left")}
-            className={`flex h-8 w-8 items-center justify-center rounded-lg text-xs transition ${
+            className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs transition ${
               isLeftActive
                 ? "bg-brand text-navy font-bold shadow-xs"
-                : "text-navy hover:bg-surface-raised"
+                : "text-navy hover:bg-white hover:shadow-xs"
             }`}
-            title={isImageSelected ? "Float Left (Wrap text on right)" : "Align Left (Ctrl+L)"}
+            title="Align Left (Ctrl+L)"
           >
-            <AlignLeft className="h-4 w-4" />
+            <AlignLeft className="h-3.5 w-3.5" />
           </button>
           <button
             type="button"
             onClick={() => handleAlign("center")}
-            className={`flex h-8 w-8 items-center justify-center rounded-lg text-xs transition ${
+            className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs transition ${
               isCenterActive
                 ? "bg-brand text-navy font-bold shadow-xs"
-                : "text-navy hover:bg-surface-raised"
+                : "text-navy hover:bg-white hover:shadow-xs"
             }`}
-            title={isImageSelected ? "Center (Break text top/bottom)" : "Align Center (Ctrl+E)"}
+            title="Align Center (Ctrl+E)"
           >
-            <AlignCenter className="h-4 w-4" />
+            <AlignCenter className="h-3.5 w-3.5" />
           </button>
           <button
             type="button"
             onClick={() => handleAlign("right")}
-            className={`flex h-8 w-8 items-center justify-center rounded-lg text-xs transition ${
+            className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs transition ${
               isRightActive
                 ? "bg-brand text-navy font-bold shadow-xs"
-                : "text-navy hover:bg-surface-raised"
+                : "text-navy hover:bg-white hover:shadow-xs"
             }`}
-            title={isImageSelected ? "Float Right (Wrap text on left)" : "Align Right (Ctrl+R)"}
+            title="Align Right (Ctrl+R)"
           >
-            <AlignRight className="h-4 w-4" />
+            <AlignRight className="h-3.5 w-3.5" />
           </button>
           <button
             type="button"
             onClick={() => handleAlign("justify")}
-            className={`flex h-8 w-8 items-center justify-center rounded-lg text-xs transition hidden sm:flex ${
+            className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs transition hidden sm:flex ${
               isJustifyActive
                 ? "bg-brand text-navy font-bold shadow-xs"
-                : "text-navy hover:bg-surface-raised"
+                : "text-navy hover:bg-white hover:shadow-xs"
             }`}
-            title={isImageSelected ? "Full Width (Breakout)" : "Justify (Ctrl+J)"}
+            title="Justify (Ctrl+J)"
           >
-            <AlignJustify className="h-4 w-4" />
+            <AlignJustify className="h-3.5 w-3.5" />
           </button>
         </div>
 
-        <div className="mx-1 h-5 w-px bg-border shrink-0" />
-
-        {/* Lists & Indent */}
-        <div className="flex items-center gap-0.5">
+        {/* Card 6: Lists & Tasks */}
+        <div className="flex items-center gap-0.5 bg-[#F8FAFC] border border-border/80 rounded-xl p-1 shadow-2xs">
           <button
             type="button"
             onClick={() => editor.chain().focus().toggleBulletList().run()}
-            className={`flex h-8 w-8 items-center justify-center rounded-lg text-xs transition ${
+            className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs transition ${
               editor.isActive("bulletList")
                 ? "bg-brand text-navy font-bold shadow-xs"
-                : "text-navy hover:bg-surface-raised"
+                : "text-navy hover:bg-white hover:shadow-xs"
             }`}
             title="Bullet List"
           >
-            <List className="h-4 w-4" />
+            <List className="h-3.5 w-3.5" />
           </button>
           <button
             type="button"
             onClick={() => editor.chain().focus().toggleOrderedList().run()}
-            className={`flex h-8 w-8 items-center justify-center rounded-lg text-xs transition ${
+            className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs transition ${
               editor.isActive("orderedList")
                 ? "bg-brand text-navy font-bold shadow-xs"
-                : "text-navy hover:bg-surface-raised"
+                : "text-navy hover:bg-white hover:shadow-xs"
             }`}
             title="Numbered List"
           >
-            <ListOrdered className="h-4 w-4" />
+            <ListOrdered className="h-3.5 w-3.5" />
           </button>
           <button
             type="button"
             onClick={() => editor.chain().focus().toggleTaskList().run()}
-            className={`flex h-8 w-8 items-center justify-center rounded-lg text-xs transition hidden md:flex ${
+            className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs transition hidden md:flex ${
               editor.isActive("taskList")
                 ? "bg-brand text-navy font-bold shadow-xs"
-                : "text-navy hover:bg-surface-raised"
+                : "text-navy hover:bg-white hover:shadow-xs"
             }`}
             title="Task / Checklist"
           >
-            <ListChecks className="h-4 w-4" />
+            <ListChecks className="h-3.5 w-3.5" />
           </button>
           <button
             type="button"
             onClick={() => editor.chain().focus().sinkListItem("listItem").run()}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-xs text-navy hover:bg-surface-raised transition hidden lg:flex"
+            className="flex h-7 w-7 items-center justify-center rounded-lg text-xs text-navy hover:bg-white hover:shadow-xs transition hidden lg:flex"
             title="Indent (Tab)"
           >
-            <Indent className="h-4 w-4" />
+            <Indent className="h-3.5 w-3.5" />
           </button>
           <button
             type="button"
             onClick={() => editor.chain().focus().liftListItem("listItem").run()}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-xs text-navy hover:bg-surface-raised transition hidden lg:flex"
+            className="flex h-7 w-7 items-center justify-center rounded-lg text-xs text-navy hover:bg-white hover:shadow-xs transition hidden lg:flex"
             title="Outdent (Shift+Tab)"
           >
-            <Outdent className="h-4 w-4" />
+            <Outdent className="h-3.5 w-3.5" />
           </button>
         </div>
 
-        <div className="mx-1 h-5 w-px bg-border shrink-0" />
-
-        {/* Hyperlink Popover */}
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => {
-              setLinkUrl(editor.getAttributes("link").href || "");
-              setShowLinkPopover(!showLinkPopover);
-            }}
-            className={`flex h-8 w-8 items-center justify-center rounded-lg text-xs transition ${
-              editor.isActive("link")
-                ? "bg-brand text-navy font-bold shadow-xs"
-                : "text-navy hover:bg-surface-raised"
-            }`}
-            title="Insert Link (Ctrl+K)"
-          >
-            <Link2 className="h-4 w-4" />
-          </button>
-
-          {showLinkPopover && (
-            <div className="absolute top-full left-0 mt-1 z-50 w-72 rounded-xl border border-border bg-white p-3 shadow-2xl text-xs text-navy">
-              <span className="font-bold text-navy mb-1.5 block">Insert Hyperlink</span>
-              <input
-                type="url"
-                autoFocus
-                placeholder="https://example.com"
-                value={linkUrl}
-                onChange={(e) => setLinkUrl(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") handleApplyLink();
-                  if (e.key === "Escape") setShowLinkPopover(false);
-                }}
-                className="w-full rounded-lg border border-border bg-surface-raised px-2.5 py-1.5 text-xs text-navy focus:border-brand focus:outline-none"
-              />
-              <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-border">
-                <label className="flex items-center gap-1.5 text-[11px] text-text-secondary cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={openInNewTab}
-                    onChange={(e) => setOpenInNewTab(e.target.checked)}
-                    className="rounded text-brand"
-                  />
-                  Open in new tab
-                </label>
-                <div className="flex gap-1.5">
-                  {editor.isActive("link") && (
+        {/* Card 7: Insert Blocks & Media */}
+        <div className="flex items-center gap-1 bg-[#F8FAFC] border border-border/80 rounded-xl p-1 shadow-2xs">
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => {
+                setLinkUrl(editor.getAttributes("link").href || "");
+                setShowLinkPopover(!showLinkPopover);
+              }}
+              className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs transition ${
+                editor.isActive("link")
+                  ? "bg-brand text-navy font-bold shadow-xs"
+                  : "text-navy hover:bg-white hover:shadow-xs"
+              }`}
+              title="Insert Link (Ctrl+K)"
+            >
+              <Link2 className="h-3.5 w-3.5" />
+            </button>
+            {showLinkPopover && (
+              <div className="absolute top-full left-0 mt-1 z-50 w-72 rounded-xl border border-border bg-white p-3 shadow-2xl text-xs text-navy">
+                <span className="font-bold text-navy mb-1.5 block">Insert Hyperlink</span>
+                <input
+                  type="url"
+                  autoFocus
+                  placeholder="https://example.com"
+                  value={linkUrl}
+                  onChange={(e) => setLinkUrl(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleApplyLink();
+                    if (e.key === "Escape") setShowLinkPopover(false);
+                  }}
+                  className="w-full rounded-lg border border-border bg-surface-raised px-2.5 py-1.5 text-xs text-navy focus:border-brand focus:outline-none"
+                />
+                <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-border">
+                  <label className="flex items-center gap-1.5 text-[11px] text-text-secondary cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={openInNewTab}
+                      onChange={(e) => setOpenInNewTab(e.target.checked)}
+                      className="rounded text-brand"
+                    />
+                    Open in new tab
+                  </label>
+                  <div className="flex gap-1.5">
+                    {editor.isActive("link") && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          editor.chain().focus().unsetLink().run();
+                          setShowLinkPopover(false);
+                        }}
+                        className="rounded-lg border border-border px-2 py-1 text-[10px] font-semibold hover:bg-surface-raised"
+                      >
+                        Remove
+                      </button>
+                    )}
                     <button
                       type="button"
-                      onClick={() => {
-                        editor.chain().focus().unsetLink().run();
-                        setShowLinkPopover(false);
-                      }}
-                      className="rounded-lg border border-border px-2 py-1 text-[10px] font-semibold hover:bg-surface-raised"
+                      onClick={handleApplyLink}
+                      className="rounded-lg bg-brand px-3 py-1 font-bold text-navy text-[11px] hover:bg-brand-hover"
                     >
-                      Remove
+                      Apply
                     </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={handleApplyLink}
-                    className="rounded-lg bg-brand px-3 py-1 font-bold text-navy text-[11px] hover:bg-brand-hover"
-                  >
-                    Apply
-                  </button>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
-        </div>
-
-        {/* Primary Inserters (Image, Table Grid Matrix, Callout) */}
-        <div className="flex items-center gap-1">
+            )}
+          </div>
           <button
             type="button"
             onClick={() => setActiveModal("image")}
-            className="flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-bold text-navy hover:bg-surface-raised transition border border-border/80 shadow-2xs"
+            className="flex h-7 items-center gap-1 rounded-lg px-2 text-xs font-bold text-navy hover:bg-white hover:shadow-xs transition"
             title="Insert Floating Image"
           >
             <ImageIcon className="h-3.5 w-3.5 text-brand" />
             <span className="hidden sm:inline">Image</span>
           </button>
-
-          {/* Table Inserter with Interactive Hover Grid Matrix */}
           <div className="relative">
             <button
               type="button"
               onClick={() => setShowTableGridPicker(!showTableGridPicker)}
-              className="flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-bold text-navy hover:bg-surface-raised transition border border-border/80 shadow-2xs"
+              className="flex h-7 items-center gap-1 rounded-lg px-2 text-xs font-bold text-navy hover:bg-white hover:shadow-xs transition"
               title="Insert Table Grid Matrix"
             >
               <TableIcon className="h-3.5 w-3.5 text-brand" />
               <span className="hidden sm:inline">Table</span>
               <ChevronDown className="h-3 w-3 text-text-tertiary" />
             </button>
-
             {showTableGridPicker && (
               <div className="absolute top-full left-0 mt-1 z-50 rounded-2xl border border-border bg-white p-3 shadow-2xl text-xs text-navy">
                 <div className="flex items-center justify-between mb-2 pb-1.5 border-b border-border">
@@ -990,7 +961,6 @@ export function EditorRibbon({
                     {hoveredTableCols} × {hoveredTableRows}
                   </span>
                 </div>
-                {/* 10 x 8 Hover Matrix */}
                 <div className="grid grid-cols-10 gap-1 p-1 bg-surface-raised rounded-xl border border-border">
                   {Array.from({ length: 8 }).map((_, r) =>
                     Array.from({ length: 10 }).map((_, c) => {
@@ -1030,11 +1000,10 @@ export function EditorRibbon({
               </div>
             )}
           </div>
-
           <button
             type="button"
             onClick={() => setActiveModal("callout")}
-            className="flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-bold text-navy hover:bg-surface-raised transition border border-border/80 shadow-2xs hidden lg:flex"
+            className="flex h-7 items-center gap-1 rounded-lg px-2 text-xs font-bold text-navy hover:bg-white hover:shadow-xs transition hidden lg:flex"
             title="Insert Callout Card"
           >
             <Sparkles className="h-3.5 w-3.5 text-brand" />

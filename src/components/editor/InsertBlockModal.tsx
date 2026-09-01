@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import type { Editor } from "@tiptap/core";
 import {
   Image as ImageIcon,
@@ -53,6 +54,11 @@ export function InsertBlockModal({
   onClose,
   editor,
 }: InsertBlockModalProps) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
   // Image State
   const [imageTab, setImageTab] = useState<"upload" | "url" | "library">("upload");
   const [imageUrl, setImageUrl] = useState("");
@@ -277,9 +283,19 @@ export function InsertBlockModal({
     onClose();
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy/40 backdrop-blur-xs p-4 animate-in fade-in">
-      <div className="w-full max-w-lg rounded-2xl border border-border bg-white p-6 shadow-2xl animate-in zoom-in-95 text-navy">
+  if (!isOpen || !mounted || !type) return null;
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-navy/60 backdrop-blur-sm p-4 animate-in fade-in select-none"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div
+        className="w-full max-w-lg rounded-2xl border border-border bg-white p-6 shadow-2xl animate-in zoom-in-95 text-navy relative"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-border">
           <div className="flex items-center gap-2.5">
@@ -826,6 +842,7 @@ export function InsertBlockModal({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

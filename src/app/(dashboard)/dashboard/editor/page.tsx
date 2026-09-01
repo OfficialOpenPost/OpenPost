@@ -362,10 +362,10 @@ function EditorInner({ initialBlogId }: EditorPageProps) {
 
       {/* FIXED TOP OPTIONS NAVBAR (Directly below header, 100% fixed, always visible) */}
       <div
-        className="w-full shrink-0 border-b border-border bg-white/95 backdrop-blur-md px-3 sm:px-5 py-1.5 flex justify-center z-20 shadow-xs transition-all overflow-hidden"
+        className="w-full shrink-0 border-b border-border bg-white px-3 sm:px-5 py-1.5 flex justify-center z-20 shadow-xs transition-all relative"
         style={{ paddingRight: showSidebar ? `${sidebarWidth}px` : undefined }}
       >
-        <div className="w-full max-w-[920px] 2xl:max-w-[1020px]">
+        <div className="w-full max-w-[940px] 2xl:max-w-[1040px]">
           <EditorRibbon
             editor={editor}
             onOpenFindReplace={() => setShowFindReplace(true)}

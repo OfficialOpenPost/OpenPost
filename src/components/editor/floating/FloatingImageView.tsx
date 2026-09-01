@@ -396,16 +396,30 @@ export function FloatingImageView({
     wrapperStyle.textAlign = "center";
   }
 
+  const [isNearTop, setIsNearTop] = useState(false);
+
+  React.useEffect(() => {
+    if (selected && containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const parent = containerRef.current.closest(".overflow-y-auto");
+      if (parent) {
+        const parentRect = parent.getBoundingClientRect();
+        setIsNearTop(rect.top - parentRect.top < 64);
+      }
+    }
+  }, [selected]);
+
   // Determine Toolbar Orientation & Placement:
   // Float Right -> Vertical toolbar on the LEFT side of image
   // Float Left  -> Vertical toolbar on the RIGHT side of image
-  // Center/Wide -> Horizontal toolbar on TOP
+  // Center/Wide -> Horizontal toolbar on TOP (inside if near top boundary, outside if space allows)
   const isVertical = isLeft || isRight;
+  const horizontalTopClass = isNearTop ? "top-2.5" : "-top-12";
   const toolbarContainerClasses = isRight
-    ? "absolute top-0 -left-12 z-40 flex flex-col items-center gap-1 rounded-2xl border border-border/80 bg-[#1E293B]/95 p-1.5 shadow-2xl text-white backdrop-blur-md animate-in fade-in zoom-in-95 duration-150 select-none"
+    ? "absolute top-2 -left-12 z-40 flex flex-col items-center gap-1 rounded-2xl border border-border/80 bg-[#1E293B]/95 p-1.5 shadow-2xl text-white backdrop-blur-md animate-in fade-in zoom-in-95 duration-150 select-none"
     : isLeft
-    ? "absolute top-0 -right-12 z-40 flex flex-col items-center gap-1 rounded-2xl border border-border/80 bg-[#1E293B]/95 p-1.5 shadow-2xl text-white backdrop-blur-md animate-in fade-in zoom-in-95 duration-150 select-none"
-    : "absolute -top-12 left-1/2 -translate-x-1/2 z-40 flex flex-row items-center gap-1 rounded-2xl border border-border/80 bg-[#1E293B]/95 px-2 py-1 shadow-2xl text-white backdrop-blur-md whitespace-nowrap animate-in fade-in zoom-in-95 duration-150 select-none";
+    ? "absolute top-2 -right-12 z-40 flex flex-col items-center gap-1 rounded-2xl border border-border/80 bg-[#1E293B]/95 p-1.5 shadow-2xl text-white backdrop-blur-md animate-in fade-in zoom-in-95 duration-150 select-none"
+    : `absolute ${horizontalTopClass} left-1/2 -translate-x-1/2 z-40 flex flex-row items-center gap-1 rounded-2xl border border-border/80 bg-[#1E293B]/95 px-2 py-1 shadow-2xl text-white backdrop-blur-md whitespace-nowrap animate-in fade-in zoom-in-95 duration-150 select-none`;
 
   // Popover placement:
   // When vertical on Left side of image -> popover opens towards left (or right)
@@ -414,6 +428,8 @@ export function FloatingImageView({
     ? "absolute right-full mr-2 top-0 z-50"
     : isLeft
     ? "absolute left-full ml-2 top-0 z-50"
+    : isNearTop
+    ? "absolute top-10 left-1/2 -translate-x-1/2 z-50"
     : "absolute top-9 left-1/2 -translate-x-1/2 z-50";
 
   return (

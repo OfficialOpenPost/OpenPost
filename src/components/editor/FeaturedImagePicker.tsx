@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { Image as ImageIcon, X, Upload } from "lucide-react";
+import { useState, useRef } from "react";
+import { Image as ImageIcon, X, Upload, Loader2 } from "lucide-react";
+import { uploadImageWithWebP } from "@/lib/uploadMedia";
 
 interface FeaturedImagePickerProps {
   imageUrl: string | null;
@@ -10,6 +11,20 @@ interface FeaturedImagePickerProps {
 
 export function FeaturedImagePicker({ imageUrl, onChange }: FeaturedImagePickerProps) {
   const [urlInput, setUrlInput] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const handleFile = async (file: File) => {
+    setUploading(true);
+    try {
+      const { url } = await uploadImageWithWebP(file);
+      onChange(url);
+    } catch {
+      // fallback to prompt
+      const u = window.prompt("Upload failed — paste URL");
+      if (u) onChange(u);
+    } finally { setUploading(false); }
+  };
 
   return (
     <div className="space-y-3">
@@ -50,8 +65,9 @@ export function FeaturedImagePicker({ imageUrl, onChange }: FeaturedImagePickerP
               Set
             </button>
           </div>
-          <button className="w-full inline-flex items-center justify-center gap-2 rounded-full border border-border bg-white py-2 text-xs font-semibold hover:bg-surface-raised">
-            <Upload className="h-3.5 w-3.5" /> Media library
+          <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
+          <button onClick={() => fileRef.current?.click()} disabled={uploading} className="w-full inline-flex items-center justify-center gap-2 rounded-full border border-border bg-white py-2 text-xs font-semibold hover:bg-surface-raised disabled:opacity-50">
+            {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />} {uploading ? "Converting to WebP…" : "Upload (→ WebP) / Media library"}
           </button>
         </div>
       )}

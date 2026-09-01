@@ -22,6 +22,46 @@ export function useOpenPostEditor({ content = "", onChange, editable = true }: U
       attributes: {
         class: "tiptap min-h-[480px] px-8 py-8 md:px-12 focus:outline-none",
       },
+      handleDrop: (view, event) => {
+        const files = event.dataTransfer?.files;
+        if (files && files.length && files[0].type.startsWith("image/")) {
+          event.preventDefault();
+          (async () => {
+            try {
+              const { uploadImageWithWebP } = await import("@/lib/uploadMedia");
+              for (const f of Array.from(files)) {
+                const { url } = await uploadImageWithWebP(f as File);
+                // Insert at drop position
+                const pos = view.posAtCoords({ left: event.clientX, top: event.clientY })?.pos ?? view.state.selection.from;
+                view.dispatch(view.state.tr.insert(pos, view.state.schema.nodes.image.create({ src: url })));
+              }
+            } catch {}
+          })();
+          return true;
+        }
+        return false;
+      },
+      handlePaste: (view, event) => {
+        const items = event.clipboardData?.items;
+        if (!items) return false;
+        for (const item of Array.from(items)) {
+          if (item.type.startsWith("image/")) {
+            const file = item.getAsFile();
+            if (!file) continue;
+            event.preventDefault();
+            (async () => {
+              try {
+                const { uploadImageWithWebP } = await import("@/lib/uploadMedia");
+                const { url } = await uploadImageWithWebP(file);
+                const { state, dispatch } = view;
+                dispatch(state.tr.replaceSelectionWith(state.schema.nodes.image.create({ src: url })));
+              } catch {}
+            })();
+            return true;
+          }
+        }
+        return false;
+      },
     },
   });
 }

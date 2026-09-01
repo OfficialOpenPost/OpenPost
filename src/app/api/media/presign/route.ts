@@ -28,10 +28,10 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   const { filename, contentType, size } = body as { filename?: string; contentType?: string; size?: number };
 
-  // Validate server-side (never trust client)
-  const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+  // Validate server-side (never trust client) — after browser WebP conversion, almost everything is image/webp, but allow originals + svg for passthrough
+  const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/gif", "image/svg+xml", "image/avif", "application/pdf", "video/mp4"];
   if (!contentType || !allowedTypes.includes(contentType)) {
-    return NextResponse.json({ error: { code: "INVALID_TYPE", message: "Unsupported file type" } }, { status: 400 });
+    return NextResponse.json({ error: { code: "INVALID_TYPE", message: "Unsupported file type: " + contentType } }, { status: 400 });
   }
   if (!size || size > 25 * 1024 * 1024) {
     return NextResponse.json({ error: { code: "TOO_LARGE", message: "Max 25MB" } }, { status: 400 });

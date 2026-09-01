@@ -69,9 +69,24 @@ export function Toolbar({ editor }: ToolbarProps) {
 
   if (!editor) return null;
 
-  const addImage = () => {
-    const url = window.prompt("Enter image URL");
-    if (url) editor.chain().focus().setImage({ src: url }).run();
+  const addImage = async () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      // Try WebP upload, fallback to prompt URL
+      try {
+        const { uploadImageWithWebP } = await import("@/lib/uploadMedia");
+        const { url } = await uploadImageWithWebP(file);
+        editor.chain().focus().setImage({ src: url }).run();
+      } catch {
+        const url = window.prompt("Enter image URL (upload failed, paste URL)");
+        if (url) editor.chain().focus().setImage({ src: url }).run();
+      }
+    };
+    input.click();
   };
 
   const addLink = () => {

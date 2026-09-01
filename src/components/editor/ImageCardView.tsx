@@ -142,7 +142,16 @@ export function ImageCardView({
 
   const wrapperClass = `image-align-${layout}`;
 
-  // Preserve the user's width across any alignment!
+  // Inner margin alignment according to position within the document card
+  const innerMarginCls =
+    layout === "left"
+      ? "mr-auto ml-0"
+      : layout === "right"
+      ? "ml-auto mr-0"
+      : layout === "wide"
+      ? "w-full mx-0"
+      : "mx-auto"; // center
+
   const currentWidthVal = width || "100%";
   const widthStyle = { width: currentWidthVal, maxWidth: "100%" };
 
@@ -152,7 +161,7 @@ export function ImageCardView({
       data-drag-handle
     >
       <div
-        className={`group relative rounded-2xl border bg-white shadow-xs transition select-none ${
+        className={`group relative rounded-2xl border bg-white shadow-xs transition select-none ${innerMarginCls} ${
           selected
             ? "border-brand ring-2 ring-brand/50"
             : "border-border hover:border-brand/40"

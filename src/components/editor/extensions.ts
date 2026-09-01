@@ -156,6 +156,11 @@ export const EDITOR_STYLES = `
   .tiptap {
     outline: none;
   }
+  .tiptap::after {
+    content: "";
+    display: table;
+    clear: both;
+  }
   .tiptap p.is-editor-empty:first-child::before {
     content: attr(data-placeholder);
     float: left;
@@ -242,43 +247,34 @@ export const EDITOR_STYLES = `
     background: rgba(254,166,17,0.25);
   }
 
-  /* Microsoft Word-style Image Float & Text Wrapping Rules */
-  .tiptap div[data-node-view-wrapper].image-align-left,
-  .tiptap .image-align-left {
+  /* Microsoft Word / Google Docs Card Margin Float Rules */
+  .tiptap div[data-node-view-wrapper].image-align-left {
     float: left !important;
-    margin: 0.5rem 1.75rem 1.25rem 0 !important;
+    margin: 0.35rem 2rem 1.25rem 0 !important;
     clear: none !important;
-    display: inline-block !important;
-  }
-
-  .tiptap div[data-node-view-wrapper].image-align-right,
-  .tiptap .image-align-right {
-    float: right !important;
-    margin: 0.5rem 0 1.25rem 1.75rem !important;
-    clear: none !important;
-    display: inline-block !important;
-  }
-
-  .tiptap div[data-node-view-wrapper].image-align-center,
-  .tiptap .image-align-center {
     display: block !important;
-    margin: 1.75rem auto !important;
-    clear: both !important;
   }
 
-  .tiptap div[data-node-view-wrapper].image-align-wide,
-  .tiptap .image-align-wide {
+  .tiptap div[data-node-view-wrapper].image-align-right {
+    float: right !important;
+    margin: 0.35rem 0 1.25rem 2rem !important;
+    clear: none !important;
+    display: block !important;
+  }
+
+  .tiptap div[data-node-view-wrapper].image-align-center {
+    display: block !important;
+    width: 100% !important;
+    margin: 2rem 0 !important;
+    clear: both !important;
+    float: none !important;
+  }
+
+  .tiptap div[data-node-view-wrapper].image-align-wide {
     display: block !important;
     width: 100% !important;
     margin: 2.25rem 0 !important;
     clear: both !important;
-  }
-
-  .tiptap div[data-node-view-wrapper].image-align-full,
-  .tiptap .image-align-full {
-    display: block !important;
-    width: 100% !important;
-    margin: 2.5rem 0 !important;
-    clear: both !important;
+    float: none !important;
   }
 `;

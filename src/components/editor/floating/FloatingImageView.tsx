@@ -409,28 +409,26 @@ export function FloatingImageView({
     }
   }, [selected]);
 
-  // Determine Toolbar Orientation & Placement:
-  // Float Right -> Vertical toolbar on the LEFT side of image
-  // Float Left  -> Vertical toolbar on the RIGHT side of image
-  // Center/Wide -> Horizontal toolbar on TOP (inside if near top boundary, outside if space allows)
+  // Determine Toolbar Orientation & Placement (ALWAYS OUTSIDE IMAGE):
+  // Float Right -> Vertical toolbar completely on the LEFT of the image (right-full mr-3.5)
+  // Float Left  -> Vertical toolbar completely on the RIGHT of the image (left-full ml-3.5)
+  // Center/Wide -> Horizontal toolbar completely ABOVE the image (-top-14)
   const isVertical = isLeft || isRight;
-  const horizontalTopClass = isNearTop ? "top-2.5" : "-top-12";
   const toolbarContainerClasses = isRight
-    ? "absolute top-2 -left-12 z-40 flex flex-col items-center gap-1 rounded-2xl border border-border/80 bg-[#1E293B]/95 p-1.5 shadow-2xl text-white backdrop-blur-md animate-in fade-in zoom-in-95 duration-150 select-none"
+    ? "absolute top-0 right-full mr-3.5 z-40 flex flex-col items-center gap-1.5 rounded-2xl border border-slate-700/80 bg-[#1E293B] p-2 shadow-2xl text-white backdrop-blur-md animate-in fade-in zoom-in-95 duration-150 select-none"
     : isLeft
-    ? "absolute top-2 -right-12 z-40 flex flex-col items-center gap-1 rounded-2xl border border-border/80 bg-[#1E293B]/95 p-1.5 shadow-2xl text-white backdrop-blur-md animate-in fade-in zoom-in-95 duration-150 select-none"
-    : `absolute ${horizontalTopClass} left-1/2 -translate-x-1/2 z-40 flex flex-row items-center gap-1 rounded-2xl border border-border/80 bg-[#1E293B]/95 px-2 py-1 shadow-2xl text-white backdrop-blur-md whitespace-nowrap animate-in fade-in zoom-in-95 duration-150 select-none`;
+    ? "absolute top-0 left-full ml-3.5 z-40 flex flex-col items-center gap-1.5 rounded-2xl border border-slate-700/80 bg-[#1E293B] p-2 shadow-2xl text-white backdrop-blur-md animate-in fade-in zoom-in-95 duration-150 select-none"
+    : "absolute -top-14 left-1/2 -translate-x-1/2 z-40 flex flex-row items-center gap-1.5 rounded-2xl border border-slate-700/80 bg-[#1E293B] px-3 py-1.5 shadow-2xl text-white backdrop-blur-md whitespace-nowrap animate-in fade-in zoom-in-95 duration-150 select-none";
 
   // Popover placement:
-  // When vertical on Left side of image -> popover opens towards left (or right)
-  // When vertical on Right side of image -> popover opens towards right (or left)
+  // When vertical on Left side of image -> popover opens towards left
+  // When vertical on Right side of image -> popover opens towards right
+  // When horizontal on Top -> popover opens downward
   const popoverPlacement = isRight
     ? "absolute right-full mr-2 top-0 z-50"
     : isLeft
     ? "absolute left-full ml-2 top-0 z-50"
-    : isNearTop
-    ? "absolute top-10 left-1/2 -translate-x-1/2 z-50"
-    : "absolute top-9 left-1/2 -translate-x-1/2 z-50";
+    : "absolute top-12 left-1/2 -translate-x-1/2 z-50";
 
   return (
     <NodeViewWrapper
@@ -461,7 +459,7 @@ export function FloatingImageView({
           boxSizing: "border-box",
         }}
       >
-        {/* ── CONTEXTUAL FLOATING TOOLBAR (Vertical on opposite side for floats, Horizontal on top for center) ── */}
+        {/* ── CONTEXTUAL FLOATING TOOLBAR (Always outside the image boundary) ── */}
         {selected && (
           <div
             className={toolbarContainerClasses}
@@ -469,56 +467,56 @@ export function FloatingImageView({
             onMouseDown={(e) => e.stopPropagation()}
           >
             {/* Position & Flow Controls */}
-            <div className={`flex ${isVertical ? "flex-col" : "flex-row items-center"} gap-0.5 ${isVertical ? "pb-1 border-b" : "pr-1.5 border-r"} border-white/15`}>
+            <div className={`flex ${isVertical ? "flex-col" : "flex-row items-center"} gap-1 ${isVertical ? "pb-1.5 border-b" : "pr-2 border-r"} border-white/20`}>
               <button
                 type="button"
                 onClick={() => setLayout("left")}
                 title="Float Left (Text wraps on right)"
-                className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs transition ${
-                  isLeft ? "bg-brand text-navy font-bold shadow-xs" : "text-slate-300 hover:bg-white/10 hover:text-white"
+                className={`flex h-8 w-8 items-center justify-center rounded-xl text-xs transition ${
+                  isLeft ? "bg-brand text-navy font-bold shadow-xs" : "text-slate-200 hover:bg-white/15 hover:text-white"
                 }`}
               >
-                <AlignLeft className="h-3.5 w-3.5" />
+                <AlignLeft className="h-4 w-4" />
               </button>
               <button
                 type="button"
                 onClick={() => setLayout("center")}
                 title="Center (No wrap)"
-                className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs transition ${
-                  isCenter ? "bg-brand text-navy font-bold shadow-xs" : "text-slate-300 hover:bg-white/10 hover:text-white"
+                className={`flex h-8 w-8 items-center justify-center rounded-xl text-xs transition ${
+                  isCenter ? "bg-brand text-navy font-bold shadow-xs" : "text-slate-200 hover:bg-white/15 hover:text-white"
                 }`}
               >
-                <AlignCenter className="h-3.5 w-3.5" />
+                <AlignCenter className="h-4 w-4" />
               </button>
               <button
                 type="button"
                 onClick={() => setLayout("right")}
                 title="Float Right (Text wraps on left)"
-                className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs transition ${
-                  isRight ? "bg-brand text-navy font-bold shadow-xs" : "text-slate-300 hover:bg-white/10 hover:text-white"
+                className={`flex h-8 w-8 items-center justify-center rounded-xl text-xs transition ${
+                  isRight ? "bg-brand text-navy font-bold shadow-xs" : "text-slate-200 hover:bg-white/15 hover:text-white"
                 }`}
               >
-                <AlignRight className="h-3.5 w-3.5" />
+                <AlignRight className="h-4 w-4" />
               </button>
               <button
                 type="button"
                 onClick={() => setLayout("wide")}
                 title="Full Width Banner"
-                className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs transition ${
-                  isWide ? "bg-brand text-navy font-bold shadow-xs" : "text-slate-300 hover:bg-white/10 hover:text-white"
+                className={`flex h-8 w-8 items-center justify-center rounded-xl text-xs transition ${
+                  isWide ? "bg-brand text-navy font-bold shadow-xs" : "text-slate-200 hover:bg-white/15 hover:text-white"
                 }`}
               >
-                <Maximize2 className="h-3.5 w-3.5" />
+                <Maximize2 className="h-4 w-4" />
               </button>
             </div>
 
             {/* Quick Sizing Controls */}
-            <div className={`flex ${isVertical ? "flex-col" : "flex-row items-center"} gap-0.5 ${isVertical ? "py-1 border-b" : "px-1.5 border-r"} border-white/15`}>
+            <div className={`flex ${isVertical ? "flex-col" : "flex-row items-center"} gap-1 ${isVertical ? "py-1.5 border-b" : "px-2 border-r"} border-white/20`}>
               <button
                 type="button"
                 onClick={() => stepWidth(25)}
                 title="Increase Width (+25px)"
-                className="flex h-6 w-6 items-center justify-center rounded font-bold text-xs text-slate-300 hover:bg-white/15 hover:text-white transition"
+                className="flex h-7 w-7 items-center justify-center rounded-lg font-bold text-sm text-slate-200 hover:bg-white/20 hover:text-white transition"
               >
                 +
               </button>
@@ -527,7 +525,7 @@ export function FloatingImageView({
                   key={pct}
                   type="button"
                   onClick={() => setWidthPercent(pct)}
-                  className="px-1.5 py-0.5 text-[10px] font-bold rounded text-slate-300 hover:bg-white/10 hover:text-white transition"
+                  className="px-2 py-1 text-xs font-bold rounded-lg text-slate-200 hover:bg-white/20 hover:text-white transition"
                 >
                   {pct}%
                 </button>
@@ -536,14 +534,14 @@ export function FloatingImageView({
                 type="button"
                 onClick={() => stepWidth(-25)}
                 title="Decrease Width (-25px)"
-                className="flex h-6 w-6 items-center justify-center rounded font-bold text-xs text-slate-300 hover:bg-white/15 hover:text-white transition"
+                className="flex h-7 w-7 items-center justify-center rounded-lg font-bold text-sm text-slate-200 hover:bg-white/20 hover:text-white transition"
               >
                 −
               </button>
             </div>
 
             {/* Features (Caption, Link, Style, SEO) */}
-            <div className={`flex ${isVertical ? "flex-col" : "flex-row items-center"} gap-0.5 ${isVertical ? "py-1 border-b" : "px-1 border-r"} border-white/15`}>
+            <div className={`flex ${isVertical ? "flex-col" : "flex-row items-center"} gap-1 ${isVertical ? "py-1.5 border-b" : "px-1.5 border-r"} border-white/20`}>
               {/* Caption Button */}
               <button
                 type="button"
@@ -554,11 +552,11 @@ export function FloatingImageView({
                   }
                 }}
                 title="Toggle Caption"
-                className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs transition ${
-                  caption || showCaptionInput ? "bg-brand text-navy font-bold" : "text-slate-300 hover:bg-white/10 hover:text-white"
+                className={`flex h-8 w-8 items-center justify-center rounded-xl text-xs transition ${
+                  caption || showCaptionInput ? "bg-brand text-navy font-bold shadow-xs" : "text-slate-200 hover:bg-white/15 hover:text-white"
                 }`}
               >
-                <MessageSquare className="h-3.5 w-3.5" />
+                <MessageSquare className="h-4 w-4" />
               </button>
 
               {/* Link Popover */}
@@ -571,26 +569,26 @@ export function FloatingImageView({
                     setShowSeoPopover(false);
                   }}
                   title="Image Hyperlink"
-                  className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs transition ${
-                    link || showLinkPopover ? "bg-brand text-navy font-bold" : "text-slate-300 hover:bg-white/10 hover:text-white"
+                  className={`flex h-8 w-8 items-center justify-center rounded-xl text-xs transition ${
+                    link || showLinkPopover ? "bg-brand text-navy font-bold shadow-xs" : "text-slate-200 hover:bg-white/15 hover:text-white"
                   }`}
                 >
-                  <Link2 className="h-3.5 w-3.5" />
+                  <Link2 className="h-4 w-4" />
                 </button>
 
                 {showLinkPopover && (
-                  <div className={`${popoverPlacement} w-64 rounded-xl border border-border bg-[#1E293B] p-3 shadow-2xl text-xs text-white`}>
-                    <p className="font-bold mb-1 text-slate-300">Link destination</p>
+                  <div className={`${popoverPlacement} w-72 rounded-2xl border border-slate-700/80 bg-[#1E293B] p-3.5 shadow-2xl text-xs text-white`}>
+                    <p className="font-bold mb-1.5 text-slate-200 text-xs">Link destination</p>
                     <input
                       type="url"
                       autoFocus
                       placeholder="https://..."
                       value={tempLink}
                       onChange={(e) => setTempLink(e.target.value)}
-                      className="w-full rounded-lg bg-white/10 px-2.5 py-1.5 text-xs text-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-brand"
+                      className="w-full rounded-xl bg-white/10 px-3 py-2 text-xs text-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-brand"
                     />
-                    <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-white/10">
-                      <label className="flex items-center gap-1.5 text-[11px] text-slate-300 cursor-pointer">
+                    <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-white/10">
+                      <label className="flex items-center gap-1.5 text-xs text-slate-300 cursor-pointer">
                         <input
                           type="checkbox"
                           checked={openLinkInNewTab}
@@ -608,7 +606,7 @@ export function FloatingImageView({
                               setTempLink("");
                               setShowLinkPopover(false);
                             }}
-                            className="px-2 py-1 rounded bg-white/10 hover:bg-white/20 text-[10px]"
+                            className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-semibold"
                           >
                             Unlink
                           </button>
@@ -619,7 +617,7 @@ export function FloatingImageView({
                             updateAttributes({ link: tempLink.trim() || null });
                             setShowLinkPopover(false);
                           }}
-                          className="px-3 py-1 rounded bg-brand text-navy font-bold text-[10px] hover:bg-brand-hover"
+                          className="px-3.5 py-1.5 rounded-xl bg-brand text-navy font-bold text-xs hover:bg-brand-hover shadow-xs"
                         >
                           Apply
                         </button>
@@ -639,23 +637,23 @@ export function FloatingImageView({
                     setShowSeoPopover(false);
                   }}
                   title="Frame, Borders, Radius & Shadow"
-                  className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs transition ${
+                  className={`flex h-8 w-8 items-center justify-center rounded-xl text-xs transition ${
                     showStylePopover || borderRadius > 0 || shadow !== "none" || borderWidth > 0
-                      ? "bg-brand text-navy font-bold"
-                      : "text-slate-300 hover:bg-white/10 hover:text-white"
+                      ? "bg-brand text-navy font-bold shadow-xs"
+                      : "text-slate-200 hover:bg-white/15 hover:text-white"
                   }`}
                 >
-                  <Sparkles className="h-3.5 w-3.5" />
+                  <Sparkles className="h-4 w-4" />
                 </button>
 
                 {showStylePopover && (
-                  <div className={`${popoverPlacement} w-72 rounded-2xl border border-border bg-[#1E293B] p-3.5 shadow-2xl text-xs text-white space-y-3`}>
-                    <div className="flex items-center justify-between border-b border-white/10 pb-2">
-                      <span className="font-bold text-slate-200">Image Styling</span>
+                  <div className={`${popoverPlacement} w-76 rounded-2xl border border-slate-700/80 bg-[#1E293B] p-4 shadow-2xl text-xs text-white space-y-3.5`}>
+                    <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
+                      <span className="font-bold text-slate-200 text-xs">Image Styling</span>
                       <button
                         type="button"
                         onClick={() => updateAttributes({ borderRadius: 10, borderWidth: 0, shadow: "sm", opacity: 1, rotation: 0 })}
-                        className="text-[10px] text-brand hover:underline"
+                        className="text-xs text-brand hover:underline font-semibold"
                       >
                         Reset Defaults
                       </button>
@@ -663,15 +661,15 @@ export function FloatingImageView({
 
                     {/* Corner Radius */}
                     <div>
-                      <span className="text-[11px] text-slate-400 block mb-1">Corner Radius ({borderRadius}px)</span>
-                      <div className="grid grid-cols-5 gap-1">
+                      <span className="text-xs text-slate-300 block mb-1.5 font-medium">Corner Radius ({borderRadius}px)</span>
+                      <div className="grid grid-cols-5 gap-1.5">
                         {[0, 8, 16, 24, 9999].map((r) => (
                           <button
                             key={r}
                             type="button"
                             onClick={() => updateAttributes({ borderRadius: r })}
-                            className={`py-1 rounded text-[10px] font-bold border ${
-                              borderRadius === r ? "bg-brand text-navy border-brand" : "border-white/10 text-slate-300 hover:bg-white/10"
+                            className={`py-1.5 rounded-lg text-xs font-bold border transition ${
+                              borderRadius === r ? "bg-brand text-navy border-brand shadow-xs" : "border-white/10 text-slate-300 hover:bg-white/10"
                             }`}
                           >
                             {r === 0 ? "Sharp" : r === 9999 ? "Pill" : `${r}px`}
@@ -682,15 +680,15 @@ export function FloatingImageView({
 
                     {/* Border Width & Color */}
                     <div>
-                      <span className="text-[11px] text-slate-400 block mb-1">Border</span>
-                      <div className="grid grid-cols-4 gap-1 mb-1.5">
+                      <span className="text-xs text-slate-300 block mb-1.5 font-medium">Border</span>
+                      <div className="grid grid-cols-4 gap-1.5 mb-2">
                         {[0, 1, 2, 4].map((bw) => (
                           <button
                             key={bw}
                             type="button"
                             onClick={() => updateAttributes({ borderWidth: bw })}
-                            className={`py-1 rounded text-[10px] font-bold border ${
-                              borderWidth === bw ? "bg-brand text-navy border-brand" : "border-white/10 text-slate-300 hover:bg-white/10"
+                            className={`py-1.5 rounded-lg text-xs font-bold border transition ${
+                              borderWidth === bw ? "bg-brand text-navy border-brand shadow-xs" : "border-white/10 text-slate-300 hover:bg-white/10"
                             }`}
                           >
                             {bw === 0 ? "None" : `${bw}px`}
@@ -698,14 +696,14 @@ export function FloatingImageView({
                         ))}
                       </div>
                       {borderWidth > 0 && (
-                        <div className="flex items-center gap-1.5 pt-1">
+                        <div className="flex items-center gap-2 pt-1">
                           {BORDER_COLORS.map((c) => (
                             <button
                               key={c.value}
                               type="button"
                               onClick={() => updateAttributes({ borderColor: c.value })}
                               style={{ backgroundColor: c.value }}
-                              className={`h-5 w-5 rounded-full border border-white/20 transition ${
+                              className={`h-6 w-6 rounded-full border border-white/20 transition ${
                                 borderColor === c.value ? "ring-2 ring-brand scale-110" : "hover:scale-105"
                               }`}
                               title={c.label}
@@ -717,15 +715,15 @@ export function FloatingImageView({
 
                     {/* Shadow Level */}
                     <div>
-                      <span className="text-[11px] text-slate-400 block mb-1">Shadow Elevation</span>
-                      <div className="grid grid-cols-5 gap-1">
+                      <span className="text-xs text-slate-300 block mb-1.5 font-medium">Shadow Elevation</span>
+                      <div className="grid grid-cols-5 gap-1.5">
                         {(["none", "sm", "md", "lg", "xl"] as const).map((s) => (
                           <button
                             key={s}
                             type="button"
                             onClick={() => updateAttributes({ shadow: s })}
-                            className={`py-1 rounded text-[10px] font-bold uppercase border ${
-                              shadow === s ? "bg-brand text-navy border-brand" : "border-white/10 text-slate-300 hover:bg-white/10"
+                            className={`py-1.5 rounded-lg text-xs font-bold uppercase border transition ${
+                              shadow === s ? "bg-brand text-navy border-brand shadow-xs" : "border-white/10 text-slate-300 hover:bg-white/10"
                             }`}
                           >
                             {s}
@@ -735,17 +733,17 @@ export function FloatingImageView({
                     </div>
 
                     {/* Opacity & Rotate */}
-                    <div className="grid grid-cols-2 gap-2 pt-1 border-t border-white/10">
+                    <div className="grid grid-cols-2 gap-2.5 pt-2 border-t border-white/10">
                       <div>
-                        <span className="text-[11px] text-slate-400 block mb-1">Opacity</span>
+                        <span className="text-xs text-slate-300 block mb-1.5 font-medium">Opacity</span>
                         <div className="grid grid-cols-3 gap-1">
                           {[1, 0.75, 0.5].map((op) => (
                             <button
                               key={op}
                               type="button"
                               onClick={() => updateAttributes({ opacity: op })}
-                              className={`py-1 rounded text-[10px] font-bold border ${
-                                opacity === op ? "bg-brand text-navy border-brand" : "border-white/10 text-slate-300 hover:bg-white/10"
+                              className={`py-1.5 rounded-lg text-xs font-bold border transition ${
+                                opacity === op ? "bg-brand text-navy border-brand shadow-xs" : "border-white/10 text-slate-300 hover:bg-white/10"
                               }`}
                             >
                               {Math.round(op * 100)}%
@@ -754,13 +752,13 @@ export function FloatingImageView({
                         </div>
                       </div>
                       <div>
-                        <span className="text-[11px] text-slate-400 block mb-1">Rotate</span>
+                        <span className="text-xs text-slate-300 block mb-1.5 font-medium">Rotate</span>
                         <button
                           type="button"
                           onClick={() => updateAttributes({ rotation: (rotation + 90) % 360 })}
-                          className="w-full flex items-center justify-center gap-1 py-1 rounded bg-white/10 hover:bg-white/20 text-[10px] font-bold text-slate-200"
+                          className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-bold text-slate-200 transition"
                         >
-                          <RotateCw className="h-3 w-3" /> {rotation}°
+                          <RotateCw className="h-3.5 w-3.5" /> {rotation}°
                         </button>
                       </div>
                     </div>
@@ -778,39 +776,39 @@ export function FloatingImageView({
                     setShowStylePopover(false);
                   }}
                   title="Alt Text & SEO Description"
-                  className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs transition ${
-                    alt || showSeoPopover ? "bg-brand text-navy font-bold" : "text-slate-300 hover:bg-white/10 hover:text-white"
+                  className={`flex h-8 w-8 items-center justify-center rounded-xl text-xs transition ${
+                    alt || showSeoPopover ? "bg-brand text-navy font-bold shadow-xs" : "text-slate-200 hover:bg-white/15 hover:text-white"
                   }`}
                 >
-                  <FileText className="h-3.5 w-3.5" />
+                  <FileText className="h-4 w-4" />
                 </button>
 
                 {showSeoPopover && (
-                  <div className={`${popoverPlacement} w-64 rounded-2xl border border-border bg-[#1E293B] p-3 shadow-2xl text-xs text-white space-y-2.5`}>
-                    <p className="font-bold text-slate-200">SEO & Accessibility</p>
+                  <div className={`${popoverPlacement} w-72 rounded-2xl border border-slate-700/80 bg-[#1E293B] p-3.5 shadow-2xl text-xs text-white space-y-3`}>
+                    <p className="font-bold text-slate-200 text-xs">SEO & Accessibility</p>
                     <div>
-                      <span className="text-[11px] text-slate-400 block mb-1">Alt Text (Screen Readers)</span>
+                      <span className="text-xs text-slate-300 block mb-1 font-medium">Alt Text (Screen Readers)</span>
                       <input
                         type="text"
                         placeholder="Describe the image..."
                         value={tempAlt}
                         onChange={(e) => setTempAlt(e.target.value)}
                         onBlur={() => updateAttributes({ alt: tempAlt.trim() || null })}
-                        className="w-full rounded-lg bg-white/10 px-2.5 py-1 text-xs text-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-brand"
+                        className="w-full rounded-xl bg-white/10 px-3 py-1.5 text-xs text-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-brand"
                       />
                     </div>
                     <div>
-                      <span className="text-[11px] text-slate-400 block mb-1">Tooltip Title</span>
+                      <span className="text-xs text-slate-300 block mb-1 font-medium">Tooltip Title</span>
                       <input
                         type="text"
                         placeholder="Hover title..."
                         value={tempTitle}
                         onChange={(e) => setTempTitle(e.target.value)}
                         onBlur={() => updateAttributes({ title: tempTitle.trim() || null })}
-                        className="w-full rounded-lg bg-white/10 px-2.5 py-1 text-xs text-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-brand"
+                        className="w-full rounded-xl bg-white/10 px-3 py-1.5 text-xs text-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-brand"
                       />
                     </div>
-                    <label className="flex items-center gap-1.5 text-[11px] text-slate-300 cursor-pointer pt-1">
+                    <label className="flex items-center gap-1.5 text-xs text-slate-300 cursor-pointer pt-1">
                       <input
                         type="checkbox"
                         checked={isDecorative}
@@ -825,15 +823,15 @@ export function FloatingImageView({
             </div>
 
             {/* Replace & Delete Actions */}
-            <div className={`flex ${isVertical ? "flex-col" : "flex-row items-center"} gap-0.5 ${isVertical ? "pt-1" : "pl-0.5"}`}>
+            <div className={`flex ${isVertical ? "flex-col" : "flex-row items-center"} gap-1 ${isVertical ? "pt-1.5" : "pl-1"}`}>
               {/* Replace Image Trigger */}
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 title="Replace with Local File"
-                className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-300 hover:bg-white/10 hover:text-white transition"
+                className="flex h-8 w-8 items-center justify-center rounded-xl text-slate-200 hover:bg-white/15 hover:text-white transition"
               >
-                <Upload className="h-3.5 w-3.5" />
+                <Upload className="h-4 w-4" />
               </button>
 
               {/* Replace Image URL Trigger */}
@@ -841,9 +839,9 @@ export function FloatingImageView({
                 type="button"
                 onClick={() => setIsEditingUrl(true)}
                 title="Replace with Image URL"
-                className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-300 hover:bg-white/10 hover:text-white transition"
+                className="flex h-8 w-8 items-center justify-center rounded-xl text-slate-200 hover:bg-white/15 hover:text-white transition"
               >
-                <ImageIcon className="h-3.5 w-3.5" />
+                <ImageIcon className="h-4 w-4" />
               </button>
 
               {/* Delete */}
@@ -851,9 +849,9 @@ export function FloatingImageView({
                 type="button"
                 onClick={() => deleteNode()}
                 title="Delete Image"
-                className="flex h-7 w-7 items-center justify-center rounded-lg text-flame hover:bg-flame/20 transition"
+                className="flex h-8 w-8 items-center justify-center rounded-xl text-flame hover:bg-flame/20 transition"
               >
-                <Trash2 className="h-3.5 w-3.5" />
+                <Trash2 className="h-4 w-4" />
               </button>
             </div>
           </div>

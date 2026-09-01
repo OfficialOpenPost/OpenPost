@@ -1,54 +1,75 @@
 "use client";
 
-import { useState, useMemo, useEffect, Suspense, useRef } from "react";
+import React, { useState, useEffect, useMemo, Suspense, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { useOpenPostEditor } from "@/components/editor/useOpenPostEditor";
 import { EditorContent } from "@tiptap/react";
-import { EDITOR_STYLES } from "@/components/editor/extensions";
 import { EditorRibbon } from "@/components/editor/toolbar/EditorRibbon";
-import { FindReplaceBar } from "@/components/editor/toolbar/FindReplaceBar";
 import { EditorSidePanel } from "@/components/editor/panels/EditorSidePanel";
-import { DocumentOutline } from "@/components/editor/outline/DocumentOutline";
 import { SelectionBubbleMenu } from "@/components/editor/BubbleMenus";
-import { StatusIndicator } from "@/components/editor/StatusIndicator";
-import { Preview } from "@/components/editor/Preview";
-import { useAutosave } from "@/hooks/useAutosave";
-import { countWords, readingTime } from "@/lib/publish";
-import { slugify } from "@/lib/slug";
+import { FindReplaceBar } from "@/components/editor/toolbar/FindReplaceBar";
+import { EDITOR_STYLES } from "@/components/editor/extensions";
 import {
   ArrowLeft,
-  Eye,
   Sparkles,
+  Eye,
   Settings2,
-  ListTree,
   Maximize,
   Minimize,
-  Search,
-  Check,
-  RotateCcw,
   Loader2,
-  FileText,
+  CheckCircle2,
+  AlertCircle,
+  Clock,
 } from "lucide-react";
-import Link from "next/link";
 
 interface EditorPageProps {
   initialBlogId?: string;
 }
 
-function EditorInner({ initialBlogId }: EditorPageProps) {
-  const searchParams = useSearchParams();
-  const queryId = searchParams?.get("id");
-  const effectiveId = initialBlogId || queryId || null;
+function StatusIndicator({ status }: { status: "saved" | "saving" | "unsaved" | "error" }) {
+  if (status === "saving") {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+        <Clock className="h-3 w-3 animate-spin" /> Saving...
+      </span>
+    );
+  }
+  if (status === "unsaved") {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+        <span className="h-1.5 w-1.5 rounded-full bg-slate-400" /> Unsaved
+      </span>
+    );
+  }
+  if (status === "error") {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200">
+        <AlertCircle className="h-3 w-3" /> Save Error
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+      <CheckCircle2 className="h-3 w-3" /> Saved
+    </span>
+  );
+}
 
-  const [blogId, setBlogId] = useState<string | null>(effectiveId);
+function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
+  const searchParams = useSearchParams();
+  const idFromUrl = searchParams.get("id") || "";
+  const effectiveId = initialBlogId || idFromUrl;
+
+  const [blogId, setBlogId] = useState<string | null>(effectiveId || null);
   const [title, setTitle] = useState("");
-  const [slug, setSlug] = useState("untitled");
-  const [html, setHtml] = useState("<p></p>");
-  const [json, setJson] = useState<Record<string, unknown> | null>(null);
-  const [preview, setPreview] = useState(false);
+  const [slug, setSlug] = useState("");
   const [status, setStatus] = useState<"draft" | "published" | "scheduled" | "trash">("draft");
+  const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "unsaved" | "error">("saved");
+  const [html, setHtml] = useState("");
+  const [json, setJson] = useState<any>(null);
+  const [preview, setPreview] = useState(false);
   const [showSidebar, setShowSidebar] = useState(true);
-  const [showOutlineDrawer, setShowOutlineDrawer] = useState(false);
   const [showFindReplace, setShowFindReplace] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(340);
@@ -118,7 +139,7 @@ function EditorInner({ initialBlogId }: EditorPageProps) {
   }, [effectiveId, editor]);
 
   // Native Fullscreen Toggle
-  const toggleFullscreen = () => {
+  const toggleFullscreen = useCallback(() => {
     if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen?.().catch((err) => {
         console.warn("Fullscreen request error:", err);
@@ -130,7 +151,7 @@ function EditorInner({ initialBlogId }: EditorPageProps) {
       });
       setIsFullscreen(false);
     }
-  };
+  }, []);
 
   // Sync fullscreen state with browser events (e.g. Esc key or browser button)
   useEffect(() => {
@@ -159,7 +180,7 @@ function EditorInner({ initialBlogId }: EditorPageProps) {
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [toggleFullscreen]);
 
   // Handle resizable sidebar (on right)
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -206,95 +227,163 @@ function EditorInner({ initialBlogId }: EditorPageProps) {
   // SEO Warnings calculation
   const seoWarnings = useMemo(() => {
     const w: string[] = [];
-    const sTitle = seoTitle || title;
-    if (!sTitle) w.push("Missing SEO title");
-    else if (sTitle.length > 60) w.push(`SEO title too long (${sTitle.length}/60)`);
-    else if (sTitle.length < 30) w.push(`SEO title short (${sTitle.length}/60)`);
-    if (!seoDesc) w.push("Missing meta description");
-    else if (seoDesc.length > 155) w.push(`Meta description too long (${seoDesc.length}/155)`);
-    else if (seoDesc.length < 70) w.push(`Meta description short (${seoDesc.length}/155)`);
-    if (!featuredImage && !ogImage) w.push("Missing featured/OG cover image");
-    const hasImages = JSON.stringify(json ?? {}).includes('"type":"image"');
-    const hasAlt = JSON.stringify(json ?? {}).includes('"alt"');
-    if (hasImages && !hasAlt) w.push("Images missing alt text for SEO/accessibility");
-    if (!html.includes("<a ")) w.push("No internal links detected");
+    const plain = editor?.getText() || "";
+    if (title.length < 10) w.push("Title is very short for SEO (aim for 40-60 characters)");
+    if (!seoDesc || seoDesc.length < 50) w.push("Meta description is missing or too short");
+    if (!featuredImage) w.push("No featured cover image selected");
+    if (plain.split(/\s+/).filter(Boolean).length < 200) w.push("Article is short (under 200 words)");
     return w;
-  }, [seoTitle, seoDesc, featuredImage, ogImage, title, json, html]);
+  }, [title, seoDesc, featuredImage, editor]);
 
-  // Autosave
-  const { status: saveStatus, save } = useAutosave({
-    id: blogId || "new-post",
-    data: { title, slug, html, json, featuredImage, category, tags, seoTitle, seoDesc, canonical, ogTitle, ogDesc, ogImage, scheduledAt, status },
-    onSave: async (data) => {
-      const activeCat = catOptions.find((c) => c.name === (data as any).category);
-      const payload: any = {
-        title: (data as any).title || "Untitled Article",
-        slug: (data as any).slug || "untitled",
-        content: (data as any).json ?? { html: (data as any).html },
-        status: (data as any).status ?? "draft",
-        categoryId: activeCat ? activeCat.id : null,
-        scheduledAt: (data as any).scheduledAt || null,
-        seo: {
-          title: (data as any).seoTitle,
-          description: (data as any).seoDesc,
-          canonical: (data as any).canonical,
-          ogTitle: (data as any).ogTitle,
-          ogDesc: (data as any).ogDesc,
-          ogImage: (data as any).ogImage,
-        },
-      };
+  // Word count & Reading time
+  const { words, minutes } = useMemo(() => {
+    const plain = editor?.getText() || "";
+    const w = plain.split(/\s+/).filter(Boolean).length;
+    const m = Math.max(1, Math.ceil(w / 200));
+    return { words: w, minutes: m };
+  }, [editor]);
 
-      if (blogId) payload.id = blogId;
-
-      const res = await fetch("/api/blogs", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        throw new Error(j?.error?.message || "Save failed");
-      }
-
-      const j = await res.json().catch(() => ({}));
-      if (j.data?.id && !blogId) setBlogId(j.data.id);
-      if (j.data?.slug) setSlug(j.data.slug);
-    },
-  });
-
-  const words = useMemo(() => countWords(html), [html]);
-  const minutes = useMemo(() => readingTime(words), [words]);
-
-  const handleTitleChange = (v: string) => {
-    setTitle(v);
-    if (!slugEdited) setSlug(slugify(v) || "untitled");
-  };
-
-  const handleRestoreRevision = (rev: any) => {
-    if (!confirm(`Restore revision from ${new Date(rev.createdAt).toLocaleString()}?`)) return;
-    if (editor && rev.content) {
-      editor.commands.setContent(rev.content);
+  // Auto-slug generator
+  const handleTitleChange = (val: string) => {
+    setTitle(val);
+    setSaveStatus("unsaved");
+    if (!slugEdited) {
+      const generated = val
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/(^-|-$)/g, "");
+      setSlug(generated || "untitled");
     }
   };
 
+  // Save handler
+  const save = async (manualLabel?: string) => {
+    setSaveStatus("saving");
+    try {
+      const payload: any = {
+        title: title || "Untitled Article",
+        slug: slug || "untitled",
+        content: editor?.getJSON() || {},
+        status,
+        featuredImage: featuredImage ? { url: featuredImage } : null,
+        category: category ? { name: category } : null,
+        tags: tags.map((t) => ({ name: t })),
+        scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : null,
+        seo: {
+          title: seoTitle || title,
+          description: seoDesc,
+          canonical,
+          ogTitle: ogTitle || title,
+          ogDesc: ogDesc || seoDesc,
+          ogImage: ogImage || featuredImage,
+        },
+      };
+
+      if (manualLabel) {
+        payload.revisionLabel = manualLabel;
+      }
+
+      let res;
+      if (blogId) {
+        res = await fetch(`/api/blogs/${blogId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+      } else {
+        res = await fetch("/api/blogs", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+      }
+
+      const jsonRes = await res.json();
+      if (!res.ok) throw new Error(jsonRes.message || "Failed to save");
+
+      if (!blogId && jsonRes.data?.id) {
+        setBlogId(jsonRes.data.id);
+        window.history.replaceState({}, "", `/dashboard/editor?id=${jsonRes.data.id}`);
+      }
+
+      setSaveStatus("saved");
+
+      // Reload revisions
+      if (jsonRes.data?.id || blogId) {
+        fetch(`/api/blogs/${jsonRes.data?.id || blogId}/revisions`)
+          .then((r) => r.json())
+          .then((j) => {
+            if (Array.isArray(j.data)) setRevisions(j.data);
+          })
+          .catch(() => {});
+      }
+    } catch (err) {
+      console.error("Save error:", err);
+      setSaveStatus("error");
+    }
+  };
+
+  // Restore revision handler
+  const handleRestoreRevision = (revContent: any) => {
+    if (editor && revContent) {
+      editor.commands.setContent(revContent);
+      setSaveStatus("unsaved");
+    }
+  };
+
+  // Debounced auto-save (every 5 seconds of inactivity)
+  useEffect(() => {
+    if (!title && !editor?.getText()) return;
+    const timer = setTimeout(() => {
+      save();
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [title, html, category, tags, seoTitle, seoDesc, featuredImage, status, scheduledAt]);
+
+  if (loadingInitial) {
+    return (
+      <div className="fixed inset-0 flex h-screen w-screen items-center justify-center bg-[#F4F5F7]">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="h-8 w-8 animate-spin text-brand" />
+          <p className="text-xs font-bold text-navy">Loading Article...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Reading Preview Modal
   if (preview) {
     return (
-      <div className="min-h-screen bg-[#F4F5F7]">
-        <div className="sticky top-0 z-20 flex items-center justify-between border-b border-border bg-white/90 backdrop-blur-md px-6 py-3">
-          <button
-            onClick={() => setPreview(false)}
-            className="inline-flex items-center gap-2 rounded-xl border border-border bg-white px-4 py-2 text-xs font-bold text-navy hover:bg-surface-raised transition shadow-xs"
-          >
-            <ArrowLeft className="h-4 w-4" /> Back to editor
-          </button>
-          <div className="flex items-center gap-3 text-xs text-text-tertiary">
-            <span className="font-mono text-navy font-bold">{words} words</span>
-            <span>·</span>
-            <span>{minutes} min read</span>
+      <div className="fixed inset-0 z-50 overflow-y-auto bg-white p-6 sm:p-12 text-navy select-text">
+        <div className="mx-auto max-w-3xl">
+          <div className="flex items-center justify-between border-b border-border pb-4 mb-8">
+            <button
+              onClick={() => setPreview(false)}
+              className="flex items-center gap-2 text-xs font-bold text-navy hover:text-brand transition"
+            >
+              <ArrowLeft className="h-4 w-4" /> Back to Editor
+            </button>
+            <span className="text-xs font-mono text-text-tertiary">
+              {words} words · ~{minutes} min read
+            </span>
           </div>
+          <h1 className="text-3xl sm:text-5xl font-black text-navy mb-6 leading-tight">
+            {title || "Untitled Article"}
+          </h1>
+          {featuredImage && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={featuredImage}
+              alt={title}
+              className="w-full h-80 object-cover rounded-2xl mb-8 shadow-sm"
+            />
+          )}
+          <style dangerouslySetInnerHTML={{ __html: EDITOR_STYLES }} />
+          <div
+            className="prose prose-lg prose-navy max-w-none"
+            dangerouslySetInnerHTML={{ __html: html }}
+          />
         </div>
-        <Preview title={title} html={html} json={json ?? undefined} />
       </div>
     );
   }
@@ -303,7 +392,7 @@ function EditorInner({ initialBlogId }: EditorPageProps) {
     <div className="fixed inset-0 h-screen w-screen overflow-hidden bg-[#F4F5F7] flex flex-col text-navy select-none">
       <style dangerouslySetInnerHTML={{ __html: EDITOR_STYLES }} />
 
-      {/* Top Application Bar (Fixed at top: 0, height: 56px) */}
+      {/* ── TIER 1: TOP APPLICATION HEADER (Fixed: 56px height) ── */}
       <header className="h-14 shrink-0 border-b border-border bg-white z-30 flex items-center justify-between px-4 sm:px-6 shadow-xs select-none">
         <div className="flex items-center gap-3 min-w-0">
           <Link
@@ -377,18 +466,13 @@ function EditorInner({ initialBlogId }: EditorPageProps) {
         </div>
       </header>
 
-      {/* FIXED TOP OPTIONS NAVBAR (Directly below header, 100% fixed, always visible) */}
-      <div
-        className="w-full shrink-0 border-b border-border bg-white px-3 sm:px-5 py-1.5 flex justify-center z-20 shadow-xs transition-all relative"
-        style={{ paddingRight: showSidebar ? `${sidebarWidth}px` : undefined }}
-      >
+      {/* ── TIER 2: FIXED TOP OPTIONS NAVBAR (100% Fixed directly below header, never scrolls) ── */}
+      <div className="w-full shrink-0 border-b border-border bg-white px-3 sm:px-5 py-1.5 flex justify-center z-20 shadow-xs relative">
         <div className="w-full max-w-[940px] 2xl:max-w-[1040px]">
           <EditorRibbon
             editor={editor}
             onOpenFindReplace={() => setShowFindReplace(true)}
-            onToggleOutline={() => {
-              setShowSidebar(true);
-            }}
+            onToggleOutline={() => setShowSidebar(true)}
             onToggleFullscreen={toggleFullscreen}
             isFullscreen={isFullscreen}
             onOpenPreview={() => setPreview(true)}
@@ -396,8 +480,8 @@ function EditorInner({ initialBlogId }: EditorPageProps) {
         </div>
       </div>
 
-      {/* Editor Body Area (Fills exact remaining viewport height, zero outer scroll) */}
-      <div className="flex-1 flex overflow-hidden relative min-h-0">
+      {/* ── TIER 3: EDITOR BODY (Fills remaining screen height, zero page scroll) ── */}
+      <div className="flex-1 flex overflow-hidden relative min-h-0 w-full">
         {/* Find & Replace Bar Overlay */}
         <FindReplaceBar
           editor={editor}
@@ -405,14 +489,11 @@ function EditorInner({ initialBlogId }: EditorPageProps) {
           onClose={() => setShowFindReplace(false)}
         />
 
-        {/* Main Canvas Area (Fixed, centered paper card) */}
-        <main
-          className="flex-1 flex flex-col items-center p-3 sm:p-4 h-full overflow-hidden transition-all relative min-h-0 w-full"
-          style={{ marginRight: showSidebar ? `${sidebarWidth}px` : "0" }}
-        >
-          {/* Central Document Paper Card — Fixed size, ONLY internal content scrolls */}
+        {/* Main Canvas Area (Centered Paper Card) */}
+        <main className="flex-1 flex flex-col items-center p-3 sm:p-4 h-full overflow-hidden relative min-h-0 w-full">
+          {/* Central Document Paper Card — Locked to screen height, ONLY internal content scrolls */}
           <div className="w-full max-w-[940px] 2xl:max-w-[1040px] h-full flex flex-col bg-white rounded-2xl border border-slate-200/90 shadow-[0_4px_24px_rgba(0,0,0,0.05)] overflow-hidden relative transition-all min-h-0">
-            {/* Title Section (Fixed at top of paper card) */}
+            {/* Fixed Title Header Section */}
             <div className="px-8 sm:px-14 pt-7 pb-4 shrink-0 border-b border-slate-100 bg-white">
               <input
                 type="text"
@@ -423,15 +504,12 @@ function EditorInner({ initialBlogId }: EditorPageProps) {
               />
             </div>
 
-            {/* Scrollable Document Canvas (ONLY the text/image content inside scrolls) */}
-            <div className="flex-1 overflow-y-auto overflow-x-hidden px-8 sm:px-14 py-8 relative select-text">
-              {/* Dynamic Editor CSS Injection */}
-              <style dangerouslySetInnerHTML={{ __html: EDITOR_STYLES }} />
-
+            {/* Dedicated Internal Scrolling Canvas Body */}
+            <div className="flex-1 overflow-y-auto overflow-x-hidden px-8 sm:px-14 py-8 relative select-text min-h-0">
               {/* Selection Bubble Menu */}
               {editor && <SelectionBubbleMenu editor={editor} />}
 
-              {/* Tiptap Canvas */}
+              {/* Tiptap Content */}
               <EditorContent
                 editor={editor}
                 className="prose prose-lg prose-navy max-w-none focus:outline-none min-h-[360px]"
@@ -439,14 +517,12 @@ function EditorInner({ initialBlogId }: EditorPageProps) {
             </div>
           </div>
         </main>
-      </div>
 
         {/* Resizer Handle */}
         {showSidebar && (
           <div
             onMouseDown={handleMouseDown}
-            className="hidden lg:block w-1 hover:w-1.5 bg-border hover:bg-brand cursor-col-resize fixed top-14 bottom-0 z-20 transition-colors"
-            style={{ right: `${sidebarWidth}px` }}
+            className="hidden lg:block w-1 hover:w-1.5 bg-border hover:bg-brand cursor-col-resize shrink-0 z-20 transition-colors h-full"
           />
         )}
 
@@ -454,7 +530,7 @@ function EditorInner({ initialBlogId }: EditorPageProps) {
         {showSidebar && (
           <aside
             style={{ width: `${sidebarWidth}px` }}
-            className="flex flex-col border-l border-border bg-white fixed right-0 top-14 bottom-0 z-20 overflow-y-auto shadow-xs"
+            className="flex flex-col border-l border-border bg-white h-full shrink-0 overflow-y-auto shadow-xs z-20 min-h-0"
           >
             <EditorSidePanel
               editor={editor}
@@ -495,8 +571,9 @@ function EditorInner({ initialBlogId }: EditorPageProps) {
           </aside>
         )}
       </div>
-    );
-  }
+    </div>
+  );
+}
 
 export default function EditorPage({ initialBlogId }: EditorPageProps) {
   return (

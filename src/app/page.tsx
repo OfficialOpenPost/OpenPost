@@ -1030,6 +1030,15 @@ export default function Home() {
                   self-host with Docker. You own everything.
                 </p>
 
+                <div className="mt-8 rounded-2xl border border-border bg-white p-4 shadow-sm">
+                  <p className="text-xs font-bold uppercase tracking-widest text-navy">Connect your frontend</p>
+                  <div className="mt-3 flex items-center gap-2 rounded-xl bg-[#2D3440] px-4 py-3 font-mono text-sm text-white">
+                    <span className="text-[#FEA611]">$</span> npx openpost-cli
+                    <button onClick={()=>navigator.clipboard.writeText('npx openpost-cli')} className="ml-auto rounded-lg bg-white/10 px-3 py-1 text-xs font-bold hover:bg-white/20">Copy</button>
+                  </div>
+                  <p className="mt-2 text-xs text-text-tertiary">Creates <code className="font-mono text-xs">my-blog/.env.local</code> with <code>OPENPOST_URL</code> + <code>TOKEN</code> — then <code>npm run dev</code></p>
+                </div>
+
                 <div className="mt-8 grid grid-cols-2 gap-x-6 gap-y-5">
                   {[
                     { icon: Cloud, label: "Vercel + Supabase", desc: "Recommended stack" },

@@ -299,7 +299,10 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
       }
 
       const jsonRes = await res.json();
-      if (!res.ok) throw new Error(jsonRes.message || "Failed to save");
+      if (!res.ok) {
+        console.error("Save response error:", jsonRes);
+        throw new Error(jsonRes.error?.message || jsonRes.message || `Failed to save (Status ${res.status})`);
+      }
 
       if (!blogId && jsonRes.data?.id) {
         setBlogId(jsonRes.data.id);

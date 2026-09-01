@@ -5,17 +5,22 @@ import { getCurrentUser } from "@/lib/auth";
 import { countWords, readingTime as calcReadingTime } from "@/lib/publish";
 
 const createSchema = z.object({
-  title: z.string().min(1).max(200),
-  slug: z.string().min(1).max(100),
-  content: z.any(),
-  status: z.enum(["draft", "published", "scheduled", "trash"]).optional(),
+  title: z.string().optional().default("Untitled Article"),
+  slug: z.string().optional().default("untitled"),
+  content: z.any().optional().default({}),
+  status: z.enum(["draft", "published", "scheduled", "archived", "trash"]).optional().default("draft"),
   projectId: z.string().nullable().optional(),
   categoryId: z.string().nullable().optional(),
+  category: z.any().optional(),
+  featuredImage: z.any().optional(),
+  featuredImageId: z.string().nullable().optional(),
+  tags: z.any().optional(),
   scheduledAt: z.string().nullable().optional(),
   seo: z.any().optional(),
   updatedAt: z.string().optional(),
   id: z.string().nullable().optional(),
-});
+  revisionLabel: z.string().nullable().optional(),
+}).passthrough();
 
 function extractMediaUrls(content: any): string[] {
   const urls: string[] = [];

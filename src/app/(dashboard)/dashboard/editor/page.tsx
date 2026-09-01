@@ -466,21 +466,7 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
         </div>
       </header>
 
-      {/* ── TIER 2: FIXED TOP OPTIONS NAVBAR (100% Fixed directly below header, never scrolls) ── */}
-      <div className="w-full shrink-0 border-b border-border bg-white px-3 sm:px-5 py-1.5 flex justify-center z-20 shadow-xs relative">
-        <div className="w-full max-w-[940px] 2xl:max-w-[1040px]">
-          <EditorRibbon
-            editor={editor}
-            onOpenFindReplace={() => setShowFindReplace(true)}
-            onToggleOutline={() => setShowSidebar(true)}
-            onToggleFullscreen={toggleFullscreen}
-            isFullscreen={isFullscreen}
-            onOpenPreview={() => setPreview(true)}
-          />
-        </div>
-      </div>
-
-      {/* ── TIER 3: EDITOR BODY (Fills remaining screen height, zero page scroll) ── */}
+      {/* ── MAIN WORKSPACE CONTAINER (Directly below 56px header) ── */}
       <div className="flex-1 flex overflow-hidden relative min-h-0 w-full">
         {/* Find & Replace Bar Overlay */}
         <FindReplaceBar
@@ -489,34 +475,51 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
           onClose={() => setShowFindReplace(false)}
         />
 
-        {/* Main Canvas Area (Centered Paper Card) */}
-        <main className="flex-1 flex flex-col items-center p-3 sm:p-4 h-full overflow-hidden relative min-h-0 w-full">
-          {/* Central Document Paper Card — Locked to screen height, ONLY internal content scrolls */}
-          <div className="w-full max-w-[940px] 2xl:max-w-[1040px] h-full flex flex-col bg-white rounded-2xl border border-slate-200/90 shadow-[0_4px_24px_rgba(0,0,0,0.05)] overflow-hidden relative transition-all min-h-0">
-            {/* Fixed Title Header Section */}
-            <div className="px-8 sm:px-14 pt-7 pb-4 shrink-0 border-b border-slate-100 bg-white">
-              <input
-                type="text"
-                placeholder="Article Title..."
-                value={title}
-                onChange={(e) => handleTitleChange(e.target.value)}
-                className="w-full text-3xl sm:text-4xl font-extrabold text-navy placeholder:text-slate-300 focus:outline-none leading-tight tracking-tight bg-transparent"
-              />
-            </div>
-
-            {/* Dedicated Internal Scrolling Canvas Body */}
-            <div className="flex-1 overflow-y-auto overflow-x-hidden px-8 sm:px-14 py-8 relative select-text min-h-0">
-              {/* Selection Bubble Menu */}
-              {editor && <SelectionBubbleMenu editor={editor} />}
-
-              {/* Tiptap Content */}
-              <EditorContent
+        {/* ── LEFT & CENTER WORKSPACE (Contains Fixed Options Navbar + Main Document Card) ── */}
+        <div className="flex-1 flex flex-col h-full overflow-hidden min-h-0 min-w-0">
+          {/* FIXED TOP OPTIONS NAVBAR (Directly under header, perfectly above canvas, never hides sidebar) */}
+          <div className="w-full shrink-0 border-b border-border bg-white px-3 sm:px-5 py-1.5 flex justify-center z-10 shadow-xs relative">
+            <div className="w-full max-w-[940px] 2xl:max-w-[1040px]">
+              <EditorRibbon
                 editor={editor}
-                className="prose prose-lg prose-navy max-w-none focus:outline-none min-h-[360px]"
+                onOpenFindReplace={() => setShowFindReplace(true)}
+                onToggleOutline={() => setShowSidebar(true)}
+                onToggleFullscreen={toggleFullscreen}
+                isFullscreen={isFullscreen}
+                onOpenPreview={() => setPreview(true)}
               />
             </div>
           </div>
-        </main>
+
+          {/* MAIN DOCUMENT CANVAS AREA */}
+          <main className="flex-1 flex flex-col items-center p-3 sm:p-4 h-full overflow-hidden relative min-h-0 w-full">
+            {/* Central Document Paper Card — Locked to screen height, ONLY internal content scrolls */}
+            <div className="w-full max-w-[940px] 2xl:max-w-[1040px] h-full flex flex-col bg-white rounded-2xl border border-slate-200/90 shadow-[0_4px_24px_rgba(0,0,0,0.05)] overflow-hidden relative transition-all min-h-0">
+              {/* Fixed Title Header Section */}
+              <div className="px-8 sm:px-14 pt-7 pb-4 shrink-0 border-b border-slate-100 bg-white">
+                <input
+                  type="text"
+                  placeholder="Article Title..."
+                  value={title}
+                  onChange={(e) => handleTitleChange(e.target.value)}
+                  className="w-full text-3xl sm:text-4xl font-extrabold text-navy placeholder:text-slate-300 focus:outline-none leading-tight tracking-tight bg-transparent"
+                />
+              </div>
+
+              {/* Dedicated Internal Scrolling Canvas Body */}
+              <div className="flex-1 overflow-y-auto overflow-x-hidden px-8 sm:px-14 py-8 relative select-text min-h-0">
+                {/* Selection Bubble Menu */}
+                {editor && <SelectionBubbleMenu editor={editor} />}
+
+                {/* Tiptap Content */}
+                <EditorContent
+                  editor={editor}
+                  className="prose prose-lg prose-navy max-w-none focus:outline-none min-h-[360px]"
+                />
+              </div>
+            </div>
+          </main>
+        </div>
 
         {/* Resizer Handle */}
         {showSidebar && (
@@ -526,7 +529,7 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
           />
         )}
 
-        {/* Right-hand Context Inspector Sidebar */}
+        {/* Right-hand Context Inspector Sidebar — NEVER hidden by top navbar */}
         {showSidebar && (
           <aside
             style={{ width: `${sidebarWidth}px` }}

@@ -52,43 +52,45 @@ export default function Home() {
       {/* ============================================================
           SECTION 1 — HERO
       ============================================================ */}
-      <section className="relative bg-navy overflow-hidden">
+      <section className="relative overflow-hidden bg-gradient-to-br from-[#FEA611] via-[#FE990E] to-[#FE4F01]">
+        {/* 3D grid + radial highlights */}
         <div
-          className="absolute inset-0 opacity-25"
+          className="absolute inset-0 opacity-[0.08]"
           style={{
             backgroundImage:
-              "linear-gradient(rgba(254,166,17,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(254,166,17,0.05) 1px, transparent 1px)",
-            backgroundSize: "64px 64px",
+              "linear-gradient(rgba(45,52,64,0.15) 1px, transparent 1px), linear-gradient(90deg, rgba(45,52,64,0.15) 1px, transparent 1px)",
+            backgroundSize: "56px 56px",
           }}
         />
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 h-[500px] w-[500px] rounded-full bg-brand/10 blur-[150px]" />
-        <div className="absolute bottom-0 left-1/4 h-[350px] w-[350px] rounded-full bg-flame/8 blur-[120px]" />
-        <div className="absolute top-1/3 right-0 h-[250px] w-[250px] rounded-full bg-orange/10 blur-[100px]" />
+        <div className="absolute -top-24 left-1/2 -translate-x-1/2 h-[700px] w-[900px] rounded-full bg-white/25 blur-[80px]" />
+        <div className="absolute -bottom-32 -left-20 h-[500px] w-[600px] rounded-full bg-[#2D3440]/10 blur-[90px]" />
+        <div className="absolute top-20 right-0 h-[400px] w-[400px] rounded-full bg-white/20 blur-[70px]" />
+        <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-white/30 to-transparent" />
 
         <div className="relative mx-auto max-w-7xl px-6 pb-20 pt-12 md:pt-16">
           <FadeIn delay={0} className="mb-10 flex justify-center">
-            <div className="inline-flex items-center gap-2 rounded-full border border-brand/20 bg-brand/10 px-5 py-2.5">
+            <div className="inline-flex items-center gap-2 rounded-full border border-[#2D3440]/10 bg-white/80 backdrop-blur px-5 py-2.5 shadow-sm">
               <span className="relative flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-brand opacity-75" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-brand" />
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#2D3440] opacity-20" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-[#2D3440]" />
               </span>
-              <span className="text-sm font-semibold text-brand">
+              <span className="text-sm font-semibold text-[#2D3440]">
                 Open Source — MIT License
               </span>
-              <ChevronRight className="h-3.5 w-3.5 text-brand" />
+              <ChevronRight className="h-3.5 w-3.5 text-[#2D3440]" />
             </div>
           </FadeIn>
 
           <FadeIn delay={0.1}>
-            <h1 className="text-center text-[3rem] font-bold leading-[1.08] tracking-tight text-white sm:text-5xl md:text-7xl lg:text-[5.5rem]">
+            <h1 className="text-center text-[3rem] font-bold leading-[1.08] tracking-tight text-[#2D3440] sm:text-5xl md:text-7xl lg:text-[5.5rem] drop-shadow-[0_2px_20px_rgba(255,255,255,0.35)]">
               Write. Publish.
               <br />
-              <span className="text-brand">Scale your content.</span>
+              <span className="bg-gradient-to-r from-[#2D3440] to-[#2D3440]/80 bg-clip-text text-transparent">Scale your content.</span>
             </h1>
           </FadeIn>
 
           <FadeIn delay={0.2}>
-            <p className="mx-auto mt-8 max-w-2xl text-center text-lg leading-relaxed text-slate-400 md:text-xl">
+            <p className="mx-auto mt-8 max-w-2xl text-center text-lg leading-relaxed text-[#2D3440]/80 md:text-xl">
               A professional blog CMS and writing studio with a block-based
               editor, SEO tools, media management, and a headless API — deploy
               anywhere with Supabase, Cloudflare, and Vercel.
@@ -99,14 +101,14 @@ export default function Home() {
             <div className="mt-12 flex flex-col items-center justify-center gap-4 sm:flex-row">
               <Link
                 href="/signup"
-                className="group inline-flex items-center gap-2.5 rounded-xl bg-brand px-9 py-4 text-sm font-bold text-navy shadow-lg shadow-brand/25 transition hover:bg-brand-hover hover:shadow-xl hover:shadow-brand/30"
+                className="group inline-flex items-center gap-2.5 rounded-xl bg-[#2D3440] px-9 py-4 text-sm font-bold text-white shadow-xl shadow-[#2D3440]/20 transition hover:bg-[#1a1f2e] hover:shadow-2xl hover:-translate-y-0.5"
               >
                 Start Writing Free
                 <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
               </Link>
               <Link
                 href="#github"
-                className="inline-flex items-center gap-2.5 rounded-xl border border-slate-600 px-9 py-4 text-sm font-bold text-slate-300 transition hover:border-slate-500 hover:text-white"
+                className="inline-flex items-center gap-2.5 rounded-xl border border-[#2D3440]/15 bg-white/80 backdrop-blur px-9 py-4 text-sm font-bold text-[#2D3440] transition hover:bg-white hover:shadow-md"
               >
                 <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
                 Star on GitHub
@@ -120,18 +122,18 @@ export default function Home() {
                 {[...Array(7)].map((_, i) => (
                   <div
                     key={i}
-                    className="h-10 w-10 rounded-full border-2 border-navy bg-gradient-to-br from-brand to-flame"
+                    className="h-10 w-10 rounded-full border-2 border-white bg-gradient-to-br from-[#FEA611] to-[#FE4F01] shadow-md"
                   />
                 ))}
               </div>
-              <p className="text-sm text-slate-500">
+              <p className="text-sm text-[#2D3440]/70">
                 Trusted by{" "}
-                <span className="font-semibold text-slate-300">
+                <span className="font-semibold text-[#2D3440]">
                   2,400+
                 </span>{" "}
                 content teams ·{" "}
-                <span className="inline-flex items-center gap-1 text-brand">
-                  <Star className="h-3 w-3 fill-brand" /> 4.2k stars
+                <span className="inline-flex items-center gap-1 text-[#2D3440] font-semibold">
+                  <Star className="h-3 w-3 fill-[#2D3440]" /> 4.2k stars
                 </span>
               </p>
             </div>
@@ -606,22 +608,24 @@ export default function Home() {
       </section>
 
       {/* ============================================================
-          SECTION 8 — EDITOR SHOWCASE (Dark)
-      ============================================================ */}
-      <section className="bg-navy py-20">
+           SECTION 8 — EDITOR SHOWCASE (Light with 3D gradient, dark only footer)
+       ============================================================ */}
+       <section className="relative bg-white py-20 overflow-hidden">
+         <div className="absolute -top-32 -right-32 h-[500px] w-[600px] rounded-full bg-gradient-to-br from-[#FEA611]/12 to-[#FE4F01]/10 blur-[60px]" />
+         <div className="absolute -bottom-20 -left-20 h-[400px] w-[500px] rounded-full bg-[#FE990E]/8 blur-[50px]" />
         <div className="mx-auto max-w-7xl px-6">
           <div className="grid items-center gap-16 lg:grid-cols-2">
             <FadeIn direction="right">
               <div>
-                <p className="text-sm font-semibold uppercase tracking-widest text-brand">
+                <p className="text-sm font-semibold uppercase tracking-widest text-[#FE4F01]">
                   The Editor
                 </p>
-                <h2 className="mt-4 text-4xl font-bold tracking-tight text-white md:text-5xl">
+                <h2 className="mt-4 text-4xl font-bold tracking-tight text-navy md:text-5xl">
                   A writing experience
                   <br />
                   your team will love.
                 </h2>
-                <p className="mt-6 text-lg leading-relaxed text-slate-400">
+                <p className="mt-6 text-lg leading-relaxed text-text-secondary">
                   Built on Tiptap (ProseMirror), the OpenPost editor combines the
                   familiarity of Word/Docs with structured content that&apos;s safe
                   to render, version, and deliver headlessly.
@@ -651,14 +655,14 @@ export default function Home() {
                     },
                   ].map((ef) => (
                     <div key={ef.title} className="flex gap-4">
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand/20 text-brand transition group-hover:bg-brand group-hover:text-white">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#FEA611]/12 text-[#2D3440] border border-[#FEA611]/20">
                         <Check className="h-4 w-4" />
                       </div>
                       <div>
-                        <h4 className="text-sm font-semibold text-white">
+                        <h4 className="text-sm font-semibold text-navy">
                           {ef.title}
                         </h4>
-                        <p className="mt-1 text-sm text-slate-400">{ef.desc}</p>
+                        <p className="mt-1 text-sm text-text-secondary">{ef.desc}</p>
                       </div>
                     </div>
                   ))}
@@ -667,9 +671,9 @@ export default function Home() {
             </FadeIn>
 
             <ScaleIn>
-              <div className="relative rounded-2xl border border-slate-700/40 bg-slate-900/60 p-1 shadow-2xl">
-                <div className="rounded-xl bg-slate-800/50 p-6">
-                  <div className="flex items-center gap-1 rounded-lg bg-slate-900/50 px-3 py-2">
+              <div className="relative rounded-2xl border border-border bg-white p-1 shadow-xl shadow-[#FEA611]/10">
+                <div className="rounded-xl bg-[#FCFCF9] p-6 border border-border">
+                  <div className="flex items-center gap-1 rounded-lg bg-white border border-border px-3 py-2 shadow-sm">
                     <div className="flex gap-1">
                       {["B", "I", "U", "S"].map((b) => (
                         <div
@@ -856,26 +860,28 @@ export default function Home() {
       </section>
 
       {/* ============================================================
-          SECTION 10 — API SHOWCASE (Dark)
-      ============================================================ */}
-      <section className="bg-navy py-20">
-        <div className="mx-auto max-w-7xl px-6">
-          <div className="grid items-center gap-16 lg:grid-cols-2">
-            <FadeIn direction="right">
-              <div>
-                <p className="text-sm font-semibold uppercase tracking-widest text-brand">
-                  Headless API
-                </p>
-                <h2 className="mt-4 text-4xl font-bold tracking-tight text-white md:text-5xl">
-                  Build any frontend.
-                  <br />
-                  We handle the content.
-                </h2>
-                <p className="mt-6 text-lg leading-relaxed text-slate-400">
-                  A versioned, cache-friendly REST API serving only published
-                  content. Cursor-based pagination, aggressive HTTP caching, and
-                  rate limiting — production-ready from day one.
-                </p>
+           SECTION 10 — API SHOWCASE (Light, 3D gradient — dark only footer)
+       ============================================================ */}
+       <section className="relative bg-white py-20 overflow-hidden">
+         <div className="absolute -top-20 right-0 h-[400px] w-[500px] rounded-full bg-gradient-to-br from-[#FEA611]/10 to-[#FE4F01]/8 blur-[50px]" />
+         <div className="absolute -bottom-20 left-0 h-[300px] w-[400px] rounded-full bg-[#FE990E]/8 blur-[40px]" />
+         <div className="mx-auto max-w-7xl px-6 relative">
+           <div className="grid items-center gap-16 lg:grid-cols-2">
+             <FadeIn direction="right">
+               <div>
+                 <p className="text-sm font-semibold uppercase tracking-widest text-[#FE4F01]">
+                   Headless API
+                 </p>
+                 <h2 className="mt-4 text-4xl font-bold tracking-tight text-navy md:text-5xl">
+                   Build any frontend.
+                   <br />
+                   We handle the content.
+                 </h2>
+                 <p className="mt-6 text-lg leading-relaxed text-text-secondary">
+                   A versioned, cache-friendly REST API serving only published
+                   content. Cursor-based pagination, aggressive HTTP caching, and
+                   rate limiting — production-ready from day one.
+                 </p>
                 <div className="mt-8 grid grid-cols-2 gap-4">
                   {[
                     { label: "Response Time", value: "&lt;100ms" },
@@ -885,13 +891,13 @@ export default function Home() {
                   ].map((stat) => (
                     <div
                       key={stat.label}
-                      className="rounded-xl border border-slate-700/40 bg-slate-800/30 p-4"
+                      className="rounded-xl border border-border bg-white p-4 shadow-sm"
                     >
                       <p
-                        className="text-2xl font-bold text-brand"
+                        className="text-2xl font-bold text-[#2D3440]"
                         dangerouslySetInnerHTML={{ __html: stat.value }}
                       />
-                      <p className="mt-1 text-xs text-slate-500">{stat.label}</p>
+                      <p className="mt-1 text-xs text-text-tertiary">{stat.label}</p>
                     </div>
                   ))}
                 </div>

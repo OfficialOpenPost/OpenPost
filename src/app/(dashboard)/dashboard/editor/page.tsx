@@ -117,6 +117,34 @@ function EditorInner({ initialBlogId }: EditorPageProps) {
       .finally(() => setLoadingInitial(false));
   }, [effectiveId, editor]);
 
+  // Native Fullscreen Toggle
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen?.().catch((err) => {
+        console.warn("Fullscreen request error:", err);
+      });
+      setIsFullscreen(true);
+    } else {
+      document.exitFullscreen?.().catch((err) => {
+        console.warn("Exit fullscreen error:", err);
+      });
+      setIsFullscreen(false);
+    }
+  };
+
+  // Sync fullscreen state with browser events (e.g. Esc key or browser button)
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      setIsFullscreen(Boolean(document.fullscreenElement));
+    };
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    document.addEventListener("webkitfullscreenchange", onFullscreenChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", onFullscreenChange);
+      document.removeEventListener("webkitfullscreenchange", onFullscreenChange);
+    };
+  }, []);
+
   // Global Keyboard Shortcuts (Ctrl+F for find, F11 for fullscreen, Ctrl+S to save)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -126,7 +154,7 @@ function EditorInner({ initialBlogId }: EditorPageProps) {
       }
       if (e.key === "F11") {
         e.preventDefault();
-        setIsFullscreen((prev) => !prev);
+        toggleFullscreen();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -325,24 +353,13 @@ function EditorInner({ initialBlogId }: EditorPageProps) {
             {status === "published" ? "Update Post" : status === "scheduled" ? "Scheduled" : "Publish Post"}
           </button>
 
-          {/* Outline Drawer Toggle */}
-          <button
-            onClick={() => setShowOutlineDrawer(!showOutlineDrawer)}
-            className={`flex h-8 w-8 items-center justify-center rounded-xl border border-border transition shrink-0 ${
-              showOutlineDrawer ? "bg-navy text-white" : "bg-white text-navy hover:bg-surface-raised"
-            }`}
-            title="Toggle Document Outline"
-          >
-            <ListTree className="h-4 w-4" />
-          </button>
-
           {/* Fullscreen Toggle */}
           <button
-            onClick={() => setIsFullscreen(!isFullscreen)}
+            onClick={toggleFullscreen}
             className={`flex h-8 w-8 items-center justify-center rounded-xl border border-border transition shrink-0 hidden sm:flex ${
               isFullscreen ? "bg-navy text-white" : "bg-white text-navy hover:bg-surface-raised"
             }`}
-            title={isFullscreen ? "Exit Fullscreen" : "Fullscreen Mode"}
+            title={isFullscreen ? "Exit Fullscreen (F11 / Esc)" : "Fullscreen Mode (F11)"}
           >
             {isFullscreen ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
           </button>
@@ -369,8 +386,10 @@ function EditorInner({ initialBlogId }: EditorPageProps) {
           <EditorRibbon
             editor={editor}
             onOpenFindReplace={() => setShowFindReplace(true)}
-            onToggleOutline={() => setShowOutlineDrawer(!showOutlineDrawer)}
-            onToggleFullscreen={() => setIsFullscreen(!isFullscreen)}
+            onToggleOutline={() => {
+              setShowSidebar(true);
+            }}
+            onToggleFullscreen={toggleFullscreen}
             isFullscreen={isFullscreen}
             onOpenPreview={() => setPreview(true)}
           />
@@ -379,13 +398,6 @@ function EditorInner({ initialBlogId }: EditorPageProps) {
 
       {/* Editor Body Area (Fills exact remaining viewport height, zero outer scroll) */}
       <div className="flex-1 flex overflow-hidden relative min-h-0">
-        {/* Document Outline Drawer (Collapsible Left Flyout) */}
-        {showOutlineDrawer && (
-          <div className="fixed left-0 top-14 bottom-0 z-25 w-72 border-r border-border bg-white/95 backdrop-blur-md p-4 shadow-xl overflow-y-auto animate-in slide-in-from-left duration-200">
-            <DocumentOutline editor={editor} onClose={() => setShowOutlineDrawer(false)} />
-          </div>
-        )}
-
         {/* Find & Replace Bar Overlay */}
         <FindReplaceBar
           editor={editor}

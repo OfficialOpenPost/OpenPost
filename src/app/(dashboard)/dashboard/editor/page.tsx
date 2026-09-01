@@ -35,8 +35,10 @@ import {
   ExternalLink,
   Plus,
   Loader2,
+  RotateCcw,
+  Sliders,
+  FileText,
 } from "lucide-react";
-import { InsertMenu } from "@/components/editor/InsertMenu";
 import Link from "next/link";
 
 interface EditorPageProps {
@@ -56,14 +58,14 @@ function EditorInner({ initialBlogId }: EditorPageProps) {
   const [preview, setPreview] = useState(false);
   const [status, setStatus] = useState<"draft" | "published" | "scheduled" | "trash">("draft");
   const [showSidebar, setShowSidebar] = useState(true);
-  const [sidebarWidth, setSidebarWidth] = useState(320);
+  const [sidebarWidth, setSidebarWidth] = useState(340);
   const [isResizing, setIsResizing] = useState(false);
   const [featuredImage, setFeaturedImage] = useState<string | null>(null);
   const [category, setCategory] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
   const [slugEdited, setSlugEdited] = useState(false);
-  const [activeTab, setActiveTab] = useState<"seo" | "organize" | "featured" | "publishing" | "history">("organize");
+  const [activeTab, setActiveTab] = useState<"organize" | "seo" | "featured" | "publishing" | "history">("organize");
   const [seoTitle, setSeoTitle] = useState("");
   const [seoDesc, setSeoDesc] = useState("");
   const [canonical, setCanonical] = useState("");
@@ -71,7 +73,7 @@ function EditorInner({ initialBlogId }: EditorPageProps) {
   const [ogDesc, setOgDesc] = useState("");
   const [ogImage, setOgImage] = useState("");
   const [scheduledAt, setScheduledAt] = useState("");
-  const [revisions, setRevisions] = useState<Array<{ id: string; label: string | null; createdAt: string; createdBy: string }>>([]);
+  const [revisions, setRevisions] = useState<Array<{ id: string; label: string | null; createdAt: string; createdBy: string; content?: any }>>([]);
   const [catOptions, setCatOptions] = useState<Array<{ id: string; name: string; slug: string }>>([]);
   const [conflictMsg, setConflictMsg] = useState<string | null>(null);
   const [loadingInitial, setLoadingInitial] = useState(Boolean(effectiveId));
@@ -133,7 +135,7 @@ function EditorInner({ initialBlogId }: EditorPageProps) {
   useEffect(() => {
     if (!isResizing) return;
     const onMove = (e: MouseEvent) => {
-      const newWidth = Math.min(480, Math.max(260, e.clientX));
+      const newWidth = Math.min(480, Math.max(280, e.clientX));
       setSidebarWidth(newWidth);
     };
     const onUp = () => setIsResizing(false);
@@ -256,6 +258,14 @@ function EditorInner({ initialBlogId }: EditorPageProps) {
     setTags(tags.filter((tag) => tag !== t));
   };
 
+  // Restore Revision Snapshot
+  const handleRestoreRevision = (rev: any) => {
+    if (!confirm(`Restore revision from ${new Date(rev.createdAt).toLocaleString()}?`)) return;
+    if (editor && rev.content) {
+      editor.commands.setContent(rev.content);
+    }
+  };
+
   if (preview) {
     return (
       <div className="min-h-screen bg-[#FCFCF9]">
@@ -332,8 +342,9 @@ function EditorInner({ initialBlogId }: EditorPageProps) {
 
           <button
             onClick={() => setShowSidebar(!showSidebar)}
-            className="flex h-8 w-8 items-center justify-center rounded-xl border border-border bg-white hover:bg-surface-raised lg:hidden shrink-0 text-navy"
+            className="flex h-8 w-8 items-center justify-center rounded-xl border border-border bg-white hover:bg-surface-raised shrink-0 text-navy"
             aria-label="Toggle inspector"
+            title="Toggle Sidebar Inspector"
           >
             <Settings2 className="h-4 w-4" />
           </button>
@@ -342,209 +353,298 @@ function EditorInner({ initialBlogId }: EditorPageProps) {
 
       {/* Editor Body */}
       <div className="flex-1 flex pt-16">
-        {/* Left/Desktop Inspector Sidebar */}
-        <aside
-          style={{ width: `${sidebarWidth}px` }}
-          className={`hidden lg:flex flex-col border-r border-border bg-white fixed left-0 top-16 bottom-0 z-20 overflow-y-auto ${
-            !showSidebar ? "lg:hidden" : ""
-          }`}
-        >
-          {/* Inspector Tab Buttons */}
-          <div className="grid grid-cols-4 p-2 border-b border-border bg-[#F9FAFB] gap-1 text-[11px] font-bold text-center">
-            <button
-              onClick={() => setActiveTab("organize")}
-              className={`py-1.5 rounded-lg transition ${
-                activeTab === "organize" ? "bg-white text-navy shadow-xs" : "text-text-tertiary hover:text-navy"
-              }`}
-            >
-              Organize
-            </button>
-            <button
-              onClick={() => setActiveTab("seo")}
-              className={`py-1.5 rounded-lg transition ${
-                activeTab === "seo" ? "bg-white text-navy shadow-xs" : "text-text-tertiary hover:text-navy"
-              }`}
-            >
-              SEO
-            </button>
-            <button
-              onClick={() => setActiveTab("featured")}
-              className={`py-1.5 rounded-lg transition ${
-                activeTab === "featured" ? "bg-white text-navy shadow-xs" : "text-text-tertiary hover:text-navy"
-              }`}
-            >
-              Cover
-            </button>
-            <button
-              onClick={() => setActiveTab("publishing")}
-              className={`py-1.5 rounded-lg transition ${
-                activeTab === "publishing" ? "bg-white text-navy shadow-xs" : "text-text-tertiary hover:text-navy"
-              }`}
-            >
-              Schedule
-            </button>
-          </div>
+        {/* Left Inspector Sidebar (All 5 Tabs) */}
+        {showSidebar && (
+          <aside
+            style={{ width: `${sidebarWidth}px` }}
+            className="flex flex-col border-r border-border bg-white fixed left-0 top-16 bottom-0 z-20 overflow-y-auto shadow-xs"
+          >
+            {/* 5 Inspector Tabs */}
+            <div className="grid grid-cols-5 p-1.5 border-b border-border bg-[#F9FAFB] gap-1 text-[11px] font-bold text-center">
+              <button
+                onClick={() => setActiveTab("organize")}
+                className={`py-1.5 rounded-lg transition ${
+                  activeTab === "organize" ? "bg-white text-navy shadow-xs" : "text-text-tertiary hover:text-navy"
+                }`}
+                title="Slug, Category & Tags"
+              >
+                Organize
+              </button>
+              <button
+                onClick={() => setActiveTab("seo")}
+                className={`py-1.5 rounded-lg transition ${
+                  activeTab === "seo" ? "bg-white text-navy shadow-xs" : "text-text-tertiary hover:text-navy"
+                }`}
+                title="Search Engine & Social"
+              >
+                SEO
+              </button>
+              <button
+                onClick={() => setActiveTab("featured")}
+                className={`py-1.5 rounded-lg transition ${
+                  activeTab === "featured" ? "bg-white text-navy shadow-xs" : "text-text-tertiary hover:text-navy"
+                }`}
+                title="Cover Image"
+              >
+                Cover
+              </button>
+              <button
+                onClick={() => setActiveTab("publishing")}
+                className={`py-1.5 rounded-lg transition ${
+                  activeTab === "publishing" ? "bg-white text-navy shadow-xs" : "text-text-tertiary hover:text-navy"
+                }`}
+                title="Schedule & Status"
+              >
+                Publish
+              </button>
+              <button
+                onClick={() => setActiveTab("history")}
+                className={`py-1.5 rounded-lg transition ${
+                  activeTab === "history" ? "bg-white text-navy shadow-xs" : "text-text-tertiary hover:text-navy"
+                }`}
+                title="Revisions & Rollback"
+              >
+                History
+              </button>
+            </div>
 
-          {/* Inspector Panel Content */}
-          <div className="p-4 space-y-4 flex-1 overflow-y-auto text-xs">
-            {/* TAB: ORGANIZE */}
-            {activeTab === "organize" && (
-              <div className="space-y-4">
-                <div>
-                  <label className="block font-bold text-navy mb-1">URL Slug</label>
-                  <input
-                    type="text"
-                    value={slug}
-                    onChange={(e) => {
-                      setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-"));
-                      setSlugEdited(true);
-                    }}
-                    className="w-full rounded-lg border border-border bg-[#FCFCF9] px-3 py-2 text-xs font-mono text-navy focus:border-brand focus:outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-bold text-navy mb-1">Category</label>
-                  <select
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value)}
-                    className="w-full rounded-lg border border-border bg-white px-3 py-2 text-xs text-navy focus:border-brand focus:outline-none"
-                  >
-                    <option value="">Uncategorized</option>
-                    {catOptions.map((c) => (
-                      <option key={c.id} value={c.name}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block font-bold text-navy mb-1">Tags</label>
-                  <div className="flex flex-wrap gap-1.5 mb-2">
-                    {tags.map((t) => (
-                      <span
-                        key={t}
-                        className="inline-flex items-center gap-1 rounded-md bg-surface-raised px-2 py-0.5 text-[11px] font-semibold text-navy"
-                      >
-                        #{t}
-                        <button onClick={() => handleRemoveTag(t)} className="text-text-tertiary hover:text-navy">
-                          <X className="h-3 w-3" />
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                  <input
-                    type="text"
-                    placeholder="Type tag and press Enter"
-                    value={tagInput}
-                    onChange={(e) => setTagInput(e.target.value)}
-                    onKeyDown={handleAddTag}
-                    className="w-full rounded-lg border border-border bg-white px-3 py-2 text-xs text-navy focus:border-brand focus:outline-none"
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* TAB: SEO */}
-            {activeTab === "seo" && (
-              <div className="space-y-4">
-                {seoWarnings.length > 0 && (
-                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 space-y-1">
-                    <p className="font-bold text-amber-900 flex items-center gap-1">
-                      <AlertTriangle className="h-3.5 w-3.5 text-amber-600" /> SEO Checklist ({seoWarnings.length})
+            {/* Inspector Panel Content */}
+            <div className="p-4 space-y-4 flex-1 overflow-y-auto text-xs">
+              {/* TAB 1: ORGANIZE */}
+              {activeTab === "organize" && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block font-bold text-navy mb-1">URL Slug</label>
+                    <input
+                      type="text"
+                      value={slug}
+                      onChange={(e) => {
+                        setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-"));
+                        setSlugEdited(true);
+                      }}
+                      className="w-full rounded-lg border border-border bg-[#FCFCF9] px-3 py-2 text-xs font-mono text-navy focus:border-brand focus:outline-none"
+                    />
+                    <p className="text-[10px] text-text-tertiary mt-1">
+                      https://yourdomain.com/blog/{slug}
                     </p>
-                    {seoWarnings.map((w, i) => (
-                      <p key={i} className="text-[11px] text-amber-800">
-                        • {w}
-                      </p>
-                    ))}
                   </div>
-                )}
 
-                <div>
-                  <label className="block font-bold text-navy mb-1">SEO Title</label>
-                  <input
-                    type="text"
-                    placeholder={title || "Article SEO Title"}
-                    value={seoTitle}
-                    onChange={(e) => setSeoTitle(e.target.value)}
-                    className="w-full rounded-lg border border-border bg-white px-3 py-2 text-xs text-navy focus:border-brand focus:outline-none"
-                  />
+                  <div>
+                    <label className="block font-bold text-navy mb-1">Category</label>
+                    <select
+                      value={category}
+                      onChange={(e) => setCategory(e.target.value)}
+                      className="w-full rounded-lg border border-border bg-white px-3 py-2 text-xs text-navy focus:border-brand focus:outline-none"
+                    >
+                      <option value="">Uncategorized</option>
+                      {catOptions.map((c) => (
+                        <option key={c.id} value={c.name}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-navy mb-1">Tags</label>
+                    <div className="flex flex-wrap gap-1.5 mb-2">
+                      {tags.map((t) => (
+                        <span
+                          key={t}
+                          className="inline-flex items-center gap-1 rounded-md bg-surface-raised px-2 py-0.5 text-[11px] font-semibold text-navy border border-border"
+                        >
+                          #{t}
+                          <button onClick={() => handleRemoveTag(t)} className="text-text-tertiary hover:text-navy">
+                            <X className="h-3 w-3" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="Type tag and press Enter"
+                      value={tagInput}
+                      onChange={(e) => setTagInput(e.target.value)}
+                      onKeyDown={handleAddTag}
+                      className="w-full rounded-lg border border-border bg-white px-3 py-2 text-xs text-navy focus:border-brand focus:outline-none"
+                    />
+                  </div>
                 </div>
+              )}
 
-                <div>
-                  <label className="block font-bold text-navy mb-1">Meta Description</label>
-                  <textarea
-                    rows={3}
-                    placeholder="Summary for search engines..."
-                    value={seoDesc}
-                    onChange={(e) => setSeoDesc(e.target.value)}
-                    className="w-full rounded-lg border border-border bg-white px-3 py-2 text-xs text-navy focus:border-brand focus:outline-none"
-                  />
+              {/* TAB 2: SEO & SERP */}
+              {activeTab === "seo" && (
+                <div className="space-y-4">
+                  {seoWarnings.length > 0 && (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 space-y-1">
+                      <p className="font-bold text-amber-900 flex items-center gap-1 text-xs">
+                        <AlertTriangle className="h-3.5 w-3.5 text-amber-600" /> SEO Checklist ({seoWarnings.length})
+                      </p>
+                      {seoWarnings.map((w, i) => (
+                        <p key={i} className="text-[11px] text-amber-800">
+                          • {w}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+
+                  <div>
+                    <div className="flex justify-between items-center mb-1">
+                      <label className="font-bold text-navy">SEO Meta Title</label>
+                      <span className="text-[10px] text-text-tertiary font-mono">
+                        {(seoTitle || title).length}/60 chars
+                      </span>
+                    </div>
+                    <input
+                      type="text"
+                      placeholder={title || "Article SEO Title"}
+                      value={seoTitle}
+                      onChange={(e) => setSeoTitle(e.target.value)}
+                      className="w-full rounded-lg border border-border bg-white px-3 py-2 text-xs text-navy focus:border-brand focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <div className="flex justify-between items-center mb-1">
+                      <label className="font-bold text-navy">Meta Description</label>
+                      <span className="text-[10px] text-text-tertiary font-mono">
+                        {seoDesc.length}/155 chars
+                      </span>
+                    </div>
+                    <textarea
+                      rows={3}
+                      placeholder="Summary for search engines..."
+                      value={seoDesc}
+                      onChange={(e) => setSeoDesc(e.target.value)}
+                      className="w-full rounded-lg border border-border bg-white px-3 py-2 text-xs text-navy focus:border-brand focus:outline-none resize-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-navy mb-1">Canonical URL</label>
+                    <input
+                      type="text"
+                      placeholder="https://yourblog.com/post-slug"
+                      value={canonical}
+                      onChange={(e) => setCanonical(e.target.value)}
+                      className="w-full rounded-lg border border-border bg-white px-3 py-2 text-xs font-mono text-navy focus:border-brand focus:outline-none"
+                    />
+                  </div>
+
+                  {/* Google SERP Snippet Box */}
+                  <div className="p-3 rounded-xl border border-border bg-[#F9FAFB] space-y-1">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-text-tertiary">
+                      Google Search Preview
+                    </p>
+                    <p className="text-xs font-semibold text-blue-700 truncate">
+                      {seoTitle || title || "Untitled Article"}
+                    </p>
+                    <p className="text-[11px] text-emerald-800 font-mono truncate">
+                      https://yourdomain.com/blog/{slug}
+                    </p>
+                    <p className="text-[11px] text-text-secondary line-clamp-2">
+                      {seoDesc || "Summary for search engine snippets and social cards..."}
+                    </p>
+                  </div>
                 </div>
+              )}
 
+              {/* TAB 3: COVER IMAGE */}
+              {activeTab === "featured" && (
                 <div>
-                  <label className="block font-bold text-navy mb-1">Canonical URL</label>
-                  <input
-                    type="text"
-                    placeholder="https://yourblog.com/post-slug"
-                    value={canonical}
-                    onChange={(e) => setCanonical(e.target.value)}
-                    className="w-full rounded-lg border border-border bg-white px-3 py-2 text-xs font-mono text-navy focus:border-brand focus:outline-none"
-                  />
+                  <FeaturedImagePicker imageUrl={featuredImage} onChange={setFeaturedImage} />
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* TAB: FEATURED COVER */}
-            {activeTab === "featured" && (
-              <div>
-                <FeaturedImagePicker imageUrl={featuredImage} onChange={setFeaturedImage} />
-              </div>
-            )}
+              {/* TAB 4: PUBLISHING & SCHEDULE */}
+              {activeTab === "publishing" && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block font-bold text-navy mb-1">Post Status</label>
+                    <select
+                      value={status}
+                      onChange={(e) => setStatus(e.target.value as any)}
+                      className="w-full rounded-lg border border-border bg-white px-3 py-2 text-xs text-navy focus:border-brand focus:outline-none"
+                    >
+                      <option value="draft">Draft (Private)</option>
+                      <option value="published">Published (Live)</option>
+                      <option value="scheduled">Scheduled</option>
+                      <option value="trash">Trash</option>
+                    </select>
+                  </div>
 
-            {/* TAB: PUBLISHING & SCHEDULE */}
-            {activeTab === "publishing" && (
-              <div className="space-y-4">
-                <div>
-                  <label className="block font-bold text-navy mb-1">Post Status</label>
-                  <select
-                    value={status}
-                    onChange={(e) => setStatus(e.target.value as any)}
-                    className="w-full rounded-lg border border-border bg-white px-3 py-2 text-xs text-navy focus:border-brand focus:outline-none"
-                  >
-                    <option value="draft">Draft (Private)</option>
-                    <option value="published">Published (Live)</option>
-                    <option value="scheduled">Scheduled</option>
-                    <option value="trash">Trash</option>
-                  </select>
+                  <div>
+                    <label className="block font-bold text-navy mb-1">Schedule Publish Timestamp</label>
+                    <input
+                      type="datetime-local"
+                      value={scheduledAt}
+                      onChange={(e) => setScheduledAt(e.target.value)}
+                      className="w-full rounded-lg border border-border bg-white px-3 py-2 text-xs text-navy focus:border-brand focus:outline-none font-mono"
+                    />
+                  </div>
+
+                  <div className="pt-2 border-t border-border">
+                    <p className="text-[11px] text-text-tertiary">
+                      Automatic 301 redirects are generated when changing published slugs.
+                    </p>
+                  </div>
                 </div>
+              )}
 
-                <div>
-                  <label className="block font-bold text-navy mb-1">Schedule Publish Timestamp</label>
-                  <input
-                    type="datetime-local"
-                    value={scheduledAt}
-                    onChange={(e) => setScheduledAt(e.target.value)}
-                    className="w-full rounded-lg border border-border bg-white px-3 py-2 text-xs text-navy focus:border-brand focus:outline-none font-mono"
-                  />
+              {/* TAB 5: REVISION HISTORY */}
+              {activeTab === "history" && (
+                <div className="space-y-3">
+                  <p className="text-xs font-bold text-navy flex items-center gap-1.5">
+                    <History className="h-3.5 w-3.5 text-brand" /> Document Revisions ({revisions.length})
+                  </p>
+                  {revisions.length === 0 ? (
+                    <p className="text-xs text-text-tertiary py-4 text-center">
+                      Auto-save checkpoints will appear here as you edit.
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      {revisions.map((rev) => (
+                        <div
+                          key={rev.id}
+                          className="flex items-center justify-between p-2.5 rounded-xl border border-border bg-white hover:bg-surface-raised transition"
+                        >
+                          <div>
+                            <p className="text-xs font-bold text-navy">
+                              {rev.label || "Auto-save checkpoint"}
+                            </p>
+                            <p className="text-[10px] text-text-tertiary font-mono">
+                              {new Date(rev.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => handleRestoreRevision(rev)}
+                            className="inline-flex items-center gap-1 rounded-lg border border-border bg-surface-dim px-2 py-1 text-[11px] font-bold text-navy hover:bg-brand/10 transition"
+                            title="Restore this revision"
+                          >
+                            <RotateCcw className="h-3 w-3" /> Restore
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              </div>
-            )}
-          </div>
-        </aside>
+              )}
+            </div>
+          </aside>
+        )}
 
         {/* Resizer Handle */}
-        <div
-          onMouseDown={handleMouseDown}
-          className="hidden lg:block w-1 hover:w-1.5 bg-border hover:bg-brand cursor-col-resize fixed top-16 bottom-0 z-20 transition-colors"
-          style={{ left: `${sidebarWidth}px` }}
-        />
+        {showSidebar && (
+          <div
+            onMouseDown={handleMouseDown}
+            className="hidden lg:block w-1 hover:w-1.5 bg-border hover:bg-brand cursor-col-resize fixed top-16 bottom-0 z-20 transition-colors"
+            style={{ left: `${sidebarWidth}px` }}
+          />
+        )}
 
         {/* Main Canvas Area */}
         <main
-          className="flex-1 flex flex-col items-center p-4 sm:p-8 overflow-y-auto"
+          className="flex-1 flex flex-col items-center p-4 sm:p-8 overflow-y-auto transition-all"
           style={{ marginLeft: showSidebar ? `${sidebarWidth}px` : "0" }}
         >
           {/* Tiptap Sticky Toolbar */}

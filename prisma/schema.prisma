@@ -1,0 +1,489 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  EDITOR
+  WRITER
+  owner // legacy, mapped to ADMIN
+  admin // legacy
+  editor // legacy
+  author // legacy
+  contributor // legacy
+}
+
+enum PostStatus {
+  draft
+  published
+  scheduled
+  archived
+  trash
+}
+
+enum PollType {
+  single
+  multiple
+}
+
+enum PollStatus {
+  draft
+  open
+  closed
+}
+
+enum PollResultsVisibility {
+  always
+  after_vote
+  after_close
+}
+
+enum ProfileStatus {
+  pending
+  approved
+  rejected
+  suspended
+}
+
+model User {
+  id        String   @id @default(uuid()) @db.Uuid
+  email     String   @unique
+  name      String
+  passwordHash String @map("password_hash")
+  role      UserRole @default(contributor)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  blogs          Blog[]           @relation("BlogAuthor")
+  revisions      BlogRevision[]
+  mediaUploads   Media[]
+  linkedAuthors  Author[]         @relation("UserLinkedAuthor")
+
+  @@map("users")
+}
+
+model Author {
+  id           String   @id @default(uuid()) @db.Uuid
+  name         String
+  slug         String
+  bio          String?
+  photoId      String?  @map("photo_id")
+  socialLinks  Json     @default("{}") @map("social_links")
+  website      String?
+  email        String?
+  linkedUserId String?  @map("linked_user_id")
+  projectId    String?  @map("project_id") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  linkedUser User?    @relation("UserLinkedAuthor", fields: [linkedUserId], references: [id], onDelete: SetNull)
+  photo      Media?   @relation(fields: [photoId], references: [id], onDelete: SetNull)
+  project    Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  blogs      BlogAuthor[]
+
+  @@index([projectId])
+  @@unique([projectId, slug])
+  @@map("authors")
+}
+
+model Blog {
+  id              String     @id @default(uuid()) @db.Uuid
+  title           String
+  slug            String
+  content         Json       @default("{}")
+  schemaVersion   Int        @default(1) @map("schema_version")
+  status          PostStatus @default(draft)
+  featuredImageId String?    @map("featured_image_id")
+  categoryId      String?    @map("category_id")
+  projectId       String?    @map("project_id") @db.Uuid
+  publishedAt     DateTime?  @map("published_at")
+  scheduledAt     DateTime?  @map("scheduled_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
+  createdAt       DateTime   @default(now()) @map("created_at")
+  createdBy       String     @map("created_by")
+  seo             Json       @default("{}")
+  wordCount       Int        @default(0) @map("word_count")
+  readingTime     Int        @default(0) @map("reading_time")
+
+  author         User            @relation("BlogAuthor", fields: [createdBy], references: [id], onDelete: Restrict)
+  featuredImage  Media?          @relation(fields: [featuredImageId], references: [id], onDelete: SetNull)
+  category       Category?       @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  project        Project?        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  revisions      BlogRevision[]
+  tags           BlogTag[]
+  authors        BlogAuthor[]
+  mediaUsage     MediaUsage[]
+  redirects      Redirect[]
+  polls          Poll[]
+
+  @@index([projectId, slug])
+  @@index([status])
+  @@index([publishedAt])
+  @@index([createdBy])
+  @@index([projectId])
+  @@map("blogs")
+}
+
+model BlogRevision {
+  id        String   @id @default(uuid()) @db.Uuid
+  blogId    String   @map("blog_id")
+  content   Json
+  createdAt DateTime @default(now()) @map("created_at")
+  createdBy String   @map("created_by")
+  label     String?
+
+  blog Blog @relation(fields: [blogId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [createdBy], references: [id], onDelete: Restrict)
+
+  @@index([blogId, createdAt])
+  @@map("blog_revisions")
+}
+
+model BlogAuthor {
+  blogId    String @map("blog_id")
+  authorId  String @map("author_id")
+  sortOrder Int    @default(0) @map("sort_order")
+
+  blog   Blog   @relation(fields: [blogId], references: [id], onDelete: Cascade)
+  author Author @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@id([blogId, authorId])
+  @@map("blog_authors")
+}
+
+model BlogTag {
+  blogId String @map("blog_id")
+  tagId  String @map("tag_id")
+
+  blog Blog @relation(fields: [blogId], references: [id], onDelete: Cascade)
+  tag  Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([blogId, tagId])
+  @@map("blog_tags")
+}
+
+model Category {
+  id          String @id @default(uuid()) @db.Uuid
+  name        String
+  slug        String
+  description String?
+  parentId    String? @map("parent_id")
+  seo         Json   @default("{}")
+  projectId   String? @map("project_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  parent   Category? @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children Category[] @relation("CategoryTree")
+  blogs    Blog[]
+  project  Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([slug])
+  @@index([projectId])
+  @@unique([projectId, slug])
+  @@map("categories")
+}
+
+model Tag {
+  id          String @id @default(uuid()) @db.Uuid
+  name        String
+  slug        String
+  description String?
+  projectId   String? @map("project_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  blogs   BlogTag[]
+  project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([slug])
+  @@index([projectId])
+  @@unique([projectId, slug])
+  @@map("tags")
+}
+
+model Media {
+  id               String @id @default(uuid()) @db.Uuid
+  originalFilename String @map("original_filename")
+  mimeType         String @map("mime_type")
+  sizeBytes        BigInt @map("size_bytes")
+  width            Int?
+  height           Int?
+  variants         Json   @default("{}")
+  altTextDefault   String? @map("alt_text_default")
+  checksum         String
+  uploadedBy       String @map("uploaded_by")
+  projectId        String? @map("project_id") @db.Uuid
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  uploader User     @relation(fields: [uploadedBy], references: [id], onDelete: Restrict)
+  project  Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  authors  Author[]
+  usage    MediaUsage[]
+  blogs    Blog[]
+
+  @@index([checksum])
+  @@index([projectId])
+  @@map("media")
+}
+
+model MediaUsage {
+  mediaId String @map("media_id")
+  blogId  String @map("blog_id")
+
+  media Media @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  blog  Blog  @relation(fields: [blogId], references: [id], onDelete: Cascade)
+
+  @@id([mediaId, blogId])
+  @@map("media_usage")
+}
+
+model Poll {
+  id                String               @id @default(uuid()) @db.Uuid
+  blogId            String?              @map("blog_id")
+  projectId         String?              @map("project_id") @db.Uuid
+  question          String
+  type              PollType             @default(single)
+  allowAnonymous    Boolean              @default(true) @map("allow_anonymous")
+  showResults       PollResultsVisibility @default(always) @map("show_results")
+  voteLimitPerUser  Int                  @default(1) @map("vote_limit_per_user")
+  closesAt          DateTime?            @map("closes_at")
+  status            PollStatus           @default(draft)
+  createdAt         DateTime             @default(now()) @map("created_at")
+  updatedAt         DateTime             @updatedAt @map("updated_at")
+
+  blog    Blog?    @relation(fields: [blogId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  options PollOption[]
+  votes   PollVote[]
+
+  @@index([projectId])
+  @@map("polls")
+}
+
+model PollOption {
+  id        String @id @default(uuid()) @db.Uuid
+  pollId    String @map("poll_id")
+  label     String
+  sortOrder Int    @default(0) @map("sort_order")
+
+  poll  Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  votes PollVote[]
+
+  @@map("poll_options")
+}
+
+model PollVote {
+  id              String   @id @default(uuid()) @db.Uuid
+  pollId          String   @map("poll_id")
+  optionId        String   @map("option_id")
+  voterFingerprint String @map("voter_fingerprint")
+  votedAt         DateTime @default(now()) @map("voted_at")
+
+  poll   Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  option PollOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+
+  @@unique([pollId, voterFingerprint])
+  @@map("poll_votes")
+}
+
+model Redirect {
+  id       String   @id @default(uuid()) @db.Uuid
+  oldSlug  String   @map("old_slug")
+  newSlug  String   @map("new_slug")
+  blogId   String   @map("blog_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  blog Blog @relation(fields: [blogId], references: [id], onDelete: Cascade)
+
+  @@index([oldSlug])
+  @@map("redirects")
+}
+
+model Webhook {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  url       String
+  events    String[] // e.g. ["post.publish", "post.update", "post.delete", "post.scheduled"]
+  secret    String?  // HMAC signing secret
+  isActive  Boolean  @default(true) @map("is_active")
+  filter    String?  // GROQ-like filter: e.g. "category == 'seo'"
+  retryCount Int     @default(3) @map("retry_count")
+  projectId String?  @map("project_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  project    Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  deliveries WebhookDelivery[]
+
+  @@index([isActive])
+  @@index([projectId])
+  @@map("webhooks")
+}
+
+model WebhookDelivery {
+  id         String   @id @default(uuid()) @db.Uuid
+  webhookId  String   @map("webhook_id")
+  event      String
+  payload    Json
+  status     String   @default("pending") // pending, success, failed
+  attempts   Int      @default(0)
+  lastError  String?  @map("last_error")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  webhook Webhook @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+
+  @@index([webhookId, createdAt])
+  @@map("webhook_deliveries")
+}
+
+model Profile {
+  id          String        @id @db.Uuid
+  email       String        @unique
+  displayName String?       @map("display_name")
+  status      ProfileStatus @default(pending)
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  memberships ProjectMember[]
+  ownedProjects Project[] @relation("ProjectOwner")
+
+  @@map("profiles")
+}
+
+model Project {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String
+  slug        String   @unique
+  description String?
+  ownerId     String   @map("owner_id") @db.Uuid
+  settings    Json     @default("{}")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  owner           Profile         @relation("ProjectOwner", fields: [ownerId], references: [id])
+  members         ProjectMember[]
+  blogs           Blog[]
+  categories      Category[]
+  tags            Tag[]
+  authors         Author[]
+  media           Media[]
+  webhooks        Webhook[]
+  polls           Poll[]
+  integrations    Integration[]
+  connectionCodes ConnectionCode[]
+  cliCodes        CliAuthCode[]
+  invites         Invite[]
+  auditLogs       AuditLog[]
+
+  @@index([slug])
+  @@index([ownerId])
+  @@map("projects")
+}
+
+model ProjectMember {
+  projectId String   @map("project_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  role      UserRole
+  createdAt DateTime @default(now()) @map("created_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, userId])
+  @@index([userId])
+  @@map("project_members")
+}
+
+model Invite {
+  id        String   @id @default(uuid()) @db.Uuid
+  email     String
+  projectId String   @map("project_id") @db.Uuid
+  role      UserRole
+  token     String   @unique @default(dbgenerated("encode(gen_random_bytes(32), 'hex')"))
+  createdBy String   @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  expiresAt DateTime @default(dbgenerated("now() + interval '7 days'")) @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([email])
+  @@map("invites")
+}
+
+model Integration {
+  id          String    @id @default(uuid()) @db.Uuid
+  projectId   String    @map("project_id") @db.Uuid
+  name        String
+  tokenHash   String    @map("token_hash")
+  tokenPrefix String    @map("token_prefix")
+  permissions String[]  @default(["READ_PUBLISHED_POSTS", "READ_CATEGORIES", "READ_TAGS", "READ_AUTHORS", "RECEIVE_WEBHOOKS"])
+  createdBy   String    @map("created_by") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at")
+  lastUsedAt  DateTime? @map("last_used_at")
+  revokedAt   DateTime? @map("revoked_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([tokenHash])
+  @@map("integrations")
+}
+
+model ConnectionCode {
+  code      String   @id
+  projectId String   @map("project_id") @db.Uuid
+  createdBy String   @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  expiresAt DateTime @default(dbgenerated("now() + interval '10 minutes'")) @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+  @@map("connection_codes")
+}
+
+model CliAuthCode {
+  code      String   @id
+  projectId String   @map("project_id") @db.Uuid
+  createdBy String   @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  expiresAt DateTime @default(dbgenerated("now() + interval '10 minutes'")) @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+  @@map("cli_auth_codes")
+}
+
+model AuditLog {
+  id        String   @id @default(uuid()) @db.Uuid
+  projectId String?  @map("project_id") @db.Uuid
+  actorId   String?  @map("actor_id") @db.Uuid
+  action    String
+  targetId  String?  @map("target_id")
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, createdAt])
+  @@map("audit_logs")
+}
+
+model Setting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("settings")
+}

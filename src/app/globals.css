@@ -1,0 +1,136 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+
+  /* ===== EXACT USER PALETTE ===== */
+  --color-1: #FEA611;
+  --color-2: #FE4F01;
+  --color-3: #FE990E;
+  --color-4: #F14802;
+  --color-5: #2D3440;
+
+  /* ===== BRAND COLORS (mapped from palette) ===== */
+  --color-brand: #FEA611; /* color-1 */
+  --color-brand-hover: #F14802; /* color-4 */
+  --color-brand-light: #FEF3E2;
+  --color-brand-dark: #E08F00;
+
+  --color-orange: #FE990E; /* color-3 */
+  --color-orange-dark: #F14802; /* color-4 */
+  --color-orange-light: #FFF4E6;
+
+  --color-flame: #FE4F01; /* color-2 */
+  --color-flame-dark: #F14802; /* color-4 */
+  --color-flame-light: #FFF0EB;
+
+  --color-navy: #2D3440; /* color-5 */
+  --color-navy-light: #3A4250;
+  --color-navy-lighter: #4A5568;
+  --color-navy-dark: #1E242E;
+
+  /* ===== SEMANTIC COLORS ===== */
+  --color-primary: #FEA611;
+  --color-primary-hover: #F14802;
+  --color-primary-light: #FEF3E2;
+  --color-accent: #FE4F01;
+  --color-accent-hover: #D94001;
+  --color-success: #10B981;
+  --color-success-light: #ECFDF5;
+  --color-warning: #FE990E;
+  --color-warning-light: #FFF8EB;
+  --color-error: #FE4F01;
+  --color-error-light: #FFF0EB;
+
+  /* ===== SURFACES ===== */
+  --color-surface: #FFFFFF;
+  --color-surface-dim: #F8F9FA;
+  --color-surface-raised: #F3F4F6;
+  --color-surface-overlay: #E5E7EB;
+  --color-surface-dark: #2D3440;
+  --color-surface-dark-raised: #353D4A;
+  --color-surface-dark-overlay: #3E4754;
+
+  /* ===== BORDERS ===== */
+  --color-border: #E5E7EB;
+  --color-border-hover: #D1D5DB;
+  --color-border-strong: #9CA3AF;
+  --color-border-dark: #3A4250;
+
+  /* ===== TEXT ===== */
+  --color-text-primary: #111827;
+  --color-text-secondary: #4B5563;
+  --color-text-tertiary: #9CA3AF;
+  --color-text-inverse: #FFFFFF;
+  --color-text-link: #FE4F01;
+
+  /* ===== ALIASES (for bg-dark etc.) ===== */
+  --color-dark: #2D3440;
+  --color-dark-light: #3A4250;
+  --color-dark-lighter: #4A5568;
+  --color-dark-800: #1E242E;
+}
+
+:root {
+  --background: #FFFFFF;
+  --foreground: #111827;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #9CA3AF; }
+
+/* Selection */
+::selection {
+  background-color: #FEA61140;
+  color: #111827;
+}
+
+/* Focus */
+:focus-visible {
+  outline: 2px solid #FEA611;
+  outline-offset: 2px;
+}
+
+/* Transitions */
+a, button {
+  transition: all 150ms ease;
+}
+
+/* Gradient text */
+.gradient-text {
+  background: linear-gradient(135deg, #FEA611 0%, #FE4F01 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Hover lift */
+.hover-lift {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.hover-lift:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 40px -8px rgba(254, 166, 17, 0.25);
+}

@@ -202,31 +202,67 @@ export const FloatingImageNode = Node.create({
     const isRight = a.float === "right" || a.layout === "right";
     const isWide = a.layout === "wide";
 
-    let floatStyle = "display:block;margin:2rem auto;text-align:center;";
+    const widthStr = typeof a.width === "number" ? `${a.width}px` : String(a.width || "340px");
+    const formattedWidth = widthStr.endsWith("%") || widthStr.endsWith("px") ? widthStr : `${widthStr}px`;
+    const borderRadius = a.borderRadius ?? 10;
+    const shadowMap: Record<string, string> = {
+      none: "none",
+      sm: "0 1px 3px rgba(0,0,0,0.07)",
+      md: "0 4px 12px rgba(0,0,0,0.09)",
+      lg: "0 8px 24px rgba(0,0,0,0.12)",
+      xl: "0 16px 40px rgba(0,0,0,0.15)",
+    };
+    const shadowVal = shadowMap[a.shadow] || shadowMap.sm;
+    const borderStyle = a.borderWidth > 0 ? `${a.borderWidth}px solid ${a.borderColor || "#E2E8F0"}` : "1px solid #E2E8F0";
+
+    let floatStyle = "";
     if (isLeft) {
-      floatStyle = `float:left;clear:none;display:block;margin:${a.marginTop ?? 6}px ${a.marginRight ?? 20}px ${a.marginBottom ?? 12}px 0;`;
+      floatStyle = `float:left;clear:none;display:block;width:${formattedWidth};max-width:80%;margin:${a.marginTop ?? 4}px ${a.marginRight ?? 14}px ${a.marginBottom ?? 8}px 0;`;
     } else if (isRight) {
-      floatStyle = `float:right;clear:none;display:block;margin:${a.marginTop ?? 6}px 0 ${a.marginBottom ?? 12}px ${a.marginLeft ?? 20}px;`;
+      floatStyle = `float:right;clear:none;display:block;width:${formattedWidth};max-width:80%;margin:${a.marginTop ?? 4}px 0 ${a.marginBottom ?? 8}px ${a.marginLeft ?? 14}px;`;
     } else if (isWide) {
-      floatStyle = "display:block;width:100%;clear:both;margin:2rem 0;";
+      floatStyle = `float:none;clear:both;display:block;width:100%;max-width:100%;margin:1.5rem 0;`;
+    } else {
+      floatStyle = `float:none;clear:both;display:block;width:${formattedWidth};max-width:100%;margin:1.25rem auto;text-align:center;`;
     }
 
     const figureAttrs = mergeAttributes(HTMLAttributes, {
       class: "openpost-floating-image",
-      style: `${floatStyle}max-width:100%;`,
+      style: `${floatStyle}box-sizing:border-box;position:relative;`,
       "data-floating-image": "true",
-      "data-float": a.float,
-      "data-layout": a.layout,
+      "data-float": isLeft ? "left" : isRight ? "right" : "none",
+      "data-layout": a.layout || (isLeft ? "left" : isRight ? "right" : isWide ? "wide" : "center"),
+      "data-width": formattedWidth,
     });
+
+    const cardStyle = `border-radius:${borderRadius}px;border:${borderStyle};box-shadow:${shadowVal};opacity:${a.opacity ?? 1};${a.rotation ? `transform:rotate(${a.rotation}deg);` : ""}overflow:hidden;box-sizing:border-box;display:block;width:100%;background:#ffffff;margin:0;padding:0;`;
+
+    const imgStyle = `width:100%;height:auto;display:block;margin:0;padding:0;border-radius:inherit;object-fit:contain;`;
 
     const imgAttrs: Record<string, string> = {
       src: a.src,
       alt: a.isDecorative ? "" : a.alt || "",
-      style: `width:100%;height:auto;display:block;border-radius:${a.borderRadius ?? 12}px;`,
+      style: imgStyle,
     };
     if (a.title) imgAttrs.title = a.title;
 
-    const children: any[] = [["img", imgAttrs]];
+    let imgEl: any = ["img", imgAttrs];
+    if (a.link) {
+      imgEl = [
+        "a",
+        {
+          href: a.link,
+          target: a.openLinkInNewTab ? "_blank" : "_self",
+          rel: a.openLinkInNewTab ? "noopener noreferrer" : undefined,
+          style: "display:block;text-decoration:none;border:none;",
+        },
+        imgEl,
+      ];
+    }
+
+    const cardBox = ["div", { class: "openpost-fi-card", style: cardStyle }, imgEl];
+
+    const children: any[] = [cardBox];
     if (a.caption) {
       children.push([
         "figcaption",

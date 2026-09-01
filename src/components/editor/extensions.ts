@@ -309,4 +309,67 @@ export const EDITOR_STYLES = `
   .tiptap [style*="text-align: right"] { text-align: right !important; }
   .tiptap [style*="text-align: justify"] { text-align: justify !important; }
   .tiptap [style*="text-align: left"] { text-align: left !important; }
+
+  /* Floating Image Styles for Content & Preview */
+  figure.openpost-floating-image,
+  .prose figure.openpost-floating-image {
+    box-sizing: border-box !important;
+    position: relative !important;
+    max-width: 100% !important;
+  }
+  figure.openpost-floating-image[data-float="left"],
+  .prose figure.openpost-floating-image[data-float="left"] {
+    float: left !important;
+    clear: none !important;
+    max-width: 80% !important;
+  }
+  figure.openpost-floating-image[data-float="right"],
+  .prose figure.openpost-floating-image[data-float="right"] {
+    float: right !important;
+    clear: none !important;
+    max-width: 80% !important;
+  }
+  figure.openpost-floating-image[data-layout="wide"],
+  .prose figure.openpost-floating-image[data-layout="wide"] {
+    float: none !important;
+    clear: both !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  figure.openpost-floating-image[data-layout="center"],
+  .prose figure.openpost-floating-image[data-layout="center"] {
+    float: none !important;
+    clear: both !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+
+  /* Card and Image constraints in preview */
+  figure.openpost-floating-image .openpost-fi-card,
+  .prose figure.openpost-floating-image .openpost-fi-card {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+  figure.openpost-floating-image img,
+  .prose figure.openpost-floating-image img {
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    display: block !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    object-fit: contain !important;
+  }
+
+  /* Clearfix for preview and published posts */
+  .prose::after, .tiptap::after {
+    content: "";
+    display: table;
+    clear: both;
+  }
+  .prose figure.openpost-floating-image {
+    margin-top: 0.5rem;
+    margin-bottom: 0.75rem;
+  }
 `;

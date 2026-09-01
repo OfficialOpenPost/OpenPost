@@ -357,12 +357,12 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
   // Reading Preview Modal
   if (preview) {
     return (
-      <div className="fixed inset-0 z-50 overflow-y-auto bg-white p-6 sm:p-12 text-navy select-text">
-        <div className="mx-auto max-w-3xl">
+      <div className="fixed inset-0 z-50 overflow-y-auto bg-[#F4F5F7] p-3 sm:p-6 text-navy select-text flex flex-col items-center">
+        <div className="w-full max-w-[940px] 2xl:max-w-[1040px] bg-white rounded-2xl border border-slate-200/90 shadow-[0_4px_24px_rgba(0,0,0,0.06)] px-8 sm:px-14 py-8 sm:py-12 my-4">
           <div className="flex items-center justify-between border-b border-border pb-4 mb-8">
             <button
               onClick={() => setPreview(false)}
-              className="flex items-center gap-2 text-xs font-bold text-navy hover:text-brand transition"
+              className="inline-flex items-center gap-2 rounded-xl border border-border bg-white px-3 py-1.5 text-xs font-bold text-navy hover:bg-surface-raised transition shadow-xs"
             >
               <ArrowLeft className="h-4 w-4" /> Back to Editor
             </button>
@@ -370,7 +370,7 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
               {words} words · ~{minutes} min read
             </span>
           </div>
-          <h1 className="text-3xl sm:text-5xl font-black text-navy mb-6 leading-tight">
+          <h1 className="text-3xl sm:text-4xl font-extrabold text-navy mb-6 leading-tight tracking-tight">
             {title || "Untitled Article"}
           </h1>
           {featuredImage && (
@@ -383,7 +383,7 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
           )}
           <style dangerouslySetInnerHTML={{ __html: EDITOR_STYLES }} />
           <div
-            className="prose prose-lg prose-navy max-w-none"
+            className="tiptap prose prose-lg prose-navy max-w-none"
             dangerouslySetInnerHTML={{ __html: html }}
           />
         </div>
@@ -423,7 +423,10 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
           </span>
 
           <button
-            onClick={() => setPreview(true)}
+            onClick={() => {
+              if (editor) setHtml(editor.getHTML());
+              setPreview(true);
+            }}
             className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-white px-3 py-1.5 text-xs font-bold text-navy hover:bg-surface-raised transition shadow-xs"
           >
             <Eye className="h-3.5 w-3.5 text-text-tertiary" /> Preview
@@ -489,7 +492,10 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
                 onToggleOutline={() => setShowSidebar(true)}
                 onToggleFullscreen={toggleFullscreen}
                 isFullscreen={isFullscreen}
-                onOpenPreview={() => setPreview(true)}
+                onOpenPreview={() => {
+                  if (editor) setHtml(editor.getHTML());
+                  setPreview(true);
+                }}
               />
             </div>
           </div>

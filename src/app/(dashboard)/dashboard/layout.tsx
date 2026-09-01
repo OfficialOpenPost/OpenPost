@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, FileText, Image as ImageIcon, Tag, Folder, Users, Settings, PenLine, Webhook } from "lucide-react";
+import { useState } from "react";
+import { LayoutDashboard, FileText, Image as ImageIcon, Tag, Folder, Users, Settings, PenLine, Webhook, Menu, X } from "lucide-react";
 
 const nav = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -18,6 +19,7 @@ const nav = [
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isEditor = pathname?.includes("/editor");
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   if (isEditor) {
     return <div className="min-h-screen bg-surface">{children}</div>;
@@ -58,7 +60,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       </aside>
       <div className="flex-1 min-w-0 flex flex-col md:ml-80">
-        <header className="flex h-16 items-center justify-between border-b border-[#C3C4C7] bg-white px-6 md:hidden shrink-0">
+        <header className="flex h-16 items-center justify-between border-b border-[#C3C4C7] bg-white px-4 sm:px-6 md:hidden shrink-0 sticky top-0 z-30">
+          <button onClick={()=>setMobileOpen(true)} className="flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-white" aria-label="Open menu">
+            <Menu className="h-4 w-4" />
+          </button>
           <Link href="/dashboard" className="flex items-center gap-2">
             <img src="/logo.svg" alt="OpenPost" className="h-8 w-8" />
             <span className="text-sm font-bold text-navy">
@@ -69,6 +74,33 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             New Post
           </Link>
         </header>
+        {/* Mobile drawer */}
+        {mobileOpen && (
+          <div className="fixed inset-0 z-40 md:hidden">
+            <div className="absolute inset-0 bg-navy/40 backdrop-blur-sm" onClick={()=>setMobileOpen(false)} />
+            <aside className="absolute left-0 top-0 bottom-0 w-80 max-w-[85vw] bg-white border-r border-border flex flex-col shadow-xl">
+              <div className="flex h-16 items-center justify-between px-5 border-b border-border">
+                <div className="flex items-center gap-2">
+                  <img src="/logo.svg" alt="OpenPost" className="h-7 w-7" />
+                  <span className="text-sm font-bold text-navy">Open<span className="text-[#FEA611]">Post</span></span>
+                </div>
+                <button onClick={()=>setMobileOpen(false)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-border">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <nav className="flex-1 p-4 space-y-1 overflow-auto">
+                {nav.map((item) => {
+                  const isActive = item.href === "/dashboard" ? pathname === "/dashboard" : pathname === item.href || pathname?.startsWith(item.href + "/");
+                  return (
+                    <Link key={item.href} href={item.href} onClick={()=>setMobileOpen(false)} className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium ${isActive ? "bg-[#2D3440] text-white" : "text-text-secondary hover:bg-[#F0F0F1]"}`}>
+                      <item.icon className={`h-4 w-4 ${isActive ? "text-[#FEA611]" : ""}`} />{item.label}
+                    </Link>
+                  );
+                })}
+              </nav>
+            </aside>
+          </div>
+        )}
         <div className="flex-1 bg-[#F0F0F1]">{children}</div>
       </div>
     </div>

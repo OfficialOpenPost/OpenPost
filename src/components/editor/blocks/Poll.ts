@@ -1,4 +1,6 @@
 import { Node, mergeAttributes } from "@tiptap/core";
+import { ReactNodeViewRenderer } from "@tiptap/react";
+import { PollBlockView } from "../PollBlockView";
 
 export const PollBlock = Node.create({
   name: "pollBlock",
@@ -10,6 +12,9 @@ export const PollBlock = Node.create({
     return {
       pollId: { default: null },
       question: { default: "What do you think?" },
+      options: { default: [{ id: "1", label: "Option A" }, { id: "2", label: "Option B" }] },
+      type: { default: "single" },
+      showResults: { default: "always" },
     };
   },
 
@@ -22,8 +27,12 @@ export const PollBlock = Node.create({
       "div",
       mergeAttributes(HTMLAttributes, { "data-type": "pollBlock", class: "my-6 rounded-xl border border-border bg-white p-6" }),
       ["div", { class: "text-sm font-bold text-navy" }, node.attrs.question || "Poll"],
-      ["div", { class: "mt-3 text-xs text-text-tertiary" }, "Poll — vote via POST /api/v1/polls/:id/vote (fingerprint dedup)"],
+      ["div", { class: "mt-3 text-xs text-text-tertiary" }, `Poll — ${node.attrs.options?.length ?? 2} options · ${node.attrs.type ?? "single"}`],
     ];
+  },
+
+  addNodeView() {
+    return ReactNodeViewRenderer(PollBlockView);
   },
 
   addCommands() {

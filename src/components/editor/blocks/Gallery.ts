@@ -1,4 +1,6 @@
 import { Node, mergeAttributes } from "@tiptap/core";
+import { ReactNodeViewRenderer } from "@tiptap/react";
+import { GalleryBlockView } from "../GalleryBlockView";
 
 export const Gallery = Node.create({
   name: "gallery",
@@ -32,6 +34,10 @@ export const Gallery = Node.create({
     return ["div", mergeAttributes(HTMLAttributes, { "data-type": "gallery", class: "my-6 grid grid-cols-2 gap-4 rounded-xl border border-border p-4 bg-surface-raised" }), "Gallery — grid / carousel (add images in media library)"];
   },
 
+  addNodeView() {
+    return ReactNodeViewRenderer(GalleryBlockView);
+  },
+
   addCommands() {
     return {
       setGallery:
@@ -39,7 +45,6 @@ export const Gallery = Node.create({
         ({ commands, editor }: any) => {
           const images = (attrs as any).images;
           if (Array.isArray(images) && images.length < 2) {
-            // Enforce min 2 — pad or convert to single image
             if (images.length === 1) {
               return editor.chain().focus().setImage({ src: images[0].src }).run();
             }

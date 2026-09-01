@@ -13,21 +13,21 @@
   --color-4: #F14802;
   --color-5: #2D3440;
 
-  /* ===== BRAND COLORS (mapped from palette) ===== */
-  --color-brand: #FEA611; /* color-1 */
-  --color-brand-hover: #F14802; /* color-4 */
+  /* ===== BRAND COLORS ===== */
+  --color-brand: #FEA611;
+  --color-brand-hover: #F14802;
   --color-brand-light: #FEF3E2;
   --color-brand-dark: #E08F00;
 
-  --color-orange: #FE990E; /* color-3 */
-  --color-orange-dark: #F14802; /* color-4 */
+  --color-orange: #FE990E;
+  --color-orange-dark: #F14802;
   --color-orange-light: #FFF4E6;
 
-  --color-flame: #FE4F01; /* color-2 */
-  --color-flame-dark: #F14802; /* color-4 */
+  --color-flame: #FE4F01;
+  --color-flame-dark: #F14802;
   --color-flame-light: #FFF0EB;
 
-  --color-navy: #2D3440; /* color-5 */
+  --color-navy: #2D3440;
   --color-navy-light: #3A4250;
   --color-navy-lighter: #4A5568;
   --color-navy-dark: #1E242E;
@@ -47,12 +47,11 @@
 
   /* ===== SURFACES ===== */
   --color-surface: #FFFFFF;
-  --color-surface-dim: #F8F9FA;
+  --color-surface-dim: #F9FAFB;
   --color-surface-raised: #F3F4F6;
   --color-surface-overlay: #E5E7EB;
   --color-surface-dark: #2D3440;
   --color-surface-dark-raised: #353D4A;
-  --color-surface-dark-overlay: #3E4754;
 
   /* ===== BORDERS ===== */
   --color-border: #E5E7EB;
@@ -67,11 +66,8 @@
   --color-text-inverse: #FFFFFF;
   --color-text-link: #FE4F01;
 
-  /* ===== ALIASES (for bg-dark etc.) ===== */
   --color-dark: #2D3440;
   --color-dark-light: #3A4250;
-  --color-dark-lighter: #4A5568;
-  --color-dark-800: #1E242E;
 }
 
 :root {
@@ -98,8 +94,8 @@ body {
 /* Scrollbar */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #9CA3AF; }
+::-webkit-scrollbar-thumb { background: #E5E7EB; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #D1D5DB; }
 
 /* Selection */
 ::selection {
@@ -115,7 +111,7 @@ body {
 
 /* Transitions */
 a, button {
-  transition: all 150ms ease;
+  transition: all 180ms ease;
 }
 
 /* Gradient text */
@@ -126,11 +122,89 @@ a, button {
   background-clip: text;
 }
 
-/* Hover lift */
-.hover-lift {
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+.gradient-text-brand {
+  background: linear-gradient(135deg, #FEA611 0%, #FE990E 50%, #FE4F01 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
-.hover-lift:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 12px 40px -8px rgba(254, 166, 17, 0.25);
+
+/* Smooth Professional Micro-Animations (Zero CPU lag) */
+@keyframes subtleFloat {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes subtleFloatReverse {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(6px);
+  }
+}
+
+@keyframes pulseGlowSoft {
+  0%, 100% {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.03);
+  }
+}
+
+@keyframes driftBg {
+  0%, 100% {
+    transform: translate(0px, 0px);
+  }
+  50% {
+    transform: translate(15px, -10px);
+  }
+}
+
+.animate-subtle-float {
+  animation: subtleFloat 5s ease-in-out infinite;
+}
+
+.animate-subtle-float-reverse {
+  animation: subtleFloatReverse 6s ease-in-out infinite;
+}
+
+.animate-pulse-soft {
+  animation: pulseGlowSoft 3s ease-in-out infinite;
+}
+
+.animate-drift {
+  animation: driftBg 8s ease-in-out infinite;
+}
+
+/* Professional Interactive Card Hover */
+.pro-card {
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.22s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.22s ease;
+  will-change: transform;
+}
+
+.pro-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 25px -5px rgba(45, 52, 64, 0.08), 0 2px 8px -2px rgba(254, 166, 17, 0.06);
+  border-color: rgba(254, 166, 17, 0.4);
+}
+
+/* Dot Grid Background - Lightweight Hardware Accelerated */
+.bg-light-grid {
+  background-image: 
+    linear-gradient(to right, rgba(45, 52, 64, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(45, 52, 64, 0.04) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+.bg-light-dots {
+  background-image: radial-gradient(rgba(45, 52, 64, 0.08) 1px, transparent 1px);
+  background-size: 20px 20px;
 }

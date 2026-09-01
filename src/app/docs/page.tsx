@@ -7,15 +7,16 @@ import Link from "next/link";
 export default function DocsPage() {
   return (
     <div className="overflow-hidden">
-      <section className="bg-navy py-16">
-        <div className="mx-auto max-w-7xl px-6">
+      <section className="relative bg-gradient-to-br from-[#FEA611]/10 via-white to-white py-12 border-b border-border overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-r from-[#FE4F01]/[0.03] via-transparent to-[#FEA611]/[0.03]" />
+        <div className="relative mx-auto max-w-7xl px-6">
           <FadeIn>
-            <div className="inline-flex items-center gap-2 rounded-full border border-brand/20 bg-brand/10 px-4 py-2">
-              <BookOpen className="h-3.5 w-3.5 text-brand" />
-              <span className="text-xs font-semibold text-brand">Documentation</span>
+            <div className="inline-flex items-center gap-2 rounded-full border border-border bg-white px-4 py-2 shadow-sm">
+              <BookOpen className="h-3.5 w-3.5 text-[#FEA611]" />
+              <span className="text-xs font-semibold text-navy">Documentation</span>
             </div>
-            <h1 className="mt-6 text-4xl font-bold tracking-tight text-white md:text-5xl">Build with OpenPost</h1>
-            <p className="mt-4 max-w-2xl text-lg text-slate-400">Deploy in 5 minutes on Vercel + Supabase + Cloudflare R2, or self-host with Docker. Headless API, structured content, no lock-in.</p>
+            <h1 className="mt-6 text-4xl font-bold tracking-tight text-navy md:text-5xl">Build with OpenPost</h1>
+            <p className="mt-4 max-w-2xl text-lg text-text-secondary">Deploy in 5 minutes on Vercel + Supabase + Cloudflare R2, or self-host with Docker. Headless API, structured content, no lock-in. Browse all <code className="font-mono text-xs bg-white border border-border px-1.5 py-0.5 rounded">docs/</code> on the left.</p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Link href="/signup" className="inline-flex items-center gap-2 rounded-xl bg-brand px-6 py-3 text-sm font-bold text-navy hover:bg-brand-hover">
                 Quickstart <ArrowRight className="h-4 w-4" />

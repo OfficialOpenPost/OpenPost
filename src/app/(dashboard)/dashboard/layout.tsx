@@ -28,12 +28,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-[#F0F0F1] flex">
       <aside className="hidden md:flex w-80 shrink-0 flex-col border-r border-border bg-white fixed left-0 top-16 h-[calc(100vh-4rem)] overflow-y-auto z-20 shadow-[1px_0_0_0_rgba(0,0,0,0.02)]">
-        <div className="flex h-12 items-center px-5 border-b border-border">
-          <img src="/logo.svg" alt="OpenPost" className="h-7 w-7" />
-          <span className="ml-2 text-sm font-bold tracking-tight text-navy">Open<span className="text-[#FEA611]">Post</span></span>
-          <span className="ml-auto rounded-full bg-[#FEA611]/10 px-2 py-0.5 text-[10px] font-bold text-[#2D3440]">CMS</span>
-        </div>
-        <div className="px-4 py-3">
+        <div className="px-4 py-3 border-b border-border">
           <span className="text-[11px] font-bold tracking-widest text-text-tertiary uppercase">Menu</span>
         </div>
         <nav className="flex-1 px-3 space-y-1 overflow-auto pb-4">

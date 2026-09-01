@@ -106,12 +106,12 @@ create policy "projects_owner_write" on projects for all
 -- Project members: members can read their memberships
 drop policy if exists "members_self_read" on project_members;
 create policy "members_self_read" on project_members for select
-  using (user_id = auth.uid() or exists (select 1 from project_members pm where pm.project_id = project_members.project_id and pm.user_id = auth.uid() and pm.role in ('owner','admin','ADMIN')));
+  using (user_id = auth.uid() or exists (select 1 from project_members pm where pm.project_id = project_members.project_id and pm.user_id = auth.uid() and pm.role in ('owner','admin')));
 
 -- Invites: admin of project can manage
 drop policy if exists "invites_admin" on invites;
 create policy "invites_admin" on invites for all
-  using (exists (select 1 from project_members where project_members.project_id = invites.project_id and project_members.user_id = auth.uid() and project_members.role in ('owner','admin','ADMIN')))
-  with check (exists (select 1 from project_members where project_members.project_id = invites.project_id and project_members.user_id = auth.uid() and project_members.role in ('owner','admin','ADMIN')));
+  using (exists (select 1 from project_members where project_members.project_id = invites.project_id and project_members.user_id = auth.uid() and project_members.role in ('owner','admin')))
+  with check (exists (select 1 from project_members where project_members.project_id = invites.project_id and project_members.user_id = auth.uid() and project_members.role in ('owner','admin')));
 
 comment on table projects is 'One OpenPost install can host many isolated blog projects (Sanity-like). Every blog, media, category, etc must have project_id.';

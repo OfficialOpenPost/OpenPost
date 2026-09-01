@@ -63,8 +63,8 @@ create policy "integrations_member_read" on integrations for select
 
 drop policy if exists "integrations_admin_write" on integrations;
 create policy "integrations_admin_write" on integrations for all
-  using (exists (select 1 from project_members where project_members.project_id = integrations.project_id and project_members.user_id = auth.uid() and project_members.role in ('owner','admin','ADMIN')))
-  with check (exists (select 1 from project_members where project_members.project_id = integrations.project_id and project_members.user_id = auth.uid() and project_members.role in ('owner','admin','ADMIN')));
+  using (exists (select 1 from project_members where project_members.project_id = integrations.project_id and project_members.user_id = auth.uid() and project_members.role in ('owner','admin')))
+  with check (exists (select 1 from project_members where project_members.project_id = integrations.project_id and project_members.user_id = auth.uid() and project_members.role in ('owner','admin')));
 
 -- Connection codes: any authenticated member of project can create; anyone with code can read (for CLI discovery) but code is short-lived and single-use
 drop policy if exists "codes_member_create" on connection_codes;

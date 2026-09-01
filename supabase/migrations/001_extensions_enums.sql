@@ -11,6 +11,24 @@ do $$ begin
 exception when duplicate_object then null;
 end $$;
 
+-- Prisma uses UPPERCASE (ADMIN/EDITOR/WRITER) — add for compatibility (safe if already lowercase-only DB)
+do $$ begin
+  alter type user_role add value if not exists 'ADMIN';
+exception when duplicate_object then null;
+end $$;
+do $$ begin
+  alter type user_role add value if not exists 'EDITOR';
+exception when duplicate_object then null;
+end $$;
+do $$ begin
+  alter type user_role add value if not exists 'WRITER';
+exception when duplicate_object then null;
+end $$;
+do $$ begin
+  alter type user_role add value if not exists 'OWNER';
+exception when duplicate_object then null;
+end $$;
+
 do $$ begin
   create type post_status as enum ('draft','published','scheduled','archived','trash');
 exception when duplicate_object then null;

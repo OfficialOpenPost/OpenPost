@@ -14,13 +14,13 @@ on conflict (id) do update set status='approved';
 insert into projects (id, name, slug, owner_id) values (gen_random_uuid(), 'Tech Blog', 'tech-blog', '<UUID>')
 on conflict do nothing;
 
--- Make member admin
+-- Make member admin (enum is lowercase: 'admin' not 'ADMIN')
 insert into project_members (project_id, user_id, role)
-select id, '<UUID>', 'ADMIN' from projects where slug='tech-blog'
+select id, '<UUID>', 'admin' from projects where slug='tech-blog'
 on conflict do nothing;
 
 -- Also set legacy users.role for API fallback
-update users set role='ADMIN' where id='<UUID>';
+update users set role='admin' where id='<UUID>';
 ```
 
 3. Login at `/login` → you will see Dashboard, not `/pending-approval`.

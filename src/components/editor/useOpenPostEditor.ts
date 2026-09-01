@@ -4,7 +4,7 @@ import { useEditor } from "@tiptap/react";
 import { editorExtensions } from "./extensions";
 
 interface UseOpenPostEditorOptions {
-  content?: string;
+  content?: any;
   onChange?: (html: string, json: Record<string, unknown>) => void;
   editable?: boolean;
 }
@@ -18,14 +18,14 @@ export function useOpenPostEditor({ content = "", onChange, editable = true }: U
     onUpdate: ({ editor }) => {
       const html = editor.getHTML();
       const json = editor.getJSON();
-      // Use queueMicrotask to avoid flushSync warnings in React 19
+      // Use queueMicrotask to avoid React flushSync warning in React 19
       queueMicrotask(() => {
         onChange?.(html, json);
       });
     },
     editorProps: {
       attributes: {
-        class: "tiptap min-h-[480px] px-8 py-8 md:px-12 focus:outline-none",
+        class: "tiptap min-h-[520px] px-8 py-8 md:px-12 focus:outline-none",
       },
       handleDrop: (view, event) => {
         const files = event.dataTransfer?.files;
@@ -37,9 +37,21 @@ export function useOpenPostEditor({ content = "", onChange, editable = true }: U
               for (const f of Array.from(files)) {
                 const { url } = await uploadImageWithWebP(f as File);
                 const pos = view.posAtCoords({ left: event.clientX, top: event.clientY })?.pos ?? view.state.selection.from;
-                view.dispatch(view.state.tr.insert(pos, view.state.schema.nodes.image.create({ src: url })));
+                view.dispatch(
+                  view.state.tr.insert(
+                    pos,
+                    view.state.schema.nodes.image.create({
+                      src: url,
+                      width: "100%",
+                      layout: "center",
+                      float: "none",
+                    })
+                  )
+                );
               }
-            } catch {}
+            } catch (err) {
+              console.error("Drop image upload failed:", err);
+            }
           })();
           return true;
         }
@@ -58,8 +70,19 @@ export function useOpenPostEditor({ content = "", onChange, editable = true }: U
                 const { uploadImageWithWebP } = await import("@/lib/uploadMedia");
                 const { url } = await uploadImageWithWebP(file);
                 const { state, dispatch } = view;
-                dispatch(state.tr.replaceSelectionWith(state.schema.nodes.image.create({ src: url })));
-              } catch {}
+                dispatch(
+                  state.tr.replaceSelectionWith(
+                    state.schema.nodes.image.create({
+                      src: url,
+                      width: "100%",
+                      layout: "center",
+                      float: "none",
+                    })
+                  )
+                );
+              } catch (err) {
+                console.error("Paste image upload failed:", err);
+              }
             })();
             return true;
           }

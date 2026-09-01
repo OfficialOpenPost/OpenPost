@@ -252,7 +252,7 @@ export function InsertBlockModal({
   };
 
   const handleInsertFaq = () => {
-    editor.chain().focus().setFaq({ items: faqItems }).run();
+    (editor.chain().focus() as any).setFaq({ items: faqItems }).run();
     onClose();
   };
 

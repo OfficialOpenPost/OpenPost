@@ -27,7 +27,9 @@ export function useAutosave({
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  dataRef.current = data;
+  useEffect(() => {
+    dataRef.current = data;
+  }, [data]);
 
   const save = useCallback(async () => {
     const currentJson = JSON.stringify(dataRef.current);

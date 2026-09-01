@@ -11,7 +11,7 @@ export async function uploadImageWithWebP(file: File): Promise<{ url: string; ke
   const upJson = await upRes.json().catch(()=>({}));
   if (!upRes.ok) throw new Error(upJson.error?.message ?? "Upload failed");
   const { key, publicUrl } = upJson.data as { key: string; publicUrl: string };
-  let finalPublicUrl = publicUrl;
+  const finalPublicUrl = publicUrl;
 
   // Save metadata (fire-and-forget, don't block insertion if DB fails)
   let width: number | null = null, height: number | null = null;

@@ -143,7 +143,14 @@ export function ImageCardView({
     window.addEventListener("mouseup", onUp);
   };
 
-  const wrapperClass = `image-align-${layout}`;
+  const wrapperClass =
+    layout === "left"
+      ? "image-align-left float-left mr-8 mb-4 clear-none inline-block"
+      : layout === "right"
+      ? "image-align-right float-right ml-8 mb-4 clear-none inline-block"
+      : layout === "wide"
+      ? "image-align-wide block w-full my-8 clear-both"
+      : "image-align-center block w-full my-8 clear-both";
 
   // Inner container alignment classes
   const innerMarginCls =
@@ -155,11 +162,8 @@ export function ImageCardView({
       ? "w-full mx-0"
       : "mx-auto"; // center
 
-  const currentWidthVal = width || (layout === "left" || layout === "right" ? "45%" : "100%");
-  const widthStyle =
-    layout === "left" || layout === "right"
-      ? { width: currentWidthVal === "100%" ? "45%" : currentWidthVal, maxWidth: "50%" }
-      : { width: currentWidthVal, maxWidth: "100%" };
+  const currentWidthVal = width || "100%";
+  const widthStyle = { width: currentWidthVal, maxWidth: "100%" };
 
   return (
     <NodeViewWrapper
@@ -235,20 +239,14 @@ export function ImageCardView({
         {/* ======================================================== */}
         <div className="flex justify-center pt-2">
           <div className="inline-flex flex-wrap items-center gap-1.5 rounded-full border border-border bg-white/98 px-3 py-1.5 shadow-md backdrop-blur-md opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition duration-150 select-none">
-            {/* 1. Alignment Pills */}
+            {/* 1. Alignment Pills (100% Preserves current image width) */}
             <div className="flex items-center gap-0.5">
               {layouts.map((l) => (
                 <button
                   key={l.key}
                   type="button"
                   onClick={() => {
-                    const newW =
-                      l.key === "left" || l.key === "right"
-                        ? width === "100%"
-                          ? "45%"
-                          : width
-                        : width;
-                    updateAttributes({ layout: l.key, align: l.key, width: newW });
+                    updateAttributes({ layout: l.key, align: l.key });
                   }}
                   title={l.label}
                   className={`flex h-7 items-center gap-1 rounded-full px-2.5 text-xs font-bold transition ${

@@ -396,6 +396,26 @@ export function FloatingImageView({
     wrapperStyle.textAlign = "center";
   }
 
+  // Determine Toolbar Orientation & Placement:
+  // Float Right -> Vertical toolbar on the LEFT side of image
+  // Float Left  -> Vertical toolbar on the RIGHT side of image
+  // Center/Wide -> Horizontal toolbar on TOP
+  const isVertical = isLeft || isRight;
+  const toolbarContainerClasses = isRight
+    ? "absolute top-0 -left-12 z-40 flex flex-col items-center gap-1 rounded-2xl border border-border/80 bg-[#1E293B]/95 p-1.5 shadow-2xl text-white backdrop-blur-md animate-in fade-in zoom-in-95 duration-150 select-none"
+    : isLeft
+    ? "absolute top-0 -right-12 z-40 flex flex-col items-center gap-1 rounded-2xl border border-border/80 bg-[#1E293B]/95 p-1.5 shadow-2xl text-white backdrop-blur-md animate-in fade-in zoom-in-95 duration-150 select-none"
+    : "absolute -top-12 left-1/2 -translate-x-1/2 z-40 flex flex-row items-center gap-1 rounded-2xl border border-border/80 bg-[#1E293B]/95 px-2 py-1 shadow-2xl text-white backdrop-blur-md whitespace-nowrap animate-in fade-in zoom-in-95 duration-150 select-none";
+
+  // Popover placement:
+  // When vertical on Left side of image -> popover opens towards left (or right)
+  // When vertical on Right side of image -> popover opens towards right (or left)
+  const popoverPlacement = isRight
+    ? "absolute right-full mr-2 top-0 z-50"
+    : isLeft
+    ? "absolute left-full ml-2 top-0 z-50"
+    : "absolute top-9 left-1/2 -translate-x-1/2 z-50";
+
   return (
     <NodeViewWrapper
       className="openpost-floating-image-node group/img-wrapper select-none"
@@ -425,15 +445,15 @@ export function FloatingImageView({
           boxSizing: "border-box",
         }}
       >
-        {/* ── COMPLETE FLOATING PILL-SHAPED TOOLBAR ───────────────────────── */}
+        {/* ── CONTEXTUAL FLOATING TOOLBAR (Vertical on opposite side for floats, Horizontal on top for center) ── */}
         {selected && (
           <div
-            className="absolute -top-12 left-1/2 -translate-x-1/2 z-40 flex items-center gap-1 rounded-2xl border border-border/80 bg-[#1E293B]/95 px-2 py-1 shadow-2xl text-white backdrop-blur-md whitespace-nowrap animate-in fade-in zoom-in-95 duration-150 select-none"
+            className={toolbarContainerClasses}
             onClick={(e) => e.stopPropagation()}
             onMouseDown={(e) => e.stopPropagation()}
           >
-            {/* Group 1: Position & Flow */}
-            <div className="flex items-center gap-0.5 pr-1.5 border-r border-white/15">
+            {/* Position & Flow Controls */}
+            <div className={`flex ${isVertical ? "flex-col" : "flex-row items-center"} gap-0.5 ${isVertical ? "pb-1 border-b" : "pr-1.5 border-r"} border-white/15`}>
               <button
                 type="button"
                 onClick={() => setLayout("left")}
@@ -476,38 +496,38 @@ export function FloatingImageView({
               </button>
             </div>
 
-            {/* Group 2: Quick Sizing Presets */}
-            <div className="flex items-center gap-0.5 px-1.5 border-r border-white/15">
+            {/* Quick Sizing Controls */}
+            <div className={`flex ${isVertical ? "flex-col" : "flex-row items-center"} gap-0.5 ${isVertical ? "py-1 border-b" : "px-1.5 border-r"} border-white/15`}>
               <button
                 type="button"
-                onClick={() => stepWidth(-25)}
-                title="Decrease Width"
+                onClick={() => stepWidth(25)}
+                title="Increase Width (+25px)"
                 className="flex h-6 w-6 items-center justify-center rounded font-bold text-xs text-slate-300 hover:bg-white/15 hover:text-white transition"
               >
-                −
+                +
               </button>
-              {(isLeft || isRight ? [25, 33, 45, 60, 80] : [25, 50, 75, 100]).map((pct) => (
+              {!isVertical && (isLeft || isRight ? [25, 33, 45, 60, 80] : [25, 50, 75, 100]).map((pct) => (
                 <button
                   key={pct}
                   type="button"
                   onClick={() => setWidthPercent(pct)}
-                  className="px-1.5 py-0.5 text-[10px] font-bold rounded text-slate-300 hover:bg-white/15 hover:text-white transition"
+                  className="px-1.5 py-0.5 text-[10px] font-bold rounded text-slate-300 hover:bg-white/10 hover:text-white transition"
                 >
                   {pct}%
                 </button>
               ))}
               <button
                 type="button"
-                onClick={() => stepWidth(25)}
-                title="Increase Width"
+                onClick={() => stepWidth(-25)}
+                title="Decrease Width (-25px)"
                 className="flex h-6 w-6 items-center justify-center rounded font-bold text-xs text-slate-300 hover:bg-white/15 hover:text-white transition"
               >
-                +
+                −
               </button>
             </div>
 
-            {/* Group 3: Features (Caption, Link, Style, SEO) */}
-            <div className="flex items-center gap-0.5 px-1 border-r border-white/15">
+            {/* Features (Caption, Link, Style, SEO) */}
+            <div className={`flex ${isVertical ? "flex-col" : "flex-row items-center"} gap-0.5 ${isVertical ? "py-1 border-b" : "px-1 border-r"} border-white/15`}>
               {/* Caption Button */}
               <button
                 type="button"
@@ -543,7 +563,7 @@ export function FloatingImageView({
                 </button>
 
                 {showLinkPopover && (
-                  <div className="absolute top-9 left-1/2 -translate-x-1/2 z-50 w-64 rounded-xl border border-border bg-[#1E293B] p-3 shadow-2xl text-xs text-white">
+                  <div className={`${popoverPlacement} w-64 rounded-xl border border-border bg-[#1E293B] p-3 shadow-2xl text-xs text-white`}>
                     <p className="font-bold mb-1 text-slate-300">Link destination</p>
                     <input
                       type="url"
@@ -613,7 +633,7 @@ export function FloatingImageView({
                 </button>
 
                 {showStylePopover && (
-                  <div className="absolute top-9 left-1/2 -translate-x-1/2 z-50 w-72 rounded-2xl border border-border bg-[#1E293B] p-3.5 shadow-2xl text-xs text-white space-y-3">
+                  <div className={`${popoverPlacement} w-72 rounded-2xl border border-border bg-[#1E293B] p-3.5 shadow-2xl text-xs text-white space-y-3`}>
                     <div className="flex items-center justify-between border-b border-white/10 pb-2">
                       <span className="font-bold text-slate-200">Image Styling</span>
                       <button
@@ -750,7 +770,7 @@ export function FloatingImageView({
                 </button>
 
                 {showSeoPopover && (
-                  <div className="absolute top-9 left-1/2 -translate-x-1/2 z-50 w-64 rounded-2xl border border-border bg-[#1E293B] p-3 shadow-2xl text-xs text-white space-y-2.5">
+                  <div className={`${popoverPlacement} w-64 rounded-2xl border border-border bg-[#1E293B] p-3 shadow-2xl text-xs text-white space-y-2.5`}>
                     <p className="font-bold text-slate-200">SEO & Accessibility</p>
                     <div>
                       <span className="text-[11px] text-slate-400 block mb-1">Alt Text (Screen Readers)</span>
@@ -788,8 +808,8 @@ export function FloatingImageView({
               </div>
             </div>
 
-            {/* Group 4: Replace & Delete Actions */}
-            <div className="flex items-center gap-0.5 pl-0.5">
+            {/* Replace & Delete Actions */}
+            <div className={`flex ${isVertical ? "flex-col" : "flex-row items-center"} gap-0.5 ${isVertical ? "pt-1" : "pl-0.5"}`}>
               {/* Replace Image Trigger */}
               <button
                 type="button"

@@ -32,8 +32,13 @@ export default function MediaPage() {
   const fetchMedia = async (q?: string) => {
     try {
       setLoading(true);
-      const url = q ? `/api/media?search=${encodeURIComponent(q)}` : "/api/media";
-      const res = await fetch(url);
+      const activeProjId = typeof window !== "undefined" ? localStorage.getItem("openpost_active_project_id") : null;
+      const params = new URLSearchParams();
+      if (q) params.set("search", q);
+      if (activeProjId) params.set("projectId", activeProjId);
+      const qs = params.toString();
+      const url = qs ? `/api/media?${qs}` : "/api/media";
+      const res = await fetch(url, activeProjId ? { headers: { "X-OpenPost-Project": activeProjId } } : undefined);
       const json = await res.json();
       if (Array.isArray(json.data)) {
         const mapped: MediaItem[] = json.data.map((m: any) => ({
@@ -52,7 +57,7 @@ export default function MediaPage() {
     finally { setLoading(false); }
   };
 
-  useEffect(() => { fetchMedia(); }, []);
+  useEffect(() => { fetchMedia(); const h = () => fetchMedia(debouncedSearch || undefined); window.addEventListener("projectChanged", h); return () => window.removeEventListener("projectChanged", h); }, []);
   useEffect(() => { fetchMedia(debouncedSearch || undefined); }, [debouncedSearch]);
 
   const [filterType, setFilterType] = useState<"all" | "images" | "documents">("all");
@@ -87,6 +92,8 @@ export default function MediaPage() {
         setUploading({ name: file.name, progress: `WebP ${(file.size/1024).toFixed(1)}KB — uploading…` });
         const form = new FormData();
         form.append("file", file);
+        const activeProjId2 = typeof window !== "undefined" ? localStorage.getItem("openpost_active_project_id") : null;
+        if (activeProjId2) form.append("projectId", activeProjId2);
         const upRes = await fetch("/api/media/upload", { method: "POST", body: form });
         const upJson = await upRes.json().catch(()=>({}));
         if (!upRes.ok) throw new Error(upJson.error?.message ?? "Upload failed");

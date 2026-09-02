@@ -30,12 +30,17 @@ export default function CategoriesPage() {
   const [deleteTarget, setDeleteTarget] = useState<Category | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  // Fetch from DB
+  // Fetch from DB — project scoped
   const fetchCats = async (q?: string) => {
     try {
       setLoading(true);
-      const url = q ? `/api/v1/categories?search=${encodeURIComponent(q)}` : "/api/v1/categories";
-      const res = await fetch(url);
+      const activeProjId = typeof window !== "undefined" ? localStorage.getItem("openpost_active_project_id") : null;
+      const params = new URLSearchParams();
+      if (q) params.set("search", q);
+      if (activeProjId) params.set("project", activeProjId);
+      const qs = params.toString();
+      const url = qs ? `/api/v1/categories?${qs}` : "/api/v1/categories";
+      const res = await fetch(url, activeProjId ? { headers: { "X-OpenPost-Project": activeProjId } } : undefined);
       const json = await res.json();
       if (json.data) setCats(json.data);
     } catch {
@@ -47,6 +52,9 @@ export default function CategoriesPage() {
 
   useEffect(() => {
     fetchCats();
+    const h = () => fetchCats(debouncedSearch || undefined);
+    window.addEventListener("projectChanged", h);
+    return () => window.removeEventListener("projectChanged", h);
   }, []);
 
   useEffect(() => {
@@ -75,7 +83,8 @@ export default function CategoriesPage() {
     setError(null);
     try {
       const slug = slugify(form.slug || form.name || "");
-      const payload = { name: form.name, slug, description: form.description || null, parentId: form.parentId || null, seoTitle: form.seoTitle || null, seoDesc: form.seoDesc || null };
+      const activeProjId = typeof window !== "undefined" ? localStorage.getItem("openpost_active_project_id") : null;
+      const payload: any = { name: form.name, slug, description: form.description || null, parentId: form.parentId || null, seoTitle: form.seoTitle || null, seoDesc: form.seoDesc || null, projectId: activeProjId || undefined };
       const url = editing ? `/api/v1/categories/${editing.id}` : "/api/v1/categories";
       const method = editing ? "PUT" : "POST";
       const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });

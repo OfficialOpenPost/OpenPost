@@ -31,14 +31,19 @@ export default function TagsPage() {
   const fetchTags = async (q?: string) => {
     try {
       setLoading(true);
-      const url = q ? `/api/v1/tags?search=${encodeURIComponent(q)}` : "/api/v1/tags";
-      const res = await fetch(url);
+      const activeProjId = typeof window !== "undefined" ? localStorage.getItem("openpost_active_project_id") : null;
+      const params = new URLSearchParams();
+      if (q) params.set("search", q);
+      if (activeProjId) params.set("project", activeProjId);
+      const qs = params.toString();
+      const url = qs ? `/api/v1/tags?${qs}` : "/api/v1/tags";
+      const res = await fetch(url, activeProjId ? { headers: { "X-OpenPost-Project": activeProjId } } : undefined);
       const json = await res.json();
       if (json.data) setTags(json.data.map((t: any) => ({ ...t, postCount: 0 })));
     } catch {}
     finally { setLoading(false); }
   };
-  useEffect(() => { fetchTags(); }, []);
+  useEffect(() => { fetchTags(); const h = () => fetchTags(debouncedSearch || undefined); window.addEventListener("projectChanged", h); return () => window.removeEventListener("projectChanged", h); }, []);
   useEffect(() => { if (debouncedSearch) fetchTags(debouncedSearch); else fetchTags(); }, [debouncedSearch]);
 
   const filtered = tags.filter((t) => t.name.toLowerCase().includes(debouncedSearch.toLowerCase()) || t.slug.includes(debouncedSearch.toLowerCase()));
@@ -60,7 +65,8 @@ export default function TagsPage() {
     setSaving(true); setError(null);
     try {
       const slug = slugify(form.slug || form.name || "");
-      const payload = { name: form.name, slug, description: form.description || null };
+      const activeProjId = typeof window !== "undefined" ? localStorage.getItem("openpost_active_project_id") : null;
+      const payload: any = { name: form.name, slug, description: form.description || null, projectId: activeProjId || undefined };
       const url = editing ? `/api/v1/tags/${editing.id}` : "/api/v1/tags";
       const method = editing ? "PUT" : "POST";
       const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });

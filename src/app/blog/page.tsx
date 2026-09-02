@@ -40,8 +40,15 @@ async function getPublishedPosts() {
           null,
       }));
     }
-  } catch (e) {
-    console.error("Error fetching published blog posts:", e);
+  } catch (e: any) {
+    // Gracefully handle DB unreachable during build/dev without dev overlay
+    // Fallback demo posts below will be shown; avoid console.error which triggers Next.js error overlay
+    const msg = String(e?.message || "");
+    if (msg.includes("Can't reach database") || msg.includes("P1001") || msg.includes("pooler")) {
+      console.warn("[blog] Database unavailable — serving demo posts fallback");
+    } else {
+      console.warn("[blog] Fetch failed — serving fallback:", e?.message || e);
+    }
   }
 
   return [

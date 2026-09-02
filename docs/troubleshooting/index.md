@@ -78,5 +78,6 @@ This guide details common setup pitfalls, error codes, and step-by-step solution
 
 ## Need Further Help?
 
-- Open an issue on our [GitHub Repository](https://github.com/OfficialOpenPost/OpenPost).
-- Check our [API Reference](/docs/api/overview) for endpoint documentation.
+- **Email:** [officialopenpost@outlook.com](mailto:officialopenpost@outlook.com) — we reply within 24 hours
+- Open an issue on our [GitHub Repository](https://github.com/OfficialOpenPost/OpenPost)
+- Check our [API Reference](/docs/api/overview) for endpoint documentation

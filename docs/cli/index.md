@@ -1,6 +1,10 @@
-# OpenPost CLI (`openpost-cli`)
+# OpenPost CLI (`openpost-cli` v0.1.2)
+
+> **Single bin:** `openpost-cli` only — always use `npx openpost-cli` (legacy alias `create-openpost` removed in v0.1.2).
 
 The OpenPost CLI allows you to connect any frontend application to your CMS in seconds through an automated browser handshake.
+
+**Contact:** [officialopenpost@outlook.com](mailto:officialopenpost@outlook.com) for CLI support.
 
 ---
 

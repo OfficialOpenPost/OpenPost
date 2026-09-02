@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, withDbRetry } from "@/lib/db";
 import { z } from "zod";
-import { requireApprovedUser, requireProjectMember, requirePermission, AuthError, createAuditLog } from "@/lib/auth";
+import { requireApprovedUser, requireProjectMember, requirePermission, hasPermission, hasMinimumRole, AuthError, createAuditLog } from "@/lib/auth";
 import { countWords, readingTime as calcReadingTime } from "@/lib/publish";
 import { triggerWebhooks } from "@/lib/webhooks";
 
@@ -96,7 +96,7 @@ export async function GET(req: NextRequest) {
     const projectId = searchParams.get("projectId") || req.headers.get("x-openpost-project");
 
     if (!projectId) {
-      // Find projects user belongs to
+      // Find projects user belongs to — strict project scoping, no legacy null leak
       const memberships = await withDbRetry(() =>
         db.projectMember.findMany({
           where: { userId: user.id },
@@ -104,15 +104,14 @@ export async function GET(req: NextRequest) {
         })
       );
       const projectIds = memberships.map((m) => m.projectId);
+      if (projectIds.length === 0) {
+        return NextResponse.json({ data: [] });
+      }
 
       const blogs = await withDbRetry(() =>
         db.blog.findMany({
           where: {
-            OR: [
-              { projectId: { in: projectIds } },
-              { createdBy: user.id },
-              { projectId: null },
-            ],
+            projectId: { in: projectIds },
             ...(status && status !== "all" ? { status: status as any } : {}),
           },
           take: Math.min(100, Math.max(1, limit)),
@@ -129,8 +128,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ data: blogs });
     }
 
-    // Explicit project requested — verify membership
-    await requireProjectMember(projectId, "WRITER");
+    // Explicit project requested — verify membership (CONTRIBUTOR minimum to view)
+    await requireProjectMember(projectId, "CONTRIBUTOR");
 
     const blogs = await withDbRetry(() =>
       db.blog.findMany({
@@ -210,34 +209,23 @@ export async function POST(req: NextRequest) {
       targetProjectId = firstProj?.id || null;
     }
 
-    // Verify writer access if project exists
-    if (targetProjectId) {
-      const member = await withDbRetry(() =>
-        db.projectMember.findFirst({
-          where: { projectId: targetProjectId!, userId: user.id },
-        })
-      );
-      if (!member) {
-        // If user has ADMIN role or is the project owner, auto-add as ADMIN member
-        const proj = await withDbRetry(() => db.project.findUnique({ where: { id: targetProjectId! } }));
-        if (proj && (proj.ownerId === user.id || (user.role as string) === "admin" || user.role === "ADMIN")) {
-          await withDbRetry(() =>
-            db.projectMember.create({
-              data: {
-                projectId: targetProjectId!,
-                userId: user.id,
-                role: "ADMIN",
-              },
-            })
-          ).catch(() => {});
-        }
-      }
+    // Verify project membership — fail closed, never trust client-supplied projectId
+    if (!targetProjectId) {
+      return NextResponse.json({ error: { code: "PROJECT_REQUIRED", message: "Project assignment required." } }, { status: 400 });
     }
+    // Ensure user is member of target project (any role can create draft, publish gated later)
+    await requireProjectMember(targetProjectId, "CONTRIBUTOR");
 
-    // If attempting to publish or schedule, require post.publish permission
+    // If attempting to publish or schedule, require publish permission — DO NOT swallow errors
     if (status === "published" || status === "scheduled") {
-      if (targetProjectId) {
-        await requirePermission(targetProjectId, "post.publish").catch(() => {});
+      const { role } = await requireProjectMember(targetProjectId);
+      // EDITOR+ required to publish/schedule; AUTHOR/CONTRIBUTOR blocked
+      if (!hasMinimumRole(role, "EDITOR") && !hasPermission(role, "posts.publish_others") && !hasPermission(role, "posts.publish_own")) {
+        return NextResponse.json({ error: { code: "FORBIDDEN", message: "You do not have permission to publish this post." } }, { status: 403 });
+      }
+      // Enforce central permission (will throw 403 if not allowed)
+      if (!hasPermission(role, "posts.publish_others") && !hasPermission(role, "posts.publish_own") && !hasPermission(role, "post.publish")) {
+        throw new AuthError("You do not have permission to publish this post.", 403, "FORBIDDEN");
       }
     }
 
@@ -315,14 +303,27 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: { code: "NOT_FOUND", message: "Post not found" } }, { status: 404 });
       }
 
-      // If user is WRITER, they can only edit their own posts
-      if (existing.projectId) {
-        const member = await requireProjectMember(existing.projectId, "WRITER").catch(() => null);
-        if (member && member.role === "WRITER" && existing.createdBy !== user.id) {
-          return NextResponse.json(
-            { error: { code: "FORBIDDEN", message: "Writers can only modify their own posts." } },
-            { status: 403 }
-          );
+      // Strict project membership + edit permission check — fail closed, no swallow
+      if (!existing.projectId) {
+        return NextResponse.json({ error: { code: "FORBIDDEN", message: "Post has no project assignment." } }, { status: 403 });
+      }
+      const { role: editorRole } = await requireProjectMember(existing.projectId);
+      // CONTRIBUTOR/AUTHOR can only edit own posts; EDITOR+ can edit others
+      const canEditOthers = hasPermission(editorRole, "posts.edit_others") || hasMinimumRole(editorRole, "EDITOR");
+      if (!canEditOthers && existing.createdBy !== user.id) {
+        return NextResponse.json(
+          { error: { code: "FORBIDDEN", message: "You can only modify your own posts." } },
+          { status: 403 }
+        );
+      }
+      // Check edit own permission
+      if (!hasPermission(editorRole, "posts.edit_own") && !hasPermission(editorRole, "posts.edit_others") && !hasPermission(editorRole, "post.edit")) {
+        return NextResponse.json({ error: { code: "FORBIDDEN", message: "You do not have permission to edit posts." } }, { status: 403 });
+      }
+      // If changing status to published/scheduled via update, enforce publish permission
+      if ((status === "published" || status === "scheduled") && existing.status !== status) {
+        if (!hasMinimumRole(editorRole, "EDITOR")) {
+          return NextResponse.json({ error: { code: "FORBIDDEN", message: "You do not have permission to publish this post." } }, { status: 403 });
         }
       }
 

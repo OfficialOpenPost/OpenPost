@@ -50,13 +50,13 @@ export function Hero3DSection() {
       <div className="relative mx-auto max-w-7xl px-6">
         {/* Release Pill */}
         <FadeIn delay={0} className="mb-6 flex justify-center">
-          <div className="group inline-flex items-center gap-2.5 rounded-full border border-border bg-white px-4 py-1.5 text-xs font-semibold text-navy shadow-xs transition hover:border-brand hover:bg-[#FFFBF5]">
+          <div className="group inline-flex items-center gap-2.5 rounded-full border border-border bg-white px-4 py-1.5 text-sm font-semibold text-navy shadow-xs transition hover:border-brand hover:bg-[#FFFBF5]">
             <span className="flex h-2 w-2 relative">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-brand opacity-75" />
               <span className="relative inline-flex h-2 w-2 rounded-full bg-brand" />
             </span>
             <span>OpenPost 1.4 — Next-Gen Block CMS &amp; Headless Studio</span>
-            <span className="rounded-full bg-brand/15 px-2 py-0.5 text-[10px] font-bold text-navy">
+            <span className="rounded-full bg-brand/15 px-2 py-0.5 text-xs font-bold text-navy">
               MIT License
             </span>
             <ChevronRight className="h-3.5 w-3.5 text-text-tertiary transition group-hover:translate-x-0.5 group-hover:text-brand" />
@@ -120,17 +120,17 @@ export function Hero3DSection() {
         <ScaleIn delay={0.25} className="mt-14 max-w-4xl mx-auto">
           <div className="rounded-2xl border border-border bg-white shadow-xl shadow-navy/5 overflow-hidden">
             {/* Top Window Bar */}
-            <div className="flex items-center justify-between border-b border-border bg-[#F9FAFB] px-4 py-2.5 text-xs">
+            <div className="flex items-center justify-between border-b border-border bg-[#F9FAFB] px-4 py-2.5 text-sm">
               <div className="flex items-center gap-2">
                 <div className="h-2.5 w-2.5 rounded-full bg-red-400" />
                 <div className="h-2.5 w-2.5 rounded-full bg-amber-400" />
                 <div className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
-                <span className="ml-2 font-mono text-[11px] text-text-tertiary">
+                <span className="ml-2 font-mono text-xs text-text-tertiary">
                   openpost.app/studio/my-article
                 </span>
               </div>
 
-              <div className="flex items-center gap-3 text-[11px]">
+              <div className="flex items-center gap-3 text-xs">
                 <span className="flex items-center gap-1 text-emerald-600 font-semibold">
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
                   Cloud Synced
@@ -159,10 +159,10 @@ export function Hero3DSection() {
               {/* Right Side Overview Pills */}
               <div className="md:col-span-7 space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold uppercase tracking-wider text-brand">
+                  <span className="text-sm font-bold uppercase tracking-wider text-brand">
                     Writing Studio Engine
                   </span>
-                  <span className="rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-0.5 text-xs font-bold">
+                  <span className="rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-0.5 text-sm font-bold">
                     SEO Score 98/100
                   </span>
                 </div>
@@ -171,7 +171,7 @@ export function Hero3DSection() {
                   Block-based ergonomics with automatic WebP media optimization
                 </h3>
 
-                <p className="text-xs text-text-secondary leading-relaxed">
+                <p className="text-sm text-text-secondary leading-relaxed">
                   Type <code className="rounded bg-surface-raised px-1.5 py-0.5 font-mono text-brand font-bold">/</code> to insert headings, code snippets, interactive polls, and media. Structured JSON storage eliminates XSS risks.
                 </p>
 

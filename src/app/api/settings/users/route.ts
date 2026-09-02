@@ -2,24 +2,31 @@ import { NextRequest, NextResponse } from "next/server";
 import { db, withDbRetry } from "@/lib/db";
 import {
   requireAdmin,
+  requireProjectMember,
+  requirePermission,
   createAuditLog,
   normalizeRole,
+  normalizeRoleStrict,
+  hasMinimumRole,
+  hasPermission,
+  canManageRole,
   Role,
   ProfileStatus,
   AuthError,
 } from "@/lib/auth";
+import { rateLimit, getClientIp } from "@/lib/rateLimit";
 import { z } from "zod";
 
 const updateUserSchema = z.object({
   id: z.string().uuid("Invalid user ID"),
   status: z.enum(["pending", "approved", "rejected", "suspended"]).optional(),
-  role: z.enum(["ADMIN", "EDITOR", "WRITER"]).optional(),
+  role: z.enum(["OWNER", "ADMIN", "EDITOR", "AUTHOR", "CONTRIBUTOR", "WRITER"]).optional(),
   projectId: z.string().uuid().optional(),
 });
 
 const inviteUserSchema = z.object({
   email: z.string().email("Valid email required"),
-  role: z.enum(["ADMIN", "EDITOR", "WRITER"]).default("WRITER"),
+  role: z.enum(["OWNER", "ADMIN", "EDITOR", "AUTHOR", "CONTRIBUTOR", "WRITER"]).default("CONTRIBUTOR"),
   projectId: z.string().uuid("Valid project ID required"),
   name: z.string().max(100).optional(),
 });
@@ -31,7 +38,7 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const projectId = searchParams.get("projectId");
 
-    const [profiles, invites] = await Promise.all([
+    const [profiles, invitesRaw] = await Promise.all([
       withDbRetry(() =>
         db.profile.findMany({
           orderBy: { createdAt: "asc" },
@@ -63,14 +70,25 @@ export async function GET(req: NextRequest) {
         })
       ),
     ]);
+    // Sanitize invites — never expose raw token, mask it
+    const invites = (invitesRaw as any[]).map((inv) => ({
+      ...inv,
+      token: undefined,
+      tokenPreview: inv.token ? `${String(inv.token).slice(0, 8)}…` : null,
+      tokenMasked: true,
+    }));
 
     const formattedUsers = profiles.map((p) => {
-      // Find role for project if scoped, or highest role
-      let activeRole: Role = "WRITER";
+      // Find role for project if scoped, or highest role via hierarchy
+      let activeRole: Role = "CONTRIBUTOR";
+      let maxLvl = 0;
       for (const m of p.memberships) {
-        const nr = normalizeRole(m.role);
-        if (nr === "ADMIN") activeRole = "ADMIN";
-        else if (nr === "EDITOR" && activeRole !== "ADMIN") activeRole = "EDITOR";
+        const nr = normalizeRoleStrict(m.role);
+        const lvl = ({ OWNER: 5, ADMIN: 4, EDITOR: 3, AUTHOR: 2, CONTRIBUTOR: 1 } as any)[nr] || 0;
+        if (lvl > maxLvl) {
+          maxLvl = lvl;
+          activeRole = nr;
+        }
       }
 
       return {
@@ -83,7 +101,7 @@ export async function GET(req: NextRequest) {
           projectId: m.projectId,
           projectName: m.project.name,
           projectSlug: m.project.slug,
-          role: normalizeRole(m.role),
+          role: normalizeRoleStrict(m.role),
         })),
         createdAt: p.createdAt,
       };
@@ -111,6 +129,12 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    // Rate limit: 10 invites per minute per IP
+    const ip = getClientIp(req as unknown as Request);
+    const rl = rateLimit(`invite:${ip}`, { windowMs: 60_000, max: 10 });
+    if (!rl.allowed) {
+      return NextResponse.json({ error: { code: "RATE_LIMITED", message: "Too many invitations. Try again later." } }, { status: 429, headers: { "Retry-After": Math.ceil((rl.resetAt - Date.now()) / 1000).toString() } });
+    }
     const body = await req.json().catch(() => ({}));
     const parsed = inviteUserSchema.safeParse(body);
 
@@ -121,11 +145,25 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { email, role, projectId, name } = parsed.data;
+    let { email, role: rawRole, projectId, name } = parsed.data as any;
+    const role = normalizeRoleStrict(rawRole) as any;
     const cleanEmail = email.trim().toLowerCase();
 
-    // Verify admin permission on project
+    // Verify admin permission on project — prevent privilege escalation to OWNER
     const adminUser = await requireAdmin(projectId);
+    {
+      const actorRole = adminUser.memberships.find((m) => m.projectId === projectId)?.role || adminUser.role;
+      if (role === "OWNER" && normalizeRoleStrict(actorRole as string) !== "OWNER") {
+        return NextResponse.json({ error: { code: "FORBIDDEN", message: "Only the project owner can invite an OWNER." } }, { status: 403 });
+      }
+      // ADMIN cannot invite OWNER, EDITOR+ cannot invite ADMIN etc — enforce via canManageRole
+      if (!canManageRole(normalizeRoleStrict(actorRole as string) as any, "CONTRIBUTOR" as any, role as any) && actorRole !== "OWNER") {
+        // For invites, treat target as desired role
+        if (normalizeRoleStrict(actorRole as string) !== "OWNER" && role === "OWNER") {
+          return NextResponse.json({ error: { code: "FORBIDDEN", message: "Insufficient permission to invite this role." } }, { status: 403 });
+        }
+      }
+    }
 
     // 1. Check if user already has profile
     let profile = await withDbRetry(() =>
@@ -205,7 +243,8 @@ export async function PATCH(req: NextRequest) {
       );
     }
 
-    const { id, status, role, projectId } = parsed.data;
+    let { id, status, role: rawRole, projectId } = parsed.data as any;
+    const role = rawRole ? normalizeRoleStrict(rawRole) : undefined;
     const adminUser = await requireAdmin(projectId);
 
     // SECURITY: Prevent user from modifying own status or role (no self-approval or self-promotion)
@@ -246,8 +285,37 @@ export async function PATCH(req: NextRequest) {
       });
     }
 
-    // 2. Update Role in Project if provided
+    // 2. Update Role in Project if provided — enforce hierarchy and owner protection
     if (role && projectId) {
+      // Verify target membership project scoping and role management permission
+      const actorMembership = adminUser.memberships.find((m) => m.projectId === projectId);
+      const actorRole = actorMembership ? normalizeRoleStrict(actorMembership.role) : normalizeRoleStrict(adminUser.role as string);
+
+      // Fetch target current role for canManage check
+      const targetMember = await withDbRetry(() =>
+        db.projectMember.findUnique({ where: { projectId_userId: { projectId, userId: id } } })
+      ).catch(() => null);
+      const targetCurrentRole = targetMember ? normalizeRoleStrict((targetMember as any).role) : "CONTRIBUTOR" as Role;
+
+      if (!canManageRole(actorRole as any, targetCurrentRole as any, role as any)) {
+        return NextResponse.json({ error: { code: "FORBIDDEN", message: "Insufficient permission to assign this role. Only OWNER can manage OWNER." } }, { status: 403 });
+      }
+      // Prevent demoting/removing last OWNER
+      if (targetCurrentRole === "OWNER" && role !== "OWNER") {
+        const ownerCount = await withDbRetry(() => db.projectMember.count({ where: { projectId, role: "OWNER" as any } })).catch(() => 1);
+        if (ownerCount <= 1) {
+          // Check if project ownerId is same as target
+          const proj = await withDbRetry(() => db.project.findUnique({ where: { id: projectId } })).catch(() => null);
+          if (proj && (proj as any).ownerId === id) {
+            return NextResponse.json({ error: { code: "FORBIDDEN", message: "Cannot demote the sole project owner. Transfer ownership first." } }, { status: 403 });
+          }
+        }
+      }
+      // Prevent ADMIN from creating OWNER
+      if (role === "OWNER" && actorRole !== "OWNER") {
+        return NextResponse.json({ error: { code: "FORBIDDEN", message: "Only OWNER can assign OWNER role." } }, { status: 403 });
+      }
+
       await withDbRetry(() =>
         db.projectMember.upsert({
           where: {

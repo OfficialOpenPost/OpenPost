@@ -57,3 +57,15 @@ Poll voting endpoints prevent ballot stuffing through a multi-factor fingerprint
 - SHA-256 hash of `client_ip + user_agent + project_salt`.
 - Database unique constraint: `UNIQUE (poll_id, voter_fingerprint)`.
 - Re-voting attempts trigger immediate `HTTP 409 Conflict`.
+
+---
+
+## 6. Responsible Disclosure
+
+If you discover a security vulnerability, please report it responsibly:
+
+- **Email:** [officialopenpost@outlook.com](mailto:officialopenpost@outlook.com)
+- **Subject:** `[Security] OpenPost — brief description`
+- Do **not** open a public GitHub issue for security reports. We aim to acknowledge within 24 hours and provide a fix timeline.
+
+All reports are handled confidentially. Thank you for helping keep OpenPost secure.

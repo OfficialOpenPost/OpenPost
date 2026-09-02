@@ -12,6 +12,7 @@ const createAuthorSchema = z.object({
   email: z.string().email().nullable().optional().or(z.literal("")),
   website: z.string().url().nullable().optional().or(z.literal("")),
   photoId: z.string().uuid().nullable().optional(),
+  linkedUserId: z.string().uuid().nullable().optional(),
   socialLinks: z.any().optional(),
   twitter: z.string().max(100).nullable().optional(),
   linkedin: z.string().max(100).nullable().optional(),
@@ -48,7 +49,10 @@ export async function GET(req: NextRequest) {
           website: true,
           socialLinks: true,
           photoId: true,
+          linkedUserId: true,
           projectId: true,
+          photo: { select: { id: true, variants: true } },
+          linkedUser: { select: { id: true, email: true } },
           _count: {
             select: { blogs: true },
           },
@@ -65,6 +69,9 @@ export async function GET(req: NextRequest) {
       website: a.website,
       social: a.socialLinks ?? {},
       photoId: a.photoId,
+      photoUrl: (a.photo?.variants as any)?.publicUrl ?? null,
+      linkedUserId: a.linkedUserId,
+      linkedUserEmail: a.linkedUser?.email ?? null,
       projectId: a.projectId,
       postCount: a._count?.blogs ?? 0,
     }));
@@ -87,7 +94,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: { code: "VALIDATION_ERROR", message: parsed.error.message } }, { status: 400 });
     }
 
-    const { name, slug: rawSlug, bio, email, website, photoId, socialLinks, twitter, linkedin, projectId } = parsed.data;
+    const { name, slug: rawSlug, bio, email, website, photoId, linkedUserId, socialLinks, twitter, linkedin, projectId } = parsed.data;
 
     const projectContext = await resolveProjectContext(req);
     const targetProjectId = projectId || projectContext?.projectId;
@@ -96,7 +103,35 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: { code: "PROJECT_REQUIRED", message: "Project ID is required." } }, { status: 400 });
     }
 
-    await requirePermission(targetProjectId, "taxonomy.manage");
+    await requirePermission(targetProjectId, "authors.create").catch(async () => {
+      await requirePermission(targetProjectId, "taxonomy.manage");
+    });
+
+    // Validate linkedUserId belongs to same project if provided
+    if (linkedUserId) {
+      const linkMember = await withDbRetry(() =>
+        db.projectMember.findUnique({ where: { projectId_userId: { projectId: targetProjectId, userId: linkedUserId } } })
+      ).catch(() => null);
+      if (!linkMember) {
+        return NextResponse.json({ error: { code: "VALIDATION_ERROR", message: "Linked user must be a member of the same project." } }, { status: 400 });
+      }
+      // Prevent cross-project linking — ensure user exists and profile approved
+      const linkedProfile = await withDbRetry(() => db.profile.findUnique({ where: { id: linkedUserId } })).catch(() => null);
+      if (!linkedProfile || linkedProfile.status !== "approved") {
+        return NextResponse.json({ error: { code: "VALIDATION_ERROR", message: "Linked user must be approved." } }, { status: 400 });
+      }
+    }
+
+    // Validate photoId exists and belongs to same project if provided
+    if (photoId) {
+      const media = await withDbRetry(() => db.media.findUnique({ where: { id: photoId } })).catch(() => null);
+      if (!media) {
+        return NextResponse.json({ error: { code: "VALIDATION_ERROR", message: "Selected photo not found." } }, { status: 400 });
+      }
+      if ((media as any).projectId && (media as any).projectId !== targetProjectId) {
+        return NextResponse.json({ error: { code: "VALIDATION_ERROR", message: "Photo must belong to same project." } }, { status: 400 });
+      }
+    }
 
     const slug = slugify(rawSlug || name);
     if (!slug) {
@@ -125,10 +160,20 @@ export async function POST(req: NextRequest) {
           website: website || null,
           socialLinks: links,
           photoId: photoId || null,
+          linkedUserId: linkedUserId || null,
           projectId: targetProjectId,
         },
       })
     );
+
+    // Audit log
+    try {
+      const { createAuditLog, getCurrentUser } = await import("@/lib/auth");
+      const actor = await getCurrentUser().catch(() => null);
+      if (actor) {
+        await createAuditLog({ actorId: actor.id, projectId: targetProjectId, action: "author.created", targetId: created.id, metadata: { name: created.name, slug } });
+      }
+    } catch {}
 
     return NextResponse.json({ data: created }, { status: 201 });
   } catch (error: any) {

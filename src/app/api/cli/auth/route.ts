@@ -23,8 +23,8 @@ export async function POST(req: NextRequest) {
 
     const { projectId } = parsed.data;
 
-    // Verify user is a member of the project
-    await requireProjectMember(projectId, "WRITER");
+    // Verify user is a member of the project (any role can generate CLI code but must be approved member)
+    await requireProjectMember(projectId, "CONTRIBUTOR");
 
     // Generate high-entropy 12-char alphanumeric code (e.g. OP-A1B2-C3D4-E5F6)
     const part1 = crypto.randomBytes(2).toString("hex").toUpperCase();

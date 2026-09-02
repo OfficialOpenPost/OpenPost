@@ -5,8 +5,10 @@ import {
   ProfileStatus,
   Permission,
   normalizeRole,
+  normalizeRoleStrict,
   hasPermission,
   hasMinimumRole,
+  ROLE_HIERARCHY,
 } from "./rbac";
 
 export * from "./rbac";
@@ -28,7 +30,8 @@ export interface AuthUser {
   email: string;
   displayName: string | null;
   status: ProfileStatus;
-  role: Role; // Default or global mapped role
+  emailVerified: boolean;
+  role: Role;
   memberships: {
     projectId: string;
     role: Role;
@@ -57,6 +60,10 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
     if (error || !user || !user.email) {
       return null;
     }
+
+    const emailVerified = Boolean(
+      (user as any).email_confirmed_at || (user as any).confirmed_at || user.email_confirmed_at
+    );
 
     // 1. Fetch Profile and project memberships from database
     let profile = await withDbRetry(() =>
@@ -114,26 +121,54 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
     // Normalized memberships
     const memberships = (profile.memberships || []).map((m: any) => ({
       projectId: m.projectId,
-      role: normalizeRole(m.role),
+      role: normalizeRoleStrict(m.role),
       project: m.project,
     }));
 
-    // Derive highest role across memberships (or WRITER default)
-    let highestRole: Role = "WRITER";
+    // Include OWNER role from project ownership (ownerId == user.id) as OWNER membership even if not in project_members
+    try {
+      const ownedProjects = await withDbRetry(() =>
+        db.project.findMany({
+          where: { ownerId: profile!.id },
+          select: { id: true, name: true, slug: true },
+        })
+      ).catch(() => []);
+      for (const op of ownedProjects as any[]) {
+        if (!memberships.find((m) => m.projectId === op.id)) {
+          memberships.push({
+            projectId: op.id,
+            role: "OWNER" as Role,
+            project: op,
+          });
+        } else {
+          // Ensure owner has OWNER, not just ADMIN
+          const existing = memberships.find((m) => m.projectId === op.id);
+          if (existing && existing.role !== "OWNER") {
+            // Check actual project ownership
+            existing.role = "OWNER";
+          }
+        }
+      }
+    } catch {}
+
+    // Derive highest role across memberships using hierarchy
+    let highestRole: Role = "CONTRIBUTOR";
+    let highestLevel = 0;
     for (const m of memberships) {
-      if (m.role === "ADMIN") {
-        highestRole = "ADMIN";
-        break;
-      } else if (m.role === "EDITOR") {
-        highestRole = "EDITOR";
+      const lvl = ROLE_HIERARCHY[m.role] ?? 0;
+      if (lvl > highestLevel) {
+        highestLevel = lvl;
+        highestRole = m.role;
       }
     }
+    if (memberships.length === 0) highestRole = "CONTRIBUTOR";
 
     return {
       id: profile.id,
       email: profile.email,
       displayName: profile.displayName,
       status: profile.status as ProfileStatus,
+      emailVerified,
       role: highestRole,
       memberships,
     };
@@ -155,10 +190,15 @@ export async function requireAuthenticatedUser(): Promise<AuthUser> {
 }
 
 /**
- * Requires an approved user account. Throws 401 if unauthenticated, 403 if pending/rejected/suspended.
+ * Requires an approved user account. Throws 401 if unauthenticated, 403 if pending/rejected/suspended or unverified.
  */
 export async function requireApprovedUser(): Promise<AuthUser> {
   const user = await requireAuthenticatedUser();
+  // Email verification check — allow bypass in dev/test if env explicitly disables
+  const requireVerification = process.env.REQUIRE_EMAIL_VERIFICATION === "true";
+  if (requireVerification && !user.emailVerified) {
+    throw new AuthError("Email verification required. Please verify your email.", 403, "EMAIL_NOT_VERIFIED");
+  }
   if (user.status !== "approved") {
     if (user.status === "pending") {
       throw new AuthError("Your account is pending administrator approval.", 403, "PENDING_APPROVAL");
@@ -190,7 +230,6 @@ export async function requireProjectMember(
 
   const membership = user.memberships.find((m) => m.projectId === projectId);
   if (!membership) {
-    // Return 404 to prevent resource existence enumeration (IDOR / BOLA)
     throw new AuthError("Project not found or access denied.", 404, "NOT_FOUND");
   }
 
@@ -234,18 +273,29 @@ export async function requirePermission(
 }
 
 /**
+ * Requires owner role on project
+ */
+export async function requireOwner(projectId: string): Promise<{ user: AuthUser; role: Role }> {
+  return requireProjectMember(projectId, "OWNER");
+}
+
+/**
  * Requires administrator role on the project or globally.
  */
 export async function requireAdmin(projectId?: string): Promise<AuthUser> {
   const user = await requireApprovedUser();
 
   if (projectId) {
-    const { user: authedUser } = await requireProjectRole(projectId, "ADMIN");
+    const { user: authedUser } = await requireProjectMember(projectId, "ADMIN");
+    // OWNER also satisfies ADMIN
+    if (!hasMinimumRole(authedUser.memberships.find((m) => m.projectId === projectId)?.role, "ADMIN")) {
+      throw new AuthError("Administrator privileges required.", 403, "FORBIDDEN");
+    }
+    // Ensure at least ADMIN level (OWNER passes because hierarchy)
     return authedUser;
   }
 
-  // If no projectId specified, check if user is ADMIN on any project
-  const isAdmin = user.memberships.some((m) => m.role === "ADMIN") || user.role === "ADMIN";
+  const isAdmin = user.memberships.some((m) => hasMinimumRole(m.role, "ADMIN")) || hasMinimumRole(user.role, "ADMIN");
   if (!isAdmin) {
     throw new AuthError("Administrator privileges required.", 403, "FORBIDDEN");
   }
@@ -270,7 +320,6 @@ export async function createAuditLog({
   metadata?: Record<string, any>;
 }): Promise<void> {
   try {
-    // Sanitize metadata to never record raw passwords, tokens or secrets
     const sanitizedMeta = { ...(metadata || {}) };
     delete sanitizedMeta.password;
     delete sanitizedMeta.rawToken;

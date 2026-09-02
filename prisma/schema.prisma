@@ -8,10 +8,13 @@ datasource db {
 }
 
 enum UserRole {
+  OWNER
   ADMIN
   EDITOR
-  WRITER
-  owner // legacy, mapped to ADMIN
+  AUTHOR
+  CONTRIBUTOR
+  WRITER // deprecated alias for AUTHOR — retained for backwards compat
+  owner // legacy, mapped to OWNER
   admin // legacy
   editor // legacy
   author // legacy

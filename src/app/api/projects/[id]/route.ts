@@ -16,7 +16,7 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    await requireProjectMember(id, "WRITER");
+    await requireProjectMember(id, "CONTRIBUTOR");
 
     const project = await withDbRetry(() =>
       db.project.findUnique({

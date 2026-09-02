@@ -14,8 +14,13 @@
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
     "db:studio": "prisma studio",
-    "db:seed": "tsx prisma/seed.ts"
+    "db:seed": "tsx prisma/seed.ts",
+    "cms:doctor": "tsx scripts/cms.ts doctor",
+    "cms:bootstrap": "tsx scripts/cms.ts bootstrap",
+    "admin:create": "tsx scripts/cms.ts bootstrap",
+    "bootstrap:admin": "tsx scripts/cms.ts bootstrap"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1123.0",

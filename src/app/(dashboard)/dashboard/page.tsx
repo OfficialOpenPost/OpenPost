@@ -211,7 +211,7 @@ export default function DashboardPage() {
               </Link>
             </div>
 
-            <div className="mt-4 space-y-3">
+            <div className="mt-4 space-y-3 max-h-[420px] overflow-y-auto">
               {blogs.length === 0 ? (
                 <div className="rounded-xl border-2 border-dashed border-border bg-[#FCFCF9] p-8 text-center">
                   <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-brand/15 text-navy">
@@ -229,7 +229,7 @@ export default function DashboardPage() {
                   </Link>
                 </div>
               ) : (
-                blogs.slice(0, 5).map((post) => (
+                blogs.map((post) => (
                   <div
                     key={post.id}
                     className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border border-border bg-[#FCFCF9] p-4 hover:border-brand/40 hover:bg-white transition group"

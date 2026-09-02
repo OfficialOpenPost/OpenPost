@@ -16,6 +16,7 @@ import {
   Menu,
   X,
   ExternalLink,
+  Shield,
 } from "lucide-react";
 import { ProjectSwitcher } from "@/components/project/ProjectSwitcher";
 
@@ -25,8 +26,10 @@ const nav = [
   { href: "/dashboard/media", label: "Media Library", icon: ImageIcon },
   { href: "/dashboard/categories", label: "Categories", icon: Folder },
   { href: "/dashboard/tags", label: "Tags", icon: Tag },
-  { href: "/dashboard/authors", label: "Authors & Team", icon: Users },
+  { href: "/dashboard/authors", label: "Authors", icon: Users },
+  { href: "/dashboard/team", label: "Team & Invites", icon: Users },
   { href: "/dashboard/webhooks", label: "Webhooks & Sync", icon: Webhook },
+  { href: "/dashboard/audit", label: "Audit Logs", icon: Shield },
   { href: "/dashboard/settings", label: "Website Settings", icon: Settings },
 ];
 

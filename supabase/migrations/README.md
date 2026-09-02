@@ -1,7 +1,7 @@
 # Supabase Migrations — Run in Sequential Order
 
 1. Open **Supabase Dashboard** &rarr; **SQL Editor** &rarr; **New Query**
-2. Run each file **in sequential order** `001` &rarr; `018` (copy-paste, click **Run**)
+2. Run each file **in sequential order** `001` &rarr; `019` (copy-paste, click **Run**)
 3. Check for “Success”, then proceed to the next file.
 
 | File | Purpose / Description |
@@ -24,6 +24,7 @@
 | `016_auto_profile_on_signup.sql` | Supabase auth signup triggers and automated profile provisioning |
 | `017_strict_rls_and_canonical_roles.sql` | Strict canonical roles (`ADMIN`, `EDITOR`, `WRITER`), composite indexes, and fail-closed RLS policies |
 | `018_assign_legacy_blogs_to_default_project.sql` | Backfills any unassigned legacy posts/taxonomies (`project_id IS NULL`) to primary project |
+| `019_canonical_five_roles.sql` | Canonical 5-role model `OWNER/ADMIN/EDITOR/AUTHOR/CONTRIBUTOR`, preserves `WRITER` as deprecated alias, adds indexes |
 
 ---
 
@@ -31,4 +32,4 @@
 
 * **Public Read**: `blogs` (strictly `status = 'published'`), `categories`, `tags`, `authors`, `polls` & `options`.
 * **Member Read / Write**: Full draft editing and creation scoped strictly to projects where `project_members.user_id = auth.uid()`.
-* **Admin Governance**: Role permissions (`ADMIN` > `EDITOR` > `WRITER`) enforced at both database RLS and API layer.
+* **Admin Governance**: Role permissions (`OWNER` > `ADMIN` > `EDITOR` > `AUTHOR` > `CONTRIBUTOR` hierarchy, `WRITER` deprecated alias for `AUTHOR`) enforced at both database RLS and API layer.

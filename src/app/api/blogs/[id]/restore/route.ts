@@ -13,7 +13,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
 
     if (blog.projectId) {
-      await requireProjectMember(blog.projectId, "WRITER");
+      await requireProjectMember(blog.projectId, "CONTRIBUTOR");
     }
 
     const body = await req.json().catch(() => ({}));

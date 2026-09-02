@@ -31,20 +31,22 @@ export function Navbar() {
   }, []);
 
   return (
-    <header className="sticky top-0 z-50 border-b border-border bg-white/90 backdrop-blur-md">
-      <nav className={`flex h-16 items-center justify-between px-6 ${isDocs ? "w-full max-w-full" : "mx-auto max-w-7xl"}`}>
-        {/* Logo */}
-        <Link href="/" className="flex items-center gap-3 group">
-          <div className="relative flex h-10 w-10 items-center justify-center rounded-xl bg-white border border-border p-0.5 shadow-xs transition-all group-hover:scale-105 group-hover:border-brand/40">
-            <img src="/logo.svg" alt="OpenPost" className="h-8.5 w-8.5 object-contain" />
-          </div>
-          <span className="text-xl font-bold tracking-tight text-navy">
+    <header className="sticky top-0 z-50 w-full border-b border-border/80 bg-white/80 backdrop-blur-xl supports-[backdrop-filter]:bg-white/70 shadow-sm">
+      <nav
+        className={`flex h-[64px] w-full items-center justify-between gap-3 px-4 sm:px-4 lg:px-6 ${
+          isDocs ? "max-w-full" : "mx-auto w-full max-w-[1440px] 2xl:max-w-[1600px]"
+        }`}
+      >
+        {/* Logo — icon not enclosed in box (per design request) */}
+        <Link href="/" className="flex shrink-0 items-center gap-2.5 group">
+          <img src="/logo.svg" alt="OpenPost" className="h-8 w-8 object-contain transition-transform group-hover:scale-105" />
+          <span className="text-[22px] font-extrabold tracking-tight text-navy">
             Open<span className="text-brand">Post</span>
           </span>
         </Link>
 
-        {/* Desktop links */}
-        <div className="hidden items-center gap-7 md:flex">
+        {/* Desktop links — centered, responsive gap for large monitors */}
+        <div className="hidden flex-1 items-center justify-center gap-6 md:flex xl:gap-7 2xl:gap-8">
           {navLinks.map((link) => (
             <Link
               key={link.href}
@@ -126,9 +128,9 @@ export function Navbar() {
         </button>
       </nav>
 
-      {/* Mobile menu */}
+      {/* Mobile menu — reduced side padding per request */}
       {mobileOpen && (
-        <div className="border-t border-border bg-white px-6 py-4 md:hidden">
+        <div className="border-t border-border bg-white px-4 py-4 md:hidden">
           <div className="flex flex-col gap-2.5">
             {navLinks.map((link) => (
               <Link

@@ -46,7 +46,7 @@ export default function SettingsPage() {
   const [teamUsers, setTeamUsers] = useState<any[]>([]);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteName, setInviteName] = useState("");
-  const [inviteRole, setInviteRole] = useState("WRITER");
+  const [inviteRole, setInviteRole] = useState("CONTRIBUTOR");
   const [inviting, setInviting] = useState(false);
 
   // Tokens State
@@ -493,9 +493,11 @@ export default function SettingsPage() {
                       onChange={(e) => setInviteRole(e.target.value)}
                       className="w-full rounded-xl border border-border bg-white px-2.5 py-2 text-xs text-navy focus:border-brand focus:outline-none"
                     >
+                      <option value="OWNER">Owner</option>
                       <option value="ADMIN">Admin</option>
                       <option value="EDITOR">Editor</option>
-                      <option value="WRITER">Writer</option>
+                      <option value="AUTHOR">Author</option>
+                      <option value="CONTRIBUTOR">Contributor</option>
                     </select>
                   </div>
                   <div className="sm:col-span-2">
@@ -553,13 +555,15 @@ export default function SettingsPage() {
 
                           <div className="flex items-center gap-2 flex-wrap">
                             <select
-                              value={user.role || "WRITER"}
+                              value={user.role || "CONTRIBUTOR"}
                               onChange={(e) => handleUpdateRole(user.id, e.target.value)}
                               className="rounded-lg border border-border bg-white px-2.5 py-1 text-xs font-bold text-navy focus:border-brand focus:outline-none"
                             >
+                              <option value="OWNER">OWNER</option>
                               <option value="ADMIN">ADMIN</option>
                               <option value="EDITOR">EDITOR</option>
-                              <option value="WRITER">WRITER</option>
+                              <option value="AUTHOR">AUTHOR</option>
+                              <option value="CONTRIBUTOR">CONTRIBUTOR</option>
                             </select>
 
                             {isApproved && (

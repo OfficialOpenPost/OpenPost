@@ -146,7 +146,7 @@ export default function ContactPage() {
                 <h3 className="text-base font-bold text-text-primary">Contact information</h3>
                 <div className="mt-6 space-y-5">
                   {[
-                    { icon: Mail, label: "Email", value: "hello@openpost.app", desc: "Our inbox is always open" },
+                    { icon: Mail, label: "Email", value: "officialopenpost@outlook.com", desc: "Our inbox is always open — we reply within 24h" },
                     { icon: Phone, label: "Phone", value: "+1 (555) 123-4567", desc: "Mon–Fri, 9am–6pm PST" },
                     { icon: MapPin, label: "Office", value: "San Francisco, CA", desc: "Remote-first, office optional" },
                     { icon: Clock, label: "Response time", value: "< 24 hours", desc: "Average 4 hours on weekdays" },
@@ -175,7 +175,7 @@ export default function ContactPage() {
                   <a href="#" aria-label="Twitter" className="flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-surface hover:bg-navy hover:text-white hover:border-navy transition">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
                   </a>
-                  <a href="#" aria-label="Email" className="flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-surface hover:bg-navy hover:text-white hover:border-navy transition">
+                  <a href="mailto:officialopenpost@outlook.com" aria-label="Email" className="flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-surface hover:bg-navy hover:text-white hover:border-navy transition">
                     <Mail className="h-4 w-4" />
                   </a>
                 </div>

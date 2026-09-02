@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, withDbRetry } from "@/lib/db";
-import { requireApprovedUser, requireProjectMember, requirePermission, createAuditLog, AuthError } from "@/lib/auth";
+import { requireApprovedUser, requireProjectMember, requirePermission, hasPermission, hasMinimumRole, createAuditLog, AuthError } from "@/lib/auth";
 import { countWords, readingTime as calcReadingTime } from "@/lib/publish";
 import { triggerWebhooks } from "@/lib/webhooks";
 
@@ -36,12 +36,25 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: { code: "NOT_FOUND", message: "Article not found." } }, { status: 404 });
     }
 
-    const isCreator = blog.createdBy === user.id;
-    const isAdmin = (user.role as string) === "admin" || user.role === "ADMIN";
-
-    // Verify member access if neither creator nor admin
-    if (!isCreator && !isAdmin && blog.projectId) {
-      await requireProjectMember(blog.projectId, "WRITER").catch(() => null);
+    // Strict access: must be member of project's project, or creator, or OWNER/ADMIN via membership
+    if (blog.projectId) {
+      await requireProjectMember(blog.projectId, "CONTRIBUTOR");
+      // Additional edit/view check: ensure user has posts.view
+      const member = user.memberships.find((m) => m.projectId === blog.projectId);
+      const role = member?.role;
+      if (role && !hasPermission(role, "posts.view") && !hasPermission(role, "post.read")) {
+        // still allow viewing own post
+        if (blog.createdBy !== user.id) {
+          return NextResponse.json({ error: { code: "FORBIDDEN", message: "Access denied." } }, { status: 403 });
+        }
+      }
+    } else {
+      // No project assignment — only creator or OWNER/ADMIN globally can view
+      const isCreator = blog.createdBy === user.id;
+      const isPrivileged = hasMinimumRole(user.role, "ADMIN");
+      if (!isCreator && !isPrivileged) {
+        return NextResponse.json({ error: { code: "NOT_FOUND", message: "Article not found." } }, { status: 404 });
+      }
     }
 
     return NextResponse.json({ data: blog });
@@ -63,18 +76,20 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: { code: "NOT_FOUND", message: "Article not found." } }, { status: 404 });
     }
 
-    const isCreator = existing.createdBy === user.id;
-    const isAdmin = (user.role as string) === "admin" || user.role === "ADMIN";
-
-    // Verify member access if neither creator nor admin
-    if (!isCreator && !isAdmin && existing.projectId) {
-      const member = await requireProjectMember(existing.projectId, "WRITER").catch(() => null);
-      if (member && member.role === "WRITER" && existing.createdBy !== user.id) {
-        return NextResponse.json(
-          { error: { code: "FORBIDDEN", message: "Writers can only modify their own posts." } },
-          { status: 403 }
-        );
-      }
+    // Strict authorization: must be project member
+    if (!existing.projectId) {
+      return NextResponse.json({ error: { code: "FORBIDDEN", message: "Post has no project assignment." } }, { status: 403 });
+    }
+    const { role } = await requireProjectMember(existing.projectId);
+    const canEditOthers = hasPermission(role, "posts.edit_others") || hasMinimumRole(role, "EDITOR");
+    if (!canEditOthers && existing.createdBy !== user.id) {
+      return NextResponse.json(
+        { error: { code: "FORBIDDEN", message: "You can only modify your own posts." } },
+        { status: 403 }
+      );
+    }
+    if (!hasPermission(role, "posts.edit_own") && !hasPermission(role, "posts.edit_others") && !hasPermission(role, "post.edit")) {
+      return NextResponse.json({ error: { code: "FORBIDDEN", message: "You do not have permission to edit posts." } }, { status: 403 });
     }
 
     const body = await req.json().catch(() => ({}));

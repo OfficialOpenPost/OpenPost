@@ -13,7 +13,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     }
 
     if (blog.projectId && typeof blog.projectId === "string") {
-      await requireProjectMember(blog.projectId, "WRITER");
+      await requireProjectMember(blog.projectId, "CONTRIBUTOR");
     }
 
     const revisions = await withDbRetry(() =>

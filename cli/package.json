@@ -1,10 +1,9 @@
 {
   "name": "openpost-cli",
-  "version": "0.1.1",
-  "description": "Create a blog frontend connected to OpenPost CMS — npx openpost-cli",
+  "version": "0.1.2",
+  "description": "Official CLI for OpenPost CMS — scaffold a headless Next.js blog in seconds — npx openpost-cli",
   "bin": {
-    "openpost-cli": "./dist/index.js",
-    "create-openpost": "./dist/index.js"
+    "openpost-cli": "./dist/index.js"
   },
   "scripts": {
     "build": "tsc",

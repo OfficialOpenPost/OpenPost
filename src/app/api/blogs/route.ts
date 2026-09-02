@@ -66,24 +66,28 @@ async function syncMediaUsage(blogId: string, content: any) {
     mediaIds = [...new Set(mediaIds)];
     if (!mediaIds.length) return;
 
-    const existing = await withDbRetry(() =>
-      db.mediaUsage.findMany({ where: { blogId }, select: { mediaId: true } })
-    ).catch(() => [] as any);
+    const [existing, validMedia] = await Promise.all([
+      withDbRetry(() => db.mediaUsage.findMany({ where: { blogId }, select: { mediaId: true } })).catch(() => [] as any),
+      withDbRetry(() => db.media.findMany({ where: { id: { in: mediaIds } }, select: { id: true } })).catch(() => [] as any),
+    ]);
+
     const existingIds = new Set((existing as any[]).map((r) => r.mediaId));
-    const newIds = new Set(mediaIds);
-    const toDelete = [...existingIds].filter((id) => !newIds.has(id));
-    const toAdd = [...newIds].filter((id) => !existingIds.has(id));
+    const validIds = new Set((validMedia as any[]).map((m) => m.id));
+    const newIds = mediaIds.filter((id) => validIds.has(id) && !existingIds.has(id));
+    const toDelete = [...existingIds].filter((id) => !validIds.has(id));
 
     if (toDelete.length) {
       await withDbRetry(() =>
         db.mediaUsage.deleteMany({ where: { blogId, mediaId: { in: toDelete } } })
       ).catch(() => {});
     }
-    for (const mediaId of toAdd) {
-      const exists = await withDbRetry(() => db.media.findUnique({ where: { id: mediaId } })).catch(() => null);
-      if (exists) {
-        await withDbRetry(() => db.mediaUsage.create({ data: { blogId, mediaId } })).catch(() => {});
-      }
+    if (newIds.length) {
+      await withDbRetry(() =>
+        db.mediaUsage.createMany({
+          data: newIds.map((mediaId) => ({ blogId, mediaId })),
+          skipDuplicates: true,
+        })
+      ).catch(() => {});
     }
   } catch (e) {
     // Non-blocking
@@ -219,17 +223,19 @@ export async function POST(req: NextRequest) {
     if (!targetProjectId) {
       return NextResponse.json({ error: { code: "PROJECT_REQUIRED", message: "Project assignment required." } }, { status: 400 });
     }
-    // Ensure user is member of target project (any role can create draft, publish gated later)
-    await requireProjectMember(targetProjectId, "CONTRIBUTOR");
 
-    // If attempting to publish or schedule, require publish permission — DO NOT swallow errors
+    // Check membership from already-loaded user memberships (avoids extra auth call)
+    const membership = user.memberships.find((m) => m.projectId === targetProjectId);
+    if (!membership) {
+      return NextResponse.json({ error: { code: "NOT_FOUND", message: "Project not found or access denied." } }, { status: 404 });
+    }
+    const role = membership.role;
+
+    // If attempting to publish or schedule, require publish permission
     if (status === "published" || status === "scheduled") {
-      const { role } = await requireProjectMember(targetProjectId);
-      // EDITOR+ required to publish/schedule; AUTHOR/CONTRIBUTOR blocked
       if (!hasMinimumRole(role, "EDITOR") && !hasPermission(role, "posts.publish_others") && !hasPermission(role, "posts.publish_own")) {
         return NextResponse.json({ error: { code: "FORBIDDEN", message: "You do not have permission to publish this post." } }, { status: 403 });
       }
-      // Enforce central permission (will throw 403 if not allowed)
       if (!hasPermission(role, "posts.publish_others") && !hasPermission(role, "posts.publish_own") && !hasPermission(role, "post.publish")) {
         throw new AuthError("You do not have permission to publish this post.", 403, "FORBIDDEN");
       }
@@ -309,11 +315,15 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: { code: "NOT_FOUND", message: "Post not found" } }, { status: 404 });
       }
 
-      // Strict project membership + edit permission check — fail closed, no swallow
+      // Strict project membership + edit permission check — use already-loaded memberships
       if (!existing.projectId) {
         return NextResponse.json({ error: { code: "FORBIDDEN", message: "Post has no project assignment." } }, { status: 403 });
       }
-      const { role: editorRole } = await requireProjectMember(existing.projectId);
+      const editMembership = user.memberships.find((m) => m.projectId === existing.projectId);
+      if (!editMembership) {
+        return NextResponse.json({ error: { code: "NOT_FOUND", message: "Project not found or access denied." } }, { status: 404 });
+      }
+      const editorRole = editMembership.role;
       // CONTRIBUTOR/AUTHOR can only edit own posts; EDITOR+ can edit others
       const canEditOthers = hasPermission(editorRole, "posts.edit_others") || hasMinimumRole(editorRole, "EDITOR");
       if (!canEditOthers && existing.createdBy !== user.id) {

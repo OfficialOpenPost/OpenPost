@@ -271,6 +271,7 @@ export function FloatingImageView({
 
         setIsResizing(false);
         const finalW = currentDragWidthRef.current;
+        cachedWidthRef.current = null;
         updateAttributes({ width: finalW });
         setLiveWidth(null);
       };

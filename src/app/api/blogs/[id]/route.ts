@@ -36,14 +36,14 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: { code: "NOT_FOUND", message: "Article not found." } }, { status: 404 });
     }
 
-    // Strict access: must be member of project's project, or creator, or OWNER/ADMIN via membership
+    // Strict access: use already-loaded user memberships (no extra auth call)
     if (blog.projectId) {
-      await requireProjectMember(blog.projectId, "CONTRIBUTOR");
-      // Additional edit/view check: ensure user has posts.view
       const member = user.memberships.find((m) => m.projectId === blog.projectId);
-      const role = member?.role;
-      if (role && !hasPermission(role, "posts.view") && !hasPermission(role, "post.read")) {
-        // still allow viewing own post
+      if (!member) {
+        return NextResponse.json({ error: { code: "FORBIDDEN", message: "Access denied." } }, { status: 403 });
+      }
+      const role = member.role;
+      if (!hasPermission(role, "posts.view") && !hasPermission(role, "post.read")) {
         if (blog.createdBy !== user.id) {
           return NextResponse.json({ error: { code: "FORBIDDEN", message: "Access denied." } }, { status: 403 });
         }
@@ -76,11 +76,15 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: { code: "NOT_FOUND", message: "Article not found." } }, { status: 404 });
     }
 
-    // Strict authorization: must be project member
+    // Strict authorization: use already-loaded user memberships (no extra auth call)
     if (!existing.projectId) {
       return NextResponse.json({ error: { code: "FORBIDDEN", message: "Post has no project assignment." } }, { status: 403 });
     }
-    const { role } = await requireProjectMember(existing.projectId);
+    const editMembership = user.memberships.find((m) => m.projectId === existing.projectId);
+    if (!editMembership) {
+      return NextResponse.json({ error: { code: "FORBIDDEN", message: "Access denied." } }, { status: 403 });
+    }
+    const role = editMembership.role;
     const canEditOthers = hasPermission(role, "posts.edit_others") || hasMinimumRole(role, "EDITOR");
     if (!canEditOthers && existing.createdBy !== user.id) {
       return NextResponse.json(
@@ -110,9 +114,11 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       contentVersion,
     } = body;
 
-    // If changing to published or scheduled, require permission
+    // If changing to published or scheduled, require permission (use already-loaded role)
     if (status && (status === "published" || status === "scheduled") && existing.status !== status && existing.projectId) {
-      await requirePermission(existing.projectId, "post.publish");
+      if (!hasPermission(role, "posts.publish_others") && !hasPermission(role, "posts.publish_own") && !hasPermission(role, "post.publish")) {
+        throw new AuthError("You do not have permission to publish this post.", 403, "FORBIDDEN");
+      }
     }
 
     const dataToUpdate: any = {
@@ -123,25 +129,24 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       dataToUpdate.title = title.trim();
     }
 
-    if (typeof slug === "string" && slug.trim()) {
+      if (typeof slug === "string" && slug.trim()) {
       let cleanSlug = slug.trim();
       if (cleanSlug !== existing.slug) {
-        // Check slug collision globally — auto-resolve by appending suffix
-        let candidateSlug = cleanSlug;
-        let counter = 1;
-        let dup = await withDbRetry(() =>
-          db.blog.findFirst({ where: { slug: candidateSlug, id: { not: id } } })
+        // Batch check for slug collision — single query instead of loop
+        const existingSlugs = await withDbRetry(() =>
+          db.blog.findMany({
+            where: { slug: { startsWith: cleanSlug }, id: { not: id } },
+            select: { slug: true },
+          })
         );
-        while (dup) {
-          counter++;
-          candidateSlug = `${cleanSlug}-${counter}`;
-          dup = await withDbRetry(() =>
-            db.blog.findFirst({ where: { slug: candidateSlug, id: { not: id } } })
-          );
-          if (counter > 100) {
-            candidateSlug = `${cleanSlug}-${Date.now().toString(36)}`;
-            break;
+        const existingSet = new Set(existingSlugs.map((s) => s.slug));
+        let candidateSlug = cleanSlug;
+        if (existingSet.has(candidateSlug)) {
+          let counter = 2;
+          while (existingSet.has(`${cleanSlug}-${counter}`)) {
+            counter++;
           }
+          candidateSlug = `${cleanSlug}-${counter}`;
         }
         dataToUpdate.slug = candidateSlug;
 
@@ -291,20 +296,27 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       ).catch(() => {});
     }
 
-    // Sync taxonomy relations if passed
+    // Sync taxonomy relations — batch operations
     if (Array.isArray(tagIds)) {
       await withDbRetry(() => db.blogTag.deleteMany({ where: { blogId: id } })).catch(() => {});
-      for (const tagId of tagIds) {
-        await withDbRetry(() => db.blogTag.create({ data: { blogId: id, tagId } })).catch(() => {});
+      if (tagIds.length > 0) {
+        await withDbRetry(() =>
+          db.blogTag.createMany({
+            data: tagIds.map((tagId: string) => ({ blogId: id, tagId })),
+            skipDuplicates: true,
+          })
+        ).catch(() => {});
       }
     }
 
     if (Array.isArray(authorIds)) {
       await withDbRetry(() => db.blogAuthor.deleteMany({ where: { blogId: id } })).catch(() => {});
-      let sortOrder = 0;
-      for (const authorId of authorIds) {
+      if (authorIds.length > 0) {
         await withDbRetry(() =>
-          db.blogAuthor.create({ data: { blogId: id, authorId, sortOrder: sortOrder++ } })
+          db.blogAuthor.createMany({
+            data: authorIds.map((authorId: string, i: number) => ({ blogId: id, authorId, sortOrder: i })),
+            skipDuplicates: true,
+          })
         ).catch(() => {});
       }
     }

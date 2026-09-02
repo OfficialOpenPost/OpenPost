@@ -11,14 +11,21 @@ export async function middleware(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname;
 
-  // Skip auth for public routes — saves ~2s per request
+  // Skip session refresh for truly public API routes — they don't need auth cookie rotation
   if (
-    pathname.startsWith("/blog") ||
-    pathname.startsWith("/authors") ||
     pathname.startsWith("/api/v1") ||
     pathname.startsWith("/api/health") ||
     pathname.startsWith("/api/cron") ||
     pathname.startsWith("/api/cli") ||
+    pathname.startsWith("/api/webhooks")
+  ) {
+    return NextResponse.next();
+  }
+
+  // Skip auth for public page routes
+  if (
+    pathname.startsWith("/blog") ||
+    pathname.startsWith("/authors") ||
     pathname.startsWith("/login") ||
     pathname.startsWith("/signup") ||
     pathname === "/"

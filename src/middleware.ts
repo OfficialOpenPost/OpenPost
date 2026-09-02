@@ -9,6 +9,23 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  const pathname = request.nextUrl.pathname;
+
+  // Skip auth for public routes — saves ~2s per request
+  if (
+    pathname.startsWith("/blog") ||
+    pathname.startsWith("/authors") ||
+    pathname.startsWith("/api/v1") ||
+    pathname.startsWith("/api/health") ||
+    pathname.startsWith("/api/cron") ||
+    pathname.startsWith("/api/cli") ||
+    pathname.startsWith("/login") ||
+    pathname.startsWith("/signup") ||
+    pathname === "/"
+  ) {
+    return NextResponse.next();
+  }
+
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(url, key, {
@@ -29,7 +46,6 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const pathname = request.nextUrl.pathname;
   const isAuthRoute = pathname.startsWith("/login") || pathname.startsWith("/signup");
   const isDashboardRoute = pathname.startsWith("/dashboard");
   const isPendingApprovalRoute = pathname === "/pending-approval";

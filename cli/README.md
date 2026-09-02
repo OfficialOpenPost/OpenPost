@@ -34,7 +34,7 @@ npx openpost-cli
 
 ## What it does
 
-1. Prompts `OpenPost CMS URL` (e.g., `https://cms.typely.in` or `http://localhost:3000`)
+1. Prompts `OpenPost CMS URL` (e.g., `https://cms.example.com` or `http://localhost:3000`)
 2. Health-checks `GET /api/health`
 3. Opens `${cmsUrl}/cli/connect` in your browser for authorization
 4. You paste the `OP-XXXX-XXXX` connection code shown in the CMS
@@ -62,7 +62,7 @@ cd my-blog && npm install && npm run dev
 
 ```ts
 // templates/nextjs-blog/lib/openpost/client.ts uses:
-OPENPOST_URL=https://cms.typely.in
+OPENPOST_URL=https://cms.example.com
 OPENPOST_PROJECT_ID=uuid
 OPENPOST_TOKEN=op_xxx
 // then GET ${OPENPOST_URL}/api/v1/posts?limit=10 with header Authorization: Bearer ${OPENPOST_TOKEN}

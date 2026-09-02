@@ -437,14 +437,14 @@ export default function SettingsPage() {
                     e.preventDefault();
                     const f = e.target as any;
                     handleSaveSection("website", {
-                      siteName: f.siteName.value,
-                      siteTagline: f.siteTagline.value,
-                      siteDescription: f.siteDescription.value,
-                      siteLogoUrl: f.siteLogoUrl.value,
-                      sitePrimaryColor: f.sitePrimaryColor.value,
-                      siteUrl: f.siteUrl.value,
-                      siteLanguage: f.siteLanguage.value,
-                      siteTimezone: f.siteTimezone.value,
+                      siteName: f.siteName?.value ?? "",
+                      siteTagline: f.siteTagline?.value ?? "",
+                      siteDescription: f.siteDescription?.value ?? "",
+                      siteLogoUrl: f.siteLogoUrl?.value ?? "",
+                      sitePrimaryColor: f.sitePrimaryColor?.value ?? "",
+                      siteUrl: f.siteUrl?.value ?? "",
+                      siteLanguage: f.siteLanguage?.value ?? "en",
+                      siteTimezone: f.siteTimezone?.value ?? "UTC",
                     });
                   }}
                   className="p-5 space-y-5"
@@ -496,6 +496,23 @@ export default function SettingsPage() {
                         <option value="hi">हिन्दी</option>
                         <option value="ja">日本語</option>
                         <option value="pt">Português</option>
+                      </select>
+                    </label>
+                    <label className="space-y-1.5">
+                      <span className="text-xs font-semibold text-navy">Timezone</span>
+                      <select name="siteTimezone" defaultValue={activeProject?.siteTimezone || "UTC"} className="w-full rounded-lg border border-border bg-white px-3 py-2.5 text-sm focus:border-navy focus:outline-none">
+                        <option value="UTC">UTC</option>
+                        <option value="America/New_York">Eastern Time (ET)</option>
+                        <option value="America/Chicago">Central Time (CT)</option>
+                        <option value="America/Denver">Mountain Time (MT)</option>
+                        <option value="America/Los_Angeles">Pacific Time (PT)</option>
+                        <option value="Europe/London">London (GMT)</option>
+                        <option value="Europe/Paris">Paris (CET)</option>
+                        <option value="Europe/Berlin">Berlin (CET)</option>
+                        <option value="Asia/Tokyo">Tokyo (JST)</option>
+                        <option value="Asia/Shanghai">Shanghai (CST)</option>
+                        <option value="Asia/Kolkata">Mumbai (IST)</option>
+                        <option value="Australia/Sydney">Sydney (AEST)</option>
                       </select>
                     </label>
                     <label className="space-y-1.5">

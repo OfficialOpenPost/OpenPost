@@ -385,39 +385,68 @@ export async function POST(req: NextRequest) {
         })
       ).catch(() => {});
 
-      // Sync taxonomy relations if provided — handle both tagIds (UUIDs) and tags (name objects) like Sanity
-      // Resolve tags with names to IDs (find or create per project)
+      // Sync taxonomy relations — batch operations for speed
       let resolvedTagIds = Array.isArray(tagIds) ? [...tagIds] : [];
       if (Array.isArray(tags) && tags.length > 0) {
-        for (const t of tags as any[]) {
-          const tName = typeof t === "string" ? t.trim() : (t?.name || t?.label || "").trim();
-          if (!tName) continue;
-          const tSlug = tName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-          let tag = await withDbRetry(() =>
-            db.tag.findFirst({ where: { slug: tSlug, projectId: existing.projectId || targetProjectId } })
-          ).catch(() => null);
-          if (!tag && (existing.projectId || targetProjectId)) {
-            tag = await withDbRetry(() =>
-              db.tag.create({ data: { name: tName, slug: tSlug || `tag-${Date.now()}`, projectId: existing.projectId || targetProjectId } })
-            ).catch(() => null);
+        const tagSlugs = (tags as any[])
+          .map((t) => {
+            const tName = typeof t === "string" ? t.trim() : (t?.name || t?.label || "").trim();
+            return tName ? { name: tName, slug: tName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") } : null;
+          })
+          .filter(Boolean) as { name: string; slug: string }[];
+
+        if (tagSlugs.length > 0) {
+          const existingTags = await withDbRetry(() =>
+            db.tag.findMany({
+              where: { slug: { in: tagSlugs.map((t) => t.slug) }, projectId: existing.projectId || targetProjectId },
+              select: { id: true, slug: true },
+            })
+          ).catch(() => []);
+
+          const existingMap = new Map(existingTags.map((t) => [t.slug, t.id]));
+          const newTags = tagSlugs.filter((t) => !existingMap.has(t.slug));
+
+          if (newTags.length > 0) {
+            await withDbRetry(() =>
+              db.tag.createMany({
+                data: newTags.map((t) => ({ name: t.name, slug: t.slug, projectId: existing.projectId || targetProjectId })),
+                skipDuplicates: true,
+              })
+            ).catch(() => {});
+
+            const createdTags = await withDbRetry(() =>
+              db.tag.findMany({
+                where: { slug: { in: newTags.map((t) => t.slug) }, projectId: existing.projectId || targetProjectId },
+                select: { id: true, slug: true },
+              })
+            ).catch(() => []);
+            createdTags.forEach((t) => existingMap.set(t.slug, t.id));
           }
-          if (tag) resolvedTagIds.push(tag.id);
+
+          existingMap.forEach((id) => resolvedTagIds.push(id));
+          resolvedTagIds = [...new Set(resolvedTagIds)];
         }
-        resolvedTagIds = [...new Set(resolvedTagIds)];
       }
       if (resolvedTagIds.length > 0 || Array.isArray(tagIds) || Array.isArray(tags)) {
         await withDbRetry(() => db.blogTag.deleteMany({ where: { blogId: id! } })).catch(() => {});
-        for (const tagId of resolvedTagIds) {
-          await withDbRetry(() => db.blogTag.create({ data: { blogId: id!, tagId } })).catch(() => {});
+        if (resolvedTagIds.length > 0) {
+          await withDbRetry(() =>
+            db.blogTag.createMany({
+              data: resolvedTagIds.map((tagId) => ({ blogId: id!, tagId })),
+              skipDuplicates: true,
+            })
+          ).catch(() => {});
         }
       }
 
       if (Array.isArray(authorIds)) {
         await withDbRetry(() => db.blogAuthor.deleteMany({ where: { blogId: id! } })).catch(() => {});
-        let sortOrder = 0;
-        for (const authorId of authorIds) {
+        if (authorIds.length > 0) {
           await withDbRetry(() =>
-            db.blogAuthor.create({ data: { blogId: id!, authorId, sortOrder: sortOrder++ } })
+            db.blogAuthor.createMany({
+              data: authorIds.map((authorId, i) => ({ blogId: id!, authorId, sortOrder: i })),
+              skipDuplicates: true,
+            })
           ).catch(() => {});
         }
       }
@@ -449,21 +478,22 @@ export async function POST(req: NextRequest) {
     // Use global check to avoid P2002 race; will be migrated to per-project in future
     let candidateSlug = slug || "untitled";
     const baseSlug = candidateSlug.replace(/-\d+$/, "");
-    let counter = 1;
-    let existingWithSlug = await withDbRetry(() =>
-      db.blog.findFirst({ where: { slug: candidateSlug } })
-    );
 
-    while (existingWithSlug) {
-      counter++;
-      candidateSlug = `${baseSlug}-${counter}`;
-      existingWithSlug = await withDbRetry(() =>
-        db.blog.findFirst({ where: { slug: candidateSlug } })
-      );
-      if (counter > 100) {
-        candidateSlug = `${baseSlug}-${Date.now().toString(36)}`;
-        break;
+    // Batch check: find all existing slugs with this prefix in one query
+    const existingSlugs = await withDbRetry(() =>
+      db.blog.findMany({
+        where: { slug: { startsWith: baseSlug } },
+        select: { slug: true },
+      })
+    );
+    const existingSet = new Set(existingSlugs.map((s) => s.slug));
+
+    if (existingSet.has(candidateSlug)) {
+      let counter = 2;
+      while (existingSet.has(`${baseSlug}-${counter}`)) {
+        counter++;
       }
+      candidateSlug = `${baseSlug}-${counter}`;
     }
     slug = candidateSlug;
 
@@ -496,7 +526,7 @@ export async function POST(req: NextRequest) {
     } catch (err: any) {
       // Handle race condition where concurrent request created same slug
       if (err?.code === "P2002" && err?.meta?.target?.includes("slug")) {
-        const retrySlug = `${baseSlug}-${counter + 1}-${Date.now().toString(36).slice(-4)}`;
+        const retrySlug = `${baseSlug}-${Date.now().toString(36).slice(-6)}`;
         try {
           blog = await withDbRetry(() =>
             db.blog.create({
@@ -547,34 +577,74 @@ export async function POST(req: NextRequest) {
       })
     ).catch(() => {});
 
-    // Sync tags & authors — handle both tagIds and tags with names (Sanity-like)
+    // Sync tags & authors — batch operations for speed
     {
       let resolvedTagIds: string[] = Array.isArray(tagIds) ? [...tagIds] : [];
       if (Array.isArray(tags) && (tags as any[]).length > 0) {
-        for (const t of tags as any[]) {
-          const tName = typeof t === "string" ? t.trim() : (t?.name || t?.label || "").trim();
-          if (!tName) continue;
-          const tSlug = tName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-          let tag = await withDbRetry(() => db.tag.findFirst({ where: { slug: tSlug, projectId: targetProjectId } })).catch(() => null);
-          if (!tag) {
-            tag = await withDbRetry(() => db.tag.create({ data: { name: tName, slug: tSlug || `tag-${Date.now()}`, projectId: targetProjectId } })).catch(() => null);
+        // Batch find existing tags
+        const tagSlugs = (tags as any[])
+          .map((t) => {
+            const tName = typeof t === "string" ? t.trim() : (t?.name || t?.label || "").trim();
+            return tName ? { name: tName, slug: tName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") } : null;
+          })
+          .filter(Boolean) as { name: string; slug: string }[];
+
+        if (tagSlugs.length > 0) {
+          const existingTags = await withDbRetry(() =>
+            db.tag.findMany({
+              where: { slug: { in: tagSlugs.map((t) => t.slug) }, projectId: targetProjectId },
+              select: { id: true, slug: true },
+            })
+          ).catch(() => []);
+
+          const existingMap = new Map(existingTags.map((t) => [t.slug, t.id]));
+          const newTags = tagSlugs.filter((t) => !existingMap.has(t.slug));
+
+          // Batch create missing tags
+          if (newTags.length > 0) {
+            const created = await withDbRetry(() =>
+              db.tag.createMany({
+                data: newTags.map((t) => ({ name: t.name, slug: t.slug, projectId: targetProjectId })),
+                skipDuplicates: true,
+              })
+            ).catch(() => ({ count: 0 }));
+
+            // Fetch created tags to get IDs
+            if (created.count > 0) {
+              const createdTags = await withDbRetry(() =>
+                db.tag.findMany({
+                  where: { slug: { in: newTags.map((t) => t.slug) }, projectId: targetProjectId },
+                  select: { id: true, slug: true },
+                })
+              ).catch(() => []);
+              createdTags.forEach((t) => existingMap.set(t.slug, t.id));
+            }
           }
-          if (tag) resolvedTagIds.push(tag.id);
+
+          existingMap.forEach((id) => resolvedTagIds.push(id));
+          resolvedTagIds = [...new Set(resolvedTagIds)];
         }
-        resolvedTagIds = [...new Set(resolvedTagIds)];
       }
-      for (const tagId of resolvedTagIds) {
-        await withDbRetry(() => db.blogTag.create({ data: { blogId: blog.id, tagId } })).catch(() => {});
+
+      // Batch link tags
+      if (resolvedTagIds.length > 0) {
+        await withDbRetry(() =>
+          db.blogTag.createMany({
+            data: resolvedTagIds.map((tagId) => ({ blogId: blog.id, tagId })),
+            skipDuplicates: true,
+          })
+        ).catch(() => {});
       }
     }
 
-    if (Array.isArray(authorIds)) {
-      let sortOrder = 0;
-      for (const authorId of authorIds) {
-        await withDbRetry(() =>
-          db.blogAuthor.create({ data: { blogId: blog.id, authorId, sortOrder: sortOrder++ } })
-        ).catch(() => {});
-      }
+    // Batch link authors
+    if (Array.isArray(authorIds) && authorIds.length > 0) {
+      await withDbRetry(() =>
+        db.blogAuthor.createMany({
+          data: authorIds.map((authorId, i) => ({ blogId: blog.id, authorId, sortOrder: i })),
+          skipDuplicates: true,
+        })
+      ).catch(() => {});
     }
 
     await syncMediaUsage(blog.id, content);

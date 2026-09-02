@@ -3,8 +3,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 enum UserRole {
@@ -140,10 +141,10 @@ model Blog {
   polls          Poll[]
 
   @@index([projectId, slug])
+  @@index([projectId, status, updatedAt(sort: Desc)])
   @@index([status])
   @@index([publishedAt])
   @@index([createdBy])
-  @@index([projectId])
   @@map("blogs")
 }
 
@@ -251,7 +252,7 @@ model Media {
   blogs    Blog[]
 
   @@index([checksum])
-  @@index([projectId])
+  @@index([projectId, createdAt(sort: Desc)])
   @@map("media")
 }
 

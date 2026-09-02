@@ -65,31 +65,40 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
       (user as any).email_confirmed_at || (user as any).confirmed_at || user.email_confirmed_at
     );
 
-    // 1. Fetch Profile and project memberships from database
-    let profile = await withDbRetry(() =>
-      db.profile.findUnique({
-        where: { id: user.id },
-        include: {
-          memberships: {
-            include: {
-              project: {
-                select: { id: true, name: true, slug: true },
+    // 1. Fetch Profile + owned projects in parallel (both depend on user.id only)
+    const [profile, ownedProjects] = await Promise.all([
+      withDbRetry(() =>
+        db.profile.findUnique({
+          where: { id: user.id },
+          include: {
+            memberships: {
+              include: {
+                project: {
+                  select: { id: true, name: true, slug: true },
+                },
               },
             },
           },
-        },
-      })
-    ).catch(() => null);
+        })
+      ).catch(() => null),
+      withDbRetry(() =>
+        db.project.findMany({
+          where: { ownerId: user.id },
+          select: { id: true, name: true, slug: true },
+        })
+      ).catch(() => []),
+    ]);
 
     // 2. If profile record is missing, safely backfill it with 'pending' status
-    if (!profile) {
+    let finalProfile = profile;
+    if (!finalProfile) {
       const email = user.email.toLowerCase().trim();
       const displayName =
         (user.user_metadata?.full_name as string) ||
         (user.user_metadata?.display_name as string) ||
         email.split("@")[0];
 
-      profile = await withDbRetry(() =>
+      finalProfile = await withDbRetry(() =>
         db.profile.upsert({
           where: { id: user.id },
           create: {
@@ -114,42 +123,33 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
       ).catch(() => null);
     }
 
-    if (!profile) {
+    if (!finalProfile) {
       return null;
     }
 
     // Normalized memberships
-    const memberships = (profile.memberships || []).map((m: any) => ({
+    const memberships = (finalProfile.memberships || []).map((m: any) => ({
       projectId: m.projectId,
       role: normalizeRoleStrict(m.role),
       project: m.project,
     }));
 
     // Include OWNER role from project ownership (ownerId == user.id) as OWNER membership even if not in project_members
-    try {
-      const ownedProjects = await withDbRetry(() =>
-        db.project.findMany({
-          where: { ownerId: profile!.id },
-          select: { id: true, name: true, slug: true },
-        })
-      ).catch(() => []);
-      for (const op of ownedProjects as any[]) {
-        if (!memberships.find((m) => m.projectId === op.id)) {
-          memberships.push({
-            projectId: op.id,
-            role: "OWNER" as Role,
-            project: op,
-          });
-        } else {
-          // Ensure owner has OWNER, not just ADMIN
-          const existing = memberships.find((m) => m.projectId === op.id);
-          if (existing && existing.role !== "OWNER") {
-            // Check actual project ownership
-            existing.role = "OWNER";
-          }
+    for (const op of ownedProjects as any[]) {
+      if (!memberships.find((m) => m.projectId === op.id)) {
+        memberships.push({
+          projectId: op.id,
+          role: "OWNER" as Role,
+          project: op,
+        });
+      } else {
+        // Ensure owner has OWNER, not just ADMIN
+        const existing = memberships.find((m) => m.projectId === op.id);
+        if (existing && existing.role !== "OWNER") {
+          existing.role = "OWNER";
         }
       }
-    } catch {}
+    }
 
     // Derive highest role across memberships using hierarchy
     let highestRole: Role = "CONTRIBUTOR";
@@ -164,10 +164,10 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
     if (memberships.length === 0) highestRole = "CONTRIBUTOR";
 
     return {
-      id: profile.id,
-      email: profile.email,
-      displayName: profile.displayName,
-      status: profile.status as ProfileStatus,
+      id: finalProfile.id,
+      email: finalProfile.email,
+      displayName: finalProfile.displayName,
+      status: finalProfile.status as ProfileStatus,
       emailVerified,
       role: highestRole,
       memberships,

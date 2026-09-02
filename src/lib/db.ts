@@ -12,6 +12,7 @@ export const db =
       process.env.NODE_ENV === "development"
         ? ["error", "warn"]
         : ["error"],
+    datasourceUrl: process.env.DATABASE_URL,
   });
 
 // Ensure BigInts (e.g. Media sizeBytes) are natively JSON-serializable in all Next.js API routes

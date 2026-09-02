@@ -235,6 +235,26 @@ export function EditorSidePanel({
                       </option>
                     ))}
                   </select>
+                  <div className="mt-2 flex gap-1.5">
+                    <input
+                      id="new-category-inline"
+                      placeholder="New category + Enter"
+                      className="flex-1 rounded-lg border border-dashed border-border bg-[#FCFCF9] px-2.5 py-1.5 text-xs focus:border-brand focus:outline-none"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          const val = (e.target as HTMLInputElement).value.trim();
+                          if (val && !catOptions.some((c) => c.name.toLowerCase() === val.toLowerCase())) {
+                            // Optimistically add to local options and select it
+                            const newCat = { id: `temp-${Date.now()}`, name: val, slug: val.toLowerCase().replace(/[^a-z0-9]+/g, "-") };
+                            // @ts-ignore - allow temp id
+                            setCategory(val);
+                            (e.target as HTMLInputElement).value = "";
+                          }
+                        }
+                      }}
+                    />
+                    <span className="text-[10px] text-text-tertiary self-center hidden sm:inline">Press Enter to use new</span>
+                  </div>
                 </div>
 
                 <div>

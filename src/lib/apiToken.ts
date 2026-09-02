@@ -65,12 +65,9 @@ export async function authenticateIntegration(
       return null;
     }
 
-    // Check X-OpenPost-Project header if provided — must match authorized project
-    const projectHeader = req.headers.get("x-openpost-project");
-    if (projectHeader && projectHeader !== integration.projectId) {
-      // Token cannot be used to access a different project
-      return null;
-    }
+    // Strict isolation: token's project is authoritative — ignore X-OpenPost-Project header mismatch (don't leak)
+    // Previous code returned null on mismatch and allowed fallback to header's project (cross-project leak)
+    // Now we ignore header and always use token's projectId
 
     // Async update lastUsedAt (fire and forget)
     withDbRetry(() =>
@@ -133,17 +130,19 @@ export async function resolveProjectContext(
     }
   }
 
-  // 3. Fallback to default/first project if only one exists in single-tenant setup
-  const defaultProject = await withDbRetry(() =>
-    db.project.findFirst({
-      orderBy: { createdAt: "asc" },
-      select: { id: true, slug: true },
-    })
-  ).catch(() => null);
-
-  if (defaultProject) {
-    return { projectId: defaultProject.id, projectSlug: defaultProject.slug };
+  // 3. Strict multi-tenant: fallback to single project ONLY if exactly one project exists (single-tenant convenience)
+  // Prevents cross-project leak when multiple projects exist and no projectId/token is sent
+  const projectCount = await withDbRetry(() => db.project.count()).catch(() => 0);
+  if (projectCount === 1) {
+    const single = await withDbRetry(() =>
+      db.project.findFirst({
+        orderBy: { createdAt: "asc" },
+        select: { id: true, slug: true },
+      })
+    ).catch(() => null);
+    if (single) return { projectId: single.id, projectSlug: single.slug };
   }
 
+  // Multi-tenant: require explicit project identification (token or ?project or X-OpenPost-Project)
   return null;
 }

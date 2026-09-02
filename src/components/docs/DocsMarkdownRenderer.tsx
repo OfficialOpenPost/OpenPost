@@ -6,10 +6,26 @@ import { Copy, Check, Info, AlertTriangle, AlertCircle, Sparkles } from "lucide-
 export function CodeBlock({ code, language = "bash", filename }: { code: string; language?: string; filename?: string }) {
   const [copied, setCopied] = useState(false);
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(code);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const handleCopy = async () => {
+    try {
+      if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(code);
+      } else if (typeof document !== "undefined") {
+        // Fallback for insecure contexts
+        const ta = document.createElement("textarea");
+        ta.value = code;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+      }
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (e) {
+      console.warn("[docs] copy failed:", e);
+    }
   };
 
   return (
@@ -109,6 +125,13 @@ export function DocsMarkdownRenderer({ content }: { content: string }) {
   const lines = content.split("\n");
   const elements: React.ReactNode[] = [];
   let i = 0;
+  const seenIds = new Map<string, number>();
+  const makeId = (text: string) => {
+    const base = text.toLowerCase().replace(/[^\w\s-]/g, "").replace(/\s+/g, "-").replace(/^-+|-+$/g, "") || "section";
+    const count = seenIds.get(base) || 0;
+    seenIds.set(base, count + 1);
+    return count === 0 ? base : `${base}-${count}`;
+  };
 
   while (i < lines.length) {
     const line = lines[i];
@@ -177,9 +200,9 @@ export function DocsMarkdownRenderer({ content }: { content: string }) {
     // Headings
     if (line.startsWith("# ")) {
       const text = line.replace(/^#\s+/, "");
-      const id = slugify(text);
+      const id = makeId(text);
       elements.push(
-        <h1 key={`h1-${i}`} id={id} className="scroll-mt-24 mt-6 sm:mt-8 mb-3 sm:mb-4 text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-navy break-words">
+        <h1 key={`h1-${i}-${id}`} id={id} className="scroll-mt-24 mt-6 sm:mt-8 mb-3 sm:mb-4 text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-navy break-words">
           {renderInlineMarkdown(text)}
         </h1>
       );
@@ -189,9 +212,9 @@ export function DocsMarkdownRenderer({ content }: { content: string }) {
 
     if (line.startsWith("## ")) {
       const text = line.replace(/^##\s+/, "");
-      const id = slugify(text);
+      const id = makeId(text);
       elements.push(
-        <h2 key={`h2-${i}`} id={id} className="scroll-mt-24 mt-8 sm:mt-10 mb-3 sm:mb-4 pb-2 text-xl sm:text-2xl font-bold tracking-tight text-navy border-b border-border flex items-center gap-2 group break-words">
+        <h2 key={`h2-${i}-${id}`} id={id} className="scroll-mt-24 mt-8 sm:mt-10 mb-3 sm:mb-4 pb-2 text-xl sm:text-2xl font-bold tracking-tight text-navy border-b border-border flex items-center gap-2 group break-words">
           <a href={`#${id}`} className="hover:text-brand transition-colors">
             {renderInlineMarkdown(text)}
           </a>
@@ -203,9 +226,9 @@ export function DocsMarkdownRenderer({ content }: { content: string }) {
 
     if (line.startsWith("### ")) {
       const text = line.replace(/^###\s+/, "");
-      const id = slugify(text);
+      const id = makeId(text);
       elements.push(
-        <h3 key={`h3-${i}`} id={id} className="scroll-mt-24 mt-5 sm:mt-6 mb-2 sm:mb-3 text-base sm:text-lg font-bold text-navy flex items-center gap-2 group break-words">
+        <h3 key={`h3-${i}-${id}`} id={id} className="scroll-mt-24 mt-5 sm:mt-6 mb-2 sm:mb-3 text-base sm:text-lg font-bold text-navy flex items-center gap-2 group break-words">
           <a href={`#${id}`} className="hover:text-brand transition-colors">
             {renderInlineMarkdown(text)}
           </a>
@@ -217,9 +240,9 @@ export function DocsMarkdownRenderer({ content }: { content: string }) {
 
     if (line.startsWith("#### ")) {
       const text = line.replace(/^####\s+/, "");
-      const id = slugify(text);
+      const id = makeId(text);
       elements.push(
-        <h4 key={`h4-${i}`} id={id} className="scroll-mt-24 mt-4 mb-2 text-sm sm:text-base font-semibold text-navy break-words">
+        <h4 key={`h4-${i}-${id}`} id={id} className="scroll-mt-24 mt-4 mb-2 text-sm sm:text-base font-semibold text-navy break-words">
           {renderInlineMarkdown(text)}
         </h4>
       );

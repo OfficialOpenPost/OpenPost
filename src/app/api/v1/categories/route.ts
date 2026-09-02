@@ -19,13 +19,14 @@ const createCategorySchema = z.object({
 export async function GET(req: NextRequest) {
   try {
     const projectContext = await resolveProjectContext(req);
+    // Strict isolation: require project identification for multi-tenant
+    if (!projectContext?.projectId) {
+      return NextResponse.json({ data: [], meta: { total: 0, warning: "Missing project identification" } }, { headers: { "Cache-Control": "no-store" } });
+    }
     const { searchParams } = new URL(req.url);
     const search = searchParams.get("search")?.trim();
 
-    const where: any = {};
-    if (projectContext?.projectId) {
-      where.projectId = projectContext.projectId;
-    }
+    const where: any = { projectId: projectContext.projectId };
     if (search) {
       where.OR = [
         { name: { contains: search, mode: "insensitive" } },

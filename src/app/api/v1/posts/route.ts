@@ -3,9 +3,19 @@ import { db, withDbRetry } from "@/lib/db";
 import { resolveProjectContext } from "@/lib/apiToken";
 
 // Public, versioned, read-only, cache-friendly — only published content scoped strictly to authorized project
+// Strict isolation: each API key is valid for exactly one project (no cross-project leak)
 export async function GET(req: NextRequest) {
   try {
     const projectContext = await resolveProjectContext(req);
+
+    // Strict isolation: require explicit project identification in multi-tenant
+    // Prevents mixing blogs across projects when demo site has no .env configured
+    if (!projectContext?.projectId) {
+      return NextResponse.json(
+        { data: [], meta: { cursor: null, hasMore: false, total: 0, projectId: null, warning: "Missing project identification. Set OPENPOST_PROJECT_ID and OPENPOST_TOKEN in .env.local" } },
+        { headers: { "Cache-Control": "no-store" } }
+      );
+    }
 
     const { searchParams } = new URL(req.url);
     const limit = Math.min(50, Math.max(1, parseInt(searchParams.get("limit") ?? "10", 10)));

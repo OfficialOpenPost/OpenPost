@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { List, ExternalLink, MessageSquare, ArrowUp } from "lucide-react";
-import { TocItem } from "@/lib/docsToc";
+import { TocItem } from "@/lib/docsData";
 
 export function DocsTableOfContents({ headings }: { headings: TocItem[] }) {
   const [activeId, setActiveId] = useState<string>("");
@@ -36,18 +36,18 @@ export function DocsTableOfContents({ headings }: { headings: TocItem[] }) {
   if (!headings || headings.length === 0) return null;
 
   return (
-    <div className="hidden xl:block w-64 2xl:w-72 shrink-0 pl-4 pr-2">
-      <div className="sticky top-20 space-y-6">
+    <div className="hidden xl:block w-64 2xl:w-72 shrink-0 pl-4 pr-2 sticky top-16 h-[calc(100vh-4rem)] overflow-y-auto py-6">
+      <div className="space-y-6">
         <div>
           <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-navy mb-3">
             <List className="h-3.5 w-3.5 text-brand" /> On this page
           </div>
-          <nav className="max-h-[60vh] overflow-y-auto pr-2 space-y-1 text-xs">
-            {headings.map((h) => {
+          <nav className="max-h-[60vh] overflow-y-auto pr-2 space-y-1 text-xs scrollbar-thin">
+            {headings.map((h, idx) => {
               const isActive = activeId === h.id;
               return (
                 <a
-                  key={h.id}
+                  key={`${h.id}-${idx}`}
                   href={`#${h.id}`}
                   className={`block py-1 leading-snug transition-colors truncate ${
                     h.level === 3 ? "pl-3 text-[11px]" : "pl-0 font-medium"

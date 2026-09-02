@@ -14,6 +14,25 @@ export function FeaturedImagePicker({ imageUrl, onChange }: FeaturedImagePickerP
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  const [showLibrary, setShowLibrary] = useState(false);
+  const [library, setLibrary] = useState<Array<{ id: string; url: string; name: string }>>([]);
+  const [loadingLib, setLoadingLib] = useState(false);
+
+  const loadLibrary = async () => {
+    setLoadingLib(true);
+    try {
+      const activeProjId = typeof window !== "undefined" ? localStorage.getItem("openpost_active_project_id") : null;
+      const url = activeProjId ? `/api/media?limit=50&projectId=${activeProjId}` : "/api/media?limit=50";
+      const headers: Record<string, string> = activeProjId ? { "X-OpenPost-Project": activeProjId } : {};
+      const res = await fetch(url, { headers } as any);
+      const j = await res.json();
+      if (Array.isArray(j.data)) {
+        setLibrary(j.data.map((m: any) => ({ id: m.id, url: m.url || m.variants?.publicUrl || "", name: m.originalFilename || m.name || "media" })).filter((m: any) => m.url));
+      }
+    } catch {}
+    finally { setLoadingLib(false); }
+  };
+
   const handleFile = async (file: File) => {
     setUploading(true);
     try {
@@ -66,9 +85,51 @@ export function FeaturedImagePicker({ imageUrl, onChange }: FeaturedImagePickerP
             </button>
           </div>
           <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
-          <button onClick={() => fileRef.current?.click()} disabled={uploading} className="w-full inline-flex items-center justify-center gap-2 rounded-full border border-border bg-white py-2 text-xs font-semibold hover:bg-surface-raised disabled:opacity-50">
-            {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />} {uploading ? "Converting to WebP…" : "Upload (→ WebP) / Media library"}
-          </button>
+          <div className="grid grid-cols-2 gap-2">
+            <button onClick={() => fileRef.current?.click()} disabled={uploading} className="inline-flex items-center justify-center gap-1.5 rounded-full border border-border bg-white py-2 text-xs font-semibold hover:bg-surface-raised disabled:opacity-50">
+              {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />} {uploading ? "WebP…" : "Upload"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setShowLibrary(true);
+                loadLibrary();
+              }}
+              className="inline-flex items-center justify-center gap-1.5 rounded-full border border-border bg-surface-raised py-2 text-xs font-semibold hover:bg-white"
+            >
+              <ImageIcon className="h-3.5 w-3.5" /> Library
+            </button>
+          </div>
+          {showLibrary && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy/40 backdrop-blur-sm p-4" onClick={() => setShowLibrary(false)}>
+              <div className="w-full max-w-2xl max-h-[70vh] overflow-hidden rounded-2xl border border-border bg-white shadow-xl flex flex-col" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center justify-between p-4 border-b border-border">
+                  <h3 className="text-sm font-bold text-navy">Media Library</h3>
+                  <button onClick={() => setShowLibrary(false)} className="h-8 w-8 rounded-lg border border-border flex items-center justify-center hover:bg-surface-raised">
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+                <div className="flex-1 overflow-y-auto p-4">
+                  {loadingLib ? (
+                    <div className="flex items-center justify-center py-12 gap-2 text-sm text-text-tertiary">
+                      <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+                    </div>
+                  ) : library.length === 0 ? (
+                    <p className="py-12 text-center text-sm text-text-tertiary">No media found for this project</p>
+                  ) : (
+                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                      {library.map((m) => (
+                        <button key={m.id} onClick={() => { onChange(m.url); setShowLibrary(false); }} className="group relative overflow-hidden rounded-xl border border-border hover:border-brand/40 aspect-square bg-surface-raised">
+                          <img src={m.url} alt={m.name} className="h-full w-full object-cover group-hover:scale-105 transition" />
+                          <span className="absolute bottom-0 left-0 right-0 bg-navy/70 text-white text-[10px] px-1.5 py-1 truncate">{m.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

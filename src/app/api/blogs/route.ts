@@ -373,10 +373,29 @@ export async function POST(req: NextRequest) {
         })
       ).catch(() => {});
 
-      // Sync taxonomy relations if provided
-      if (Array.isArray(tagIds)) {
+      // Sync taxonomy relations if provided — handle both tagIds (UUIDs) and tags (name objects) like Sanity
+      // Resolve tags with names to IDs (find or create per project)
+      let resolvedTagIds = Array.isArray(tagIds) ? [...tagIds] : [];
+      if (Array.isArray(tags) && tags.length > 0) {
+        for (const t of tags as any[]) {
+          const tName = typeof t === "string" ? t.trim() : (t?.name || t?.label || "").trim();
+          if (!tName) continue;
+          const tSlug = tName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+          let tag = await withDbRetry(() =>
+            db.tag.findFirst({ where: { slug: tSlug, projectId: existing.projectId || targetProjectId } })
+          ).catch(() => null);
+          if (!tag && (existing.projectId || targetProjectId)) {
+            tag = await withDbRetry(() =>
+              db.tag.create({ data: { name: tName, slug: tSlug || `tag-${Date.now()}`, projectId: existing.projectId || targetProjectId } })
+            ).catch(() => null);
+          }
+          if (tag) resolvedTagIds.push(tag.id);
+        }
+        resolvedTagIds = [...new Set(resolvedTagIds)];
+      }
+      if (resolvedTagIds.length > 0 || Array.isArray(tagIds) || Array.isArray(tags)) {
         await withDbRetry(() => db.blogTag.deleteMany({ where: { blogId: id! } })).catch(() => {});
-        for (const tagId of tagIds) {
+        for (const tagId of resolvedTagIds) {
           await withDbRetry(() => db.blogTag.create({ data: { blogId: id!, tagId } })).catch(() => {});
         }
       }
@@ -414,53 +433,86 @@ export async function POST(req: NextRequest) {
     }
 
     // 2. CREATE NEW ARTICLE
-    // Ensure slug uniqueness within project
+    // Ensure slug uniqueness — DB currently has global unique on slug (not per-project)
+    // Use global check to avoid P2002 race; will be migrated to per-project in future
     let candidateSlug = slug || "untitled";
+    const baseSlug = candidateSlug.replace(/-\d+$/, "");
     let counter = 1;
     let existingWithSlug = await withDbRetry(() =>
-      db.blog.findFirst({
-        where: {
-          slug: candidateSlug,
-          ...(targetProjectId ? { projectId: targetProjectId } : {}),
-        },
-      })
+      db.blog.findFirst({ where: { slug: candidateSlug } })
     );
 
     while (existingWithSlug) {
       counter++;
-      candidateSlug = `${slug.replace(/-\d+$/, "")}-${counter}`;
+      candidateSlug = `${baseSlug}-${counter}`;
       existingWithSlug = await withDbRetry(() =>
-        db.blog.findFirst({
-          where: {
-            slug: candidateSlug,
-            ...(targetProjectId ? { projectId: targetProjectId } : {}),
-          },
-        })
+        db.blog.findFirst({ where: { slug: candidateSlug } })
       );
+      if (counter > 100) {
+        candidateSlug = `${baseSlug}-${Date.now().toString(36)}`;
+        break;
+      }
     }
     slug = candidateSlug;
 
     const publishedAt = status === "published" ? new Date() : null;
 
-    const blog = await withDbRetry(() =>
-      db.blog.create({
-        data: {
-          title,
-          slug,
-          content,
-          status: status as any,
-          wordCount: wc,
-          readingTime: rt,
-          scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
-          publishedAt,
-          createdBy: user.id,
-          seo: seo ?? {},
-          projectId: targetProjectId,
-          categoryId: resolvedCategoryId,
-          featuredImageId: resolvedFeaturedImageId,
-        },
-      })
-    );
+    let blog: any;
+    try {
+      blog = await withDbRetry(() =>
+        db.blog.create({
+          data: {
+            title,
+            slug,
+            content,
+            status: status as any,
+            wordCount: wc,
+            readingTime: rt,
+            scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
+            publishedAt,
+            createdBy: user.id,
+            seo: seo ?? {},
+            projectId: targetProjectId,
+            categoryId: resolvedCategoryId,
+            featuredImageId: resolvedFeaturedImageId,
+          },
+        })
+      );
+    } catch (err: any) {
+      // Handle race condition where concurrent request created same slug
+      if (err?.code === "P2002" && err?.meta?.target?.includes("slug")) {
+        const retrySlug = `${baseSlug}-${counter + 1}-${Date.now().toString(36).slice(-4)}`;
+        try {
+          blog = await withDbRetry(() =>
+            db.blog.create({
+              data: {
+                title,
+                slug: retrySlug,
+                content,
+                status: status as any,
+                wordCount: wc,
+                readingTime: rt,
+                scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
+                publishedAt,
+                createdBy: user.id,
+                seo: seo ?? {},
+                projectId: targetProjectId,
+                categoryId: resolvedCategoryId,
+                featuredImageId: resolvedFeaturedImageId,
+              },
+            })
+          );
+          slug = retrySlug;
+        } catch {
+          return NextResponse.json(
+            { error: { code: "SLUG_EXISTS", message: "Slug already exists. Please try a different title." } },
+            { status: 409 }
+          );
+        }
+      } else {
+        throw err;
+      }
+    }
 
     // Create initial revision
     await withDbRetry(() =>
@@ -474,9 +526,23 @@ export async function POST(req: NextRequest) {
       })
     ).catch(() => {});
 
-    // Sync tags & authors
-    if (Array.isArray(tagIds)) {
-      for (const tagId of tagIds) {
+    // Sync tags & authors — handle both tagIds and tags with names (Sanity-like)
+    {
+      let resolvedTagIds: string[] = Array.isArray(tagIds) ? [...tagIds] : [];
+      if (Array.isArray(tags) && (tags as any[]).length > 0) {
+        for (const t of tags as any[]) {
+          const tName = typeof t === "string" ? t.trim() : (t?.name || t?.label || "").trim();
+          if (!tName) continue;
+          const tSlug = tName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+          let tag = await withDbRetry(() => db.tag.findFirst({ where: { slug: tSlug, projectId: targetProjectId } })).catch(() => null);
+          if (!tag) {
+            tag = await withDbRetry(() => db.tag.create({ data: { name: tName, slug: tSlug || `tag-${Date.now()}`, projectId: targetProjectId } })).catch(() => null);
+          }
+          if (tag) resolvedTagIds.push(tag.id);
+        }
+        resolvedTagIds = [...new Set(resolvedTagIds)];
+      }
+      for (const tagId of resolvedTagIds) {
         await withDbRetry(() => db.blogTag.create({ data: { blogId: blog.id, tagId } })).catch(() => {});
       }
     }

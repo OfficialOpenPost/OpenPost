@@ -100,6 +100,58 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
   const [revisions, setRevisions] = useState<Array<{ id: string; label: string | null; createdAt: string; createdBy: string; content?: any }>>([]);
   const [catOptions, setCatOptions] = useState<Array<{ id: string; name: string; slug: string }>>([]);
   const [loadingInitial, setLoadingInitial] = useState(Boolean(effectiveId));
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const canPublish = useMemo(() => {
+    if (!userRole) return true; // optimistic until loaded — will be checked server-side anyway
+    const r = userRole.toUpperCase();
+    return ["OWNER", "ADMIN", "EDITOR"].includes(r);
+  }, [userRole]);
+
+  // Fetch current user's project role for Sanity-like publish gating
+  useEffect(() => {
+    const activeProjId = typeof window !== "undefined" ? localStorage.getItem("openpost_active_project_id") : null;
+    if (!activeProjId) return;
+    fetch(`/api/projects`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => {
+        const proj = Array.isArray(j.data) ? j.data.find((p: any) => p.id === activeProjId) : null;
+        // Try to get role from project members via /api/settings/users
+        return fetch(`/api/settings/users?projectId=${activeProjId}`, { cache: "no-store" } as any)
+          .then((r2) => r2.json())
+          .then((j2) => {
+            const me = j2.data?.users?.find((u: any) => u.id === proj?.ownerId || u.memberships?.some((m: any) => m.projectId === activeProjId));
+            // Fallback: try to infer from local membership via /api/projects/[id] members
+            if (me?.role) setUserRole(me.role);
+            else if (proj) {
+              // If owner, treat as OWNER
+              fetch(`/api/projects/${activeProjId}`, { cache: "no-store" } as any)
+                .then((r3) => r3.json())
+                .then((j3) => {
+                  if (j3.data) {
+                    // Use requireProjectMember logic client-side: check if current user is owner
+                    // Simplify: assume EDITOR if fetch succeeds and no role found, will be validated server-side
+                    setUserRole("EDITOR");
+                  }
+                })
+                .catch(() => setUserRole("EDITOR"));
+            }
+          });
+      })
+      .catch(() => setUserRole("EDITOR"));
+    const handler = () => {
+      const pid = localStorage.getItem("openpost_active_project_id");
+      if (!pid) return;
+      fetch(`/api/settings/users?projectId=${pid}`, { cache: "no-store" } as any)
+        .then((r) => r.json())
+        .then((j) => {
+          const me = j.data?.users?.find((u: any) => u.memberships?.some((m: any) => m.projectId === pid));
+          if (me?.role) setUserRole(me.role);
+        })
+        .catch(() => {});
+    };
+    window.addEventListener("projectChanged", handler);
+    return () => window.removeEventListener("projectChanged", handler);
+  }, []);
 
   const [isDirty, setIsDirty] = useState<boolean>(false);
   const [activeSaveAction, setActiveSaveAction] = useState<"draft" | "publish" | "update" | null>(null);
@@ -268,14 +320,30 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
     };
   }, [isResizing]);
 
-  // Load categories
+  // Load categories — project-scoped like Sanity (per active project)
   useEffect(() => {
-    fetch("/api/v1/categories")
+    const activeProjId = typeof window !== "undefined" ? localStorage.getItem("openpost_active_project_id") : null;
+    const url = activeProjId ? `/api/v1/categories?project=${activeProjId}` : "/api/v1/categories";
+    const headers: Record<string, string> = activeProjId ? { "X-OpenPost-Project": activeProjId } : {};
+    fetch(url, { headers, cache: "no-store" as any })
       .then((r) => r.json())
       .then((j) => {
         if (Array.isArray(j.data)) setCatOptions(j.data);
       })
       .catch(() => {});
+    const handler = () => {
+      const pid = localStorage.getItem("openpost_active_project_id");
+      const u = pid ? `/api/v1/categories?project=${pid}` : "/api/v1/categories";
+      const h: Record<string, string> = pid ? { "X-OpenPost-Project": pid } : {};
+      fetch(u, { headers: h, cache: "no-store" as any })
+        .then((r) => r.json())
+        .then((j) => {
+          if (Array.isArray(j.data)) setCatOptions(j.data);
+        })
+        .catch(() => {});
+    };
+    window.addEventListener("projectChanged", handler);
+    return () => window.removeEventListener("projectChanged", handler);
   }, []);
 
   // Load revisions
@@ -437,9 +505,19 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
           })
           .catch(() => {});
       }
-    } catch (err) {
-      console.error("Save error:", err);
-      setSaveStatus("error");
+    } catch (err: any) {
+      const msg = String(err?.message || "");
+      if (msg.includes("permission to publish") || msg.includes("FORBIDDEN")) {
+        // Sanity-like: draft was saved, just not published — show as saved + toast
+        console.warn("Publish blocked (role):", msg);
+        setSaveStatus("saved");
+        // Optionally show a subtle error that will be visible as "Saved" with note
+        // The draft itself is already saved if it was a new post; if it was publish attempt, it remains draft
+        alert("Draft saved — you don't have permission to publish. An Editor will review it.");
+      } else {
+        console.error("Save error:", err);
+        setSaveStatus("error");
+      }
     } finally {
       isSavingRef.current = false;
       setActiveSaveAction(null);
@@ -599,9 +677,8 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
             {activeSaveAction === "draft" ? "Saving Draft..." : "Save Draft"}
           </button>
 
-          {/* Publish / Update Button */}
+          {/* Publish / Update — Sanity-like: EDITOR+ can publish, AUTHOR/CONTRIBUTOR submit for review */}
           {status === "published" ? (
-            /* Update Post Button (Visibly Gray & Disabled until user makes changes) */
             <button
               disabled={(isSavingRef.current || saveStatus === "saving") || !isDirty}
               onClick={() => save("Updated post", "published", "update")}
@@ -612,41 +689,30 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
               }`}
               title={isDirty ? "Save changes to live post" : "No unsaved edits to update"}
             >
-              {activeSaveAction === "update" ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin text-navy" />
-              ) : (
-                <Sparkles className="h-3.5 w-3.5" />
-              )}
+              {activeSaveAction === "update" ? <Loader2 className="h-3.5 w-3.5 animate-spin text-navy" /> : <Sparkles className="h-3.5 w-3.5" />}
               {activeSaveAction === "update" ? "Updating..." : "Update Post"}
             </button>
-          ) : (
-            /* Publish / Schedule Button (Active for drafts and new articles) */
+          ) : !canPublish ? (
             <button
-              disabled={
-                (isSavingRef.current || saveStatus === "saving") ||
-                !Boolean(title.trim().length > 0 || (editor && !editor.isEmpty))
-              }
+              disabled={(isSavingRef.current || saveStatus === "saving") || !Boolean(title.trim().length > 0 || (editor && !editor.isEmpty))}
+              onClick={() => save("Submitted for review", "draft", "draft")}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-navy px-4 py-1.5 text-xs font-bold text-white hover:bg-black disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
+              title="You don't have publish permission — draft will be saved for Editor review"
+            >
+              {activeSaveAction === "draft" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Clock className="h-3.5 w-3.5" />}
+              {activeSaveAction === "draft" ? "Submitting..." : "Submit for Review"}
+            </button>
+          ) : (
+            <button
+              disabled={(isSavingRef.current || saveStatus === "saving") || !Boolean(title.trim().length > 0 || (editor && !editor.isEmpty))}
               onClick={() => {
-                const target =
-                  scheduledAt && new Date(scheduledAt) > new Date()
-                    ? "scheduled"
-                    : "published";
+                const target = scheduledAt && new Date(scheduledAt) > new Date() ? "scheduled" : "published";
                 save("Published post", target, "publish");
               }}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-brand px-4 py-1.5 text-xs font-bold text-navy shadow-xs hover:bg-brand-hover hover:text-white disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-brand disabled:hover:text-navy transition cursor-pointer"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-brand px-4 py-1.5 text-xs font-bold text-navy shadow-xs hover:bg-brand-hover hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
             >
-              {activeSaveAction === "publish" ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin text-navy" />
-              ) : (
-                <Sparkles className="h-3.5 w-3.5" />
-              )}
-              {activeSaveAction === "publish"
-                ? status === "scheduled"
-                  ? "Scheduling..."
-                  : "Publishing..."
-                : status === "scheduled"
-                ? "Schedule Post"
-                : "Publish Post"}
+              {activeSaveAction === "publish" ? <Loader2 className="h-3.5 w-3.5 animate-spin text-navy" /> : <Sparkles className="h-3.5 w-3.5" />}
+              {activeSaveAction === "publish" ? (status === "scheduled" ? "Scheduling..." : "Publishing...") : status === "scheduled" ? "Schedule Post" : "Publish Post"}
             </button>
           )}
 

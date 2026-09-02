@@ -165,15 +165,25 @@ export function extractTocHeadings(content: string): TocItem[] {
   if (!content) return [];
   const lines = content.split("\n");
   const headings: TocItem[] = [];
+  const seen = new Map<string, number>();
+
+  const makeId = (text: string) => {
+    const base = text.toLowerCase().replace(/[^\w\s-]/g, "").replace(/\s+/g, "-").replace(/^-+|-+$/g, "") || "section";
+    const count = seen.get(base) || 0;
+    seen.set(base, count + 1);
+    return count === 0 ? base : `${base}-${count}`;
+  };
 
   for (const line of lines) {
     if (line.startsWith("## ")) {
       const text = line.replace(/^##\s+/, "").replace(/[*`_]/g, "").trim();
-      const id = text.toLowerCase().replace(/[^\w\s-]/g, "").replace(/\s+/g, "-");
+      if (!text) continue;
+      const id = makeId(text);
       headings.push({ id, text, level: 2 });
     } else if (line.startsWith("### ")) {
       const text = line.replace(/^###\s+/, "").replace(/[*`_]/g, "").trim();
-      const id = text.toLowerCase().replace(/[^\w\s-]/g, "").replace(/\s+/g, "-");
+      if (!text) continue;
+      const id = makeId(text);
       headings.push({ id, text, level: 3 });
     }
   }

@@ -8,6 +8,21 @@ const updateProjectSchema = z.object({
   slug: z.string().min(1).max(50).optional(),
   description: z.string().max(300).nullable().optional(),
   settings: z.record(z.any()).optional(),
+  // Site config fields
+  siteName: z.string().max(100).nullable().optional(),
+  siteTagline: z.string().max(200).nullable().optional(),
+  siteDescription: z.string().max(500).nullable().optional(),
+  siteLogoUrl: z.string().max(500).nullable().optional(),
+  siteFaviconUrl: z.string().max(500).nullable().optional(),
+  sitePrimaryColor: z.string().max(7).nullable().optional(),
+  siteUrl: z.string().max(500).nullable().optional(),
+  siteLanguage: z.string().max(10).nullable().optional(),
+  siteTimezone: z.string().max(50).nullable().optional(),
+  socialTwitter: z.string().max(500).nullable().optional(),
+  socialGithub: z.string().max(500).nullable().optional(),
+  socialLinkedin: z.string().max(500).nullable().optional(),
+  socialYoutube: z.string().max(500).nullable().optional(),
+  socialInstagram: z.string().max(500).nullable().optional(),
 });
 
 export async function GET(
@@ -81,7 +96,12 @@ export async function PATCH(
       );
     }
 
-    const { name, slug, description, settings } = parsed.data;
+    const {
+      name, slug, description, settings,
+      siteName, siteTagline, siteDescription, siteLogoUrl, siteFaviconUrl,
+      sitePrimaryColor, siteUrl, siteLanguage, siteTimezone,
+      socialTwitter, socialGithub, socialLinkedin, socialYoutube, socialInstagram,
+    } = parsed.data;
     let cleanSlug = existing.slug;
 
     if (slug && slug !== existing.slug) {
@@ -114,6 +134,21 @@ export async function PATCH(
           slug: cleanSlug,
           description: description !== undefined ? description : existing.description,
           settings: settings !== undefined ? { ...(existing.settings as any), ...settings } : existing.settings,
+          // Site config fields
+          ...(siteName !== undefined && { siteName }),
+          ...(siteTagline !== undefined && { siteTagline }),
+          ...(siteDescription !== undefined && { siteDescription }),
+          ...(siteLogoUrl !== undefined && { siteLogoUrl }),
+          ...(siteFaviconUrl !== undefined && { siteFaviconUrl }),
+          ...(sitePrimaryColor !== undefined && { sitePrimaryColor }),
+          ...(siteUrl !== undefined && { siteUrl }),
+          ...(siteLanguage !== undefined && { siteLanguage }),
+          ...(siteTimezone !== undefined && { siteTimezone }),
+          ...(socialTwitter !== undefined && { socialTwitter }),
+          ...(socialGithub !== undefined && { socialGithub }),
+          ...(socialLinkedin !== undefined && { socialLinkedin }),
+          ...(socialYoutube !== undefined && { socialYoutube }),
+          ...(socialInstagram !== undefined && { socialInstagram }),
         },
       })
     );
@@ -145,20 +180,44 @@ export async function DELETE(
     const { id } = await params;
     const adminUser = await requireAdmin(id);
 
-    const count = await withDbRetry(() => db.project.count());
-    if (count <= 1) {
+    const project = await withDbRetry(() => db.project.findUnique({ where: { id } }));
+    if (!project) {
       return NextResponse.json(
-        { error: { code: "CANNOT_DELETE_LAST", message: "Cannot delete the only remaining project." } },
+        { error: { code: "NOT_FOUND", message: "Project not found." } },
+        { status: 404 }
+      );
+    }
+
+    // Check if project has real content
+    const counts = await withDbRetry(() =>
+      Promise.all([
+        db.blog.count({ where: { projectId: id } }),
+        db.media.count({ where: { projectId: id } }),
+      ])
+    );
+    const blogCount = counts[0];
+    const mediaCount = counts[1];
+
+    if (blogCount > 0 || mediaCount > 0) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "PROJECT_HAS_CONTENT",
+            message: `Cannot delete project with existing content (${blogCount} posts, ${mediaCount} media). Delete all content first or transfer ownership.`,
+          },
+        },
         { status: 400 }
       );
     }
 
+    // Delete project — cascades handle all related records
     await withDbRetry(() => db.project.delete({ where: { id } }));
 
     await createAuditLog({
       actorId: adminUser.id,
       action: "project.deleted",
       targetId: id,
+      metadata: { name: project.name, slug: project.slug },
     });
 
     return NextResponse.json({ data: { success: true } });

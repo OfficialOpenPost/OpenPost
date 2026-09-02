@@ -17,6 +17,7 @@ import {
   X,
   ExternalLink,
   Shield,
+  Plus,
 } from "lucide-react";
 import { ProjectSwitcher } from "@/components/project/ProjectSwitcher";
 
@@ -83,10 +84,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* Sidebar Footer Action */}
         <div className="p-3 border-t border-border bg-[#FCFCF9]">
           <Link
-            href="/dashboard/editor"
+            href="/projects/new"
             className="flex items-center justify-center gap-2 rounded-xl bg-[#FEA611] px-4 py-2.5 text-sm font-bold text-[#2D3440] hover:bg-[#FE990E] hover:text-white transition shadow-xs"
           >
-            <PenLine className="h-4 w-4" /> New Article
+            <Plus className="h-4 w-4" /> New Website
           </Link>
           <div className="mt-2 flex items-center justify-between text-[11px] text-text-tertiary px-1">
             <span>OpenPost Studio</span>
@@ -175,11 +176,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
               <div className="p-4 border-t border-border">
                 <Link
-                  href="/dashboard/editor"
+                  href="/projects/new"
                   onClick={() => setMobileOpen(false)}
                   className="flex items-center justify-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-bold text-navy w-full"
                 >
-                  <PenLine className="h-4 w-4" /> New Article
+                  <Plus className="h-4 w-4" /> New Website
                 </Link>
               </div>
             </aside>

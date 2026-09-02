@@ -4,7 +4,7 @@ import { usePathname } from "next/navigation";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 
-const HIDE_ALL_ROUTES = ["/login", "/signup", "/dashboard/editor"];
+const HIDE_ALL_ROUTES = ["/login", "/signup", "/dashboard/editor", "/projects/new"];
 
 export function LayoutShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -16,7 +16,6 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
     return <>{children}</>;
   }
 
-  // Dashboard & Docs: show Navbar but never Footer (app workspace & fixed sidebar docs)
   if (isDashboard || isDocs) {
     return (
       <>

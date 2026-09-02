@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, withDbRetry } from "@/lib/db";
 import { requireApprovedUser, createAuditLog, AuthError } from "@/lib/auth";
+import { hasMinimumRole } from "@/lib/rbac";
 import { z } from "zod";
 
 const createProjectSchema = z.object({
@@ -54,6 +55,21 @@ export async function POST(req: NextRequest) {
   try {
     const user = await requireApprovedUser();
 
+    // Only OWNER and ADMIN can create new projects (except first project)
+    const hasProjects = user.memberships.length > 0;
+    if (hasProjects) {
+      const isHighPrivileged = user.memberships.some(
+        (m) => hasMinimumRole(m.role, "ADMIN")
+      );
+      if (!isHighPrivileged) {
+        throw new AuthError(
+          "Only owners and administrators can create new projects.",
+          403,
+          "FORBIDDEN"
+        );
+      }
+    }
+
     const body = await req.json().catch(() => ({}));
     const parsed = createProjectSchema.safeParse(body);
 
@@ -81,18 +97,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Check slug uniqueness
-    const existing = await withDbRetry(() =>
-      db.project.findUnique({
-        where: { slug: cleanSlug },
-      })
-    );
-
-    if (existing) {
-      return NextResponse.json(
-        { error: { code: "SLUG_EXISTS", message: "A website with this slug identifier already exists." } },
-        { status: 409 }
+    // Check slug uniqueness — auto-append -2, -3 etc. if taken
+    let finalSlug = cleanSlug;
+    let counter = 2;
+    while (true) {
+      const existing = await withDbRetry(() =>
+        db.project.findUnique({ where: { slug: finalSlug } })
       );
+      if (!existing) break;
+      finalSlug = `${cleanSlug}-${counter}`;
+      counter++;
     }
 
     // Create Project and add creator as ADMIN ProjectMember atomically
@@ -101,7 +115,7 @@ export async function POST(req: NextRequest) {
         const newProject = await tx.project.create({
           data: {
             name: name.trim(),
-            slug: cleanSlug,
+            slug: finalSlug,
             description: description?.trim() || null,
             ownerId: user.id,
             settings: {

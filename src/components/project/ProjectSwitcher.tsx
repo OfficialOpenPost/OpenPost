@@ -1,17 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import {
   Globe,
   Plus,
   Check,
   ChevronDown,
-  ExternalLink,
-  Layers,
-  Sparkles,
-  X,
-  FolderPlus,
   Loader2,
+  Trash2,
 } from "lucide-react";
 
 export interface ProjectItem {
@@ -28,20 +25,13 @@ export interface ProjectItem {
 }
 
 export function ProjectSwitcher() {
+  const router = useRouter();
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [activeProject, setActiveProject] = useState<ProjectItem | null>(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [modalOpen, setModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  // New Project Form State
-  const [newName, setNewName] = useState("");
-  const [newSlug, setNewSlug] = useState("");
-  const [newDesc, setNewDesc] = useState("");
-  const [creating, setCreating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  // Fetch Projects from API
   const loadProjects = async () => {
     try {
       setLoading(true);
@@ -49,8 +39,6 @@ export function ProjectSwitcher() {
       const json = await res.json();
       if (Array.isArray(json.data) && json.data.length > 0) {
         setProjects(json.data);
-        
-        // Check saved project in localStorage or default to first
         const savedId = typeof window !== "undefined" ? localStorage.getItem("openpost_active_project_id") : null;
         const matched = json.data.find((p: ProjectItem) => p.id === savedId) || json.data[0];
         setActiveProject(matched);
@@ -78,75 +66,47 @@ export function ProjectSwitcher() {
     setDropdownOpen(false);
   };
 
-  const handleAutoSlug = (name: string) => {
-    setNewName(name);
-    const generated = name
-      .toLowerCase()
-      .trim()
-      .replace(/[^a-z0-9-]/g, "-")
-      .replace(/-+/g, "-")
-      .replace(/^-|-$/g, "");
-    setNewSlug(generated);
-  };
-
-  const handleCreateProject = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newName.trim() || !newSlug.trim()) {
-      setError("Please provide both website name and slug.");
-      return;
-    }
-
+  const handleDeleteProject = async (proj: ProjectItem) => {
+    if (!confirm(`Delete "${proj.name}"? This cannot be undone.`)) return;
     try {
-      setCreating(true);
-      setError(null);
-      const res = await fetch("/api/projects", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: newName.trim(),
-          slug: newSlug.trim(),
-          description: newDesc.trim(),
-        }),
-      });
-
+      setDeletingId(proj.id);
+      const res = await fetch(`/api/projects/${proj.id}`, { method: "DELETE" });
       const json = await res.json();
       if (!res.ok) {
-        throw new Error(json.error?.message || "Failed to create website project.");
+        alert(json.error?.message || "Failed to delete project.");
+        return;
       }
-
-      // Refresh list and select new project
-      setNewName("");
-      setNewSlug("");
-      setNewDesc("");
-      setModalOpen(false);
+      if (proj.id === activeProject?.id) {
+        const remaining = projects.filter((p) => p.id !== proj.id);
+        if (remaining.length > 0) {
+          handleSelectProject(remaining[0]);
+        } else {
+          setActiveProject(null);
+          if (typeof window !== "undefined") {
+            localStorage.removeItem("openpost_active_project_id");
+          }
+        }
+      }
       await loadProjects();
-      if (json.data) {
-        handleSelectProject(json.data);
-      }
     } catch (err: any) {
-      setError(err.message);
+      alert(err.message || "Failed to delete project.");
     } finally {
-      setCreating(false);
+      setDeletingId(null);
     }
+  };
+
+  const handleNewProject = () => {
+    setDropdownOpen(false);
+    router.push("/projects/new");
   };
 
   return (
     <div className="relative p-3 border-b border-border bg-[#F9FAFB]">
       {/* Top Label */}
-      <div className="flex items-center justify-between mb-1.5 px-1">
+      <div className="flex items-center mb-1.5 px-1">
         <span className="text-[10px] font-bold uppercase tracking-wider text-text-tertiary flex items-center gap-1">
           <Globe className="h-3 w-3 text-brand" /> Active Website / Project
         </span>
-        <button
-          onClick={() => {
-            setError(null);
-            setModalOpen(true);
-          }}
-          className="text-[10px] font-bold text-brand hover:text-navy transition flex items-center gap-0.5"
-          title="Add New Website Project"
-        >
-          <Plus className="h-3 w-3" /> Add Website
-        </button>
       </div>
 
       {/* Main Switcher Button */}
@@ -180,133 +140,46 @@ export function ProjectSwitcher() {
             {projects.map((proj) => {
               const isSelected = proj.id === activeProject?.id;
               return (
-                <button
-                  key={proj.id}
-                  onClick={() => handleSelectProject(proj)}
-                  className={`w-full flex items-center justify-between rounded-lg px-2.5 py-2 text-left text-xs transition ${
-                    isSelected
-                      ? "bg-brand/15 font-bold text-navy"
-                      : "text-text-secondary hover:bg-surface-dim hover:text-navy"
-                  }`}
-                >
-                  <div className="min-w-0 pr-2">
-                    <p className="truncate font-semibold">{proj.name}</p>
-                    <p className="text-[10px] text-text-tertiary font-mono truncate">
-                      /{proj.slug}
-                    </p>
-                  </div>
-                  {isSelected && <Check className="h-3.5 w-3.5 text-navy shrink-0" />}
-                </button>
+                <div key={proj.id} className={`flex items-center rounded-lg transition ${isSelected ? "bg-brand/15" : "hover:bg-surface-dim"}`}>
+                  <button
+                    onClick={() => handleSelectProject(proj)}
+                    className={`flex-1 flex items-center justify-between px-2.5 py-2 text-left text-xs min-w-0 ${isSelected ? "font-bold text-navy" : "text-text-secondary"}`}
+                  >
+                    <div className="min-w-0 pr-2">
+                      <p className="truncate font-semibold">{proj.name}</p>
+                      <p className="text-[10px] text-text-tertiary font-mono truncate">
+                        /{proj.slug}
+                      </p>
+                    </div>
+                    {isSelected && <Check className="h-3.5 w-3.5 text-navy shrink-0" />}
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteProject(proj);
+                    }}
+                    disabled={deletingId === proj.id}
+                    className="mr-1.5 p-1.5 rounded-md text-text-tertiary hover:text-red-600 hover:bg-red-50 transition disabled:opacity-50"
+                    title={`Delete ${proj.name}`}
+                  >
+                    {deletingId === proj.id ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-3 w-3" />
+                    )}
+                  </button>
+                </div>
               );
             })}
           </div>
 
           <div className="mt-1 pt-1 border-t border-border">
             <button
-              onClick={() => {
-                setDropdownOpen(false);
-                setError(null);
-                setModalOpen(true);
-              }}
+              onClick={handleNewProject}
               className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-surface-dim p-2 text-xs font-bold text-navy hover:bg-brand hover:text-navy transition"
             >
               <Plus className="h-3.5 w-3.5" /> Create New Website
             </button>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Dialog: Add New Website Project */}
-      {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy/40 backdrop-blur-xs p-4">
-          <div className="w-full max-w-md rounded-2xl border border-border bg-white p-6 shadow-2xl animate-in fade-in zoom-in duration-200">
-            <div className="flex items-center justify-between pb-3 border-b border-border">
-              <div className="flex items-center gap-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand/15 text-navy">
-                  <FolderPlus className="h-4 w-4 text-brand" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-navy">Add New Website</h3>
-                  <p className="text-[11px] text-text-tertiary">Create a separate publication or client blog</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setModalOpen(false)}
-                className="flex h-7 w-7 items-center justify-center rounded-lg border border-border text-text-tertiary hover:text-navy hover:bg-surface-dim"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateProject} className="mt-4 space-y-3.5">
-              {error && (
-                <div className="rounded-lg border border-red-200 bg-red-50 p-2.5 text-xs text-red-700">
-                  {error}
-                </div>
-              )}
-
-              <div>
-                <label className="block text-xs font-bold text-navy mb-1">
-                  Website Name *
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Engineering Blog, Client Portal"
-                  value={newName}
-                  onChange={(e) => handleAutoSlug(e.target.value)}
-                  className="w-full rounded-lg border border-border bg-white px-3 py-2 text-xs text-navy focus:border-brand focus:outline-none"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-navy mb-1">
-                  Slug / Unique Path *
-                </label>
-                <div className="flex items-center rounded-lg border border-border bg-surface-dim px-3 py-2 text-xs text-text-secondary focus-within:border-brand focus-within:bg-white">
-                  <span className="text-text-tertiary font-mono">openpost.app/</span>
-                  <input
-                    type="text"
-                    placeholder="engineering-blog"
-                    value={newSlug}
-                    onChange={(e) => setNewSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-"))}
-                    className="flex-1 bg-transparent font-mono text-xs text-navy focus:outline-none ml-1"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-navy mb-1">
-                  Description (Optional)
-                </label>
-                <textarea
-                  rows={2}
-                  placeholder="Brief summary of this publication..."
-                  value={newDesc}
-                  onChange={(e) => setNewDesc(e.target.value)}
-                  className="w-full rounded-lg border border-border bg-white px-3 py-2 text-xs text-navy focus:border-brand focus:outline-none"
-                />
-              </div>
-
-              <div className="pt-3 border-t border-border flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setModalOpen(false)}
-                  className="rounded-lg border border-border px-3.5 py-2 text-xs font-semibold text-text-secondary hover:bg-surface-dim hover:text-navy"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={creating}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-xs font-bold text-navy shadow-xs hover:bg-brand-hover hover:text-white transition disabled:opacity-50"
-                >
-                  {creating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
-                  {creating ? "Creating Website..." : "Create Website"}
-                </button>
-              </div>
-            </form>
           </div>
         </div>
       )}

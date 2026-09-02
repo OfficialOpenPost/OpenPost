@@ -27,6 +27,7 @@ import {
 
 const TABS = [
   { id: "general", label: "General", icon: Globe, desc: "Publication identity" },
+  { id: "website", label: "Website", icon: Globe, desc: "Site config for CLI" },
   { id: "users", label: "Team", icon: Users, desc: "Members & access" },
   { id: "media", label: "Media", icon: ImageIcon, desc: "Storage & processing" },
   { id: "seo", label: "SEO", icon: Search, desc: "Social & metadata" },
@@ -415,6 +416,151 @@ export default function SettingsPage() {
                   <div className="flex justify-end pt-2 border-t border-border">
                     <button type="submit" disabled={saving} className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-sm font-semibold text-white hover:bg-black disabled:opacity-50">
                       {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />} Save
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "website" && (
+            <div className="space-y-6">
+              <div className="rounded-xl border border-border bg-white shadow-sm">
+                <div className="px-5 py-4 border-b border-border">
+                  <h2 className="text-sm font-semibold text-navy">Website Configuration</h2>
+                  <p className="text-xs text-text-secondary mt-1">
+                    Configure your website appearance — these details are used by <code className="font-mono bg-surface-raised px-1 rounded">openpost-cli</code> to customize your template
+                  </p>
+                </div>
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const f = e.target as any;
+                    handleSaveSection("website", {
+                      siteName: f.siteName.value,
+                      siteTagline: f.siteTagline.value,
+                      siteDescription: f.siteDescription.value,
+                      siteLogoUrl: f.siteLogoUrl.value,
+                      sitePrimaryColor: f.sitePrimaryColor.value,
+                      siteUrl: f.siteUrl.value,
+                      siteLanguage: f.siteLanguage.value,
+                      siteTimezone: f.siteTimezone.value,
+                    });
+                  }}
+                  className="p-5 space-y-5"
+                >
+                  <div className="rounded-lg bg-brand/5 border border-brand/20 p-3 mb-4">
+                    <p className="text-xs text-navy font-semibold">How it works</p>
+                    <p className="text-xs text-text-secondary mt-1">
+                      Fill in your website details below. When you run <code className="font-mono bg-surface-raised px-1 rounded">npx openpost-cli init</code>, these values are automatically injected into your Next.js template — no manual config needed.
+                    </p>
+                  </div>
+
+                  <div className="grid gap-5 sm:grid-cols-2">
+                    <label className="space-y-1.5">
+                      <span className="text-xs font-semibold text-navy">Website Name *</span>
+                      <input name="siteName" defaultValue={activeProject?.siteName || activeProject?.name || ""} placeholder="My Awesome Blog" className="w-full rounded-lg border border-border bg-white px-3 py-2.5 text-sm focus:border-navy focus:outline-none focus:ring-1 focus:ring-navy" />
+                      <span className="text-xs text-text-tertiary">Shown in header, footer, and meta tags</span>
+                    </label>
+                    <label className="space-y-1.5">
+                      <span className="text-xs font-semibold text-navy">Logo URL</span>
+                      <input name="siteLogoUrl" defaultValue={activeProject?.siteLogoUrl || ""} placeholder="https://... or /logo.svg" className="w-full rounded-lg border border-border bg-white px-3 py-2.5 text-sm font-mono focus:border-navy focus:outline-none focus:ring-1 focus:ring-navy" />
+                      <span className="text-xs text-text-tertiary">Leave empty for text-only header</span>
+                    </label>
+                  </div>
+
+                  <label className="block space-y-1.5">
+                    <span className="text-xs font-semibold text-navy">Tagline</span>
+                    <input name="siteTagline" defaultValue={activeProject?.siteTagline || ""} placeholder="Ideas, insights, and stories..." className="w-full rounded-lg border border-border bg-white px-3 py-2.5 text-sm focus:border-navy focus:outline-none focus:ring-1 focus:ring-navy" />
+                    <span className="text-xs text-text-tertiary">Short tagline shown below the site name</span>
+                  </label>
+
+                  <label className="block space-y-1.5">
+                    <span className="text-xs font-semibold text-navy">Description (SEO)</span>
+                    <textarea name="siteDescription" rows={2} defaultValue={activeProject?.siteDescription || ""} placeholder="A blog about technology, engineering, and innovation..." className="w-full rounded-lg border border-border bg-white px-3 py-2.5 text-sm focus:border-navy focus:outline-none focus:ring-1 focus:ring-navy" />
+                    <span className="text-xs text-text-tertiary">Used in OpenGraph and meta description tags</span>
+                  </label>
+
+                  <div className="grid gap-4 sm:grid-cols-3">
+                    <label className="space-y-1.5">
+                      <span className="text-xs font-semibold text-navy">Canonical URL</span>
+                      <input name="siteUrl" defaultValue={activeProject?.siteUrl || ""} placeholder="https://myblog.com" className="w-full rounded-lg border border-border bg-white px-3 py-2.5 text-sm font-mono focus:border-navy focus:outline-none focus:ring-1 focus:ring-navy" />
+                    </label>
+                    <label className="space-y-1.5">
+                      <span className="text-xs font-semibold text-navy">Language</span>
+                      <select name="siteLanguage" defaultValue={activeProject?.siteLanguage || "en"} className="w-full rounded-lg border border-border bg-white px-3 py-2.5 text-sm focus:border-navy focus:outline-none">
+                        <option value="en">English</option>
+                        <option value="es">Español</option>
+                        <option value="fr">Français</option>
+                        <option value="de">Deutsch</option>
+                        <option value="hi">हिन्दी</option>
+                        <option value="ja">日本語</option>
+                        <option value="pt">Português</option>
+                      </select>
+                    </label>
+                    <label className="space-y-1.5">
+                      <span className="text-xs font-semibold text-navy">Accent Color</span>
+                      <span className="flex items-center gap-2 rounded-lg border border-border bg-white px-3 py-2">
+                        <input type="color" name="sitePrimaryColor" defaultValue={activeProject?.sitePrimaryColor || "#FEA611"} className="h-7 w-7 rounded border-0 p-0 cursor-pointer" />
+                        <span className="font-mono text-xs text-text-secondary">{activeProject?.sitePrimaryColor || "#FEA611"}</span>
+                      </span>
+                    </label>
+                  </div>
+
+                  <div className="flex justify-end pt-2 border-t border-border">
+                    <button type="submit" disabled={saving} className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-sm font-semibold text-white hover:bg-black disabled:opacity-50">
+                      {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />} Save Website Config
+                    </button>
+                  </div>
+                </form>
+              </div>
+
+              {/* Social Links */}
+              <div className="rounded-xl border border-border bg-white shadow-sm">
+                <div className="px-5 py-4 border-b border-border">
+                  <h2 className="text-sm font-semibold text-navy">Social Links</h2>
+                  <p className="text-xs text-text-secondary mt-1">Optional — shown in website footer and SEO metadata</p>
+                </div>
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const f = e.target as any;
+                    handleSaveSection("website", {
+                      ...settings.website,
+                      socialTwitter: f.socialTwitter.value,
+                      socialGithub: f.socialGithub.value,
+                      socialLinkedin: f.socialLinkedin.value,
+                      socialYoutube: f.socialYoutube.value,
+                      socialInstagram: f.socialInstagram.value,
+                    });
+                  }}
+                  className="p-5 space-y-4"
+                >
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <label className="space-y-1.5">
+                      <span className="text-xs font-semibold text-navy">Twitter / X</span>
+                      <input name="socialTwitter" defaultValue={activeProject?.socialTwitter || ""} placeholder="https://x.com/username" className="w-full rounded-lg border border-border bg-white px-3 py-2.5 text-sm font-mono focus:border-navy focus:outline-none focus:ring-1 focus:ring-navy" />
+                    </label>
+                    <label className="space-y-1.5">
+                      <span className="text-xs font-semibold text-navy">GitHub</span>
+                      <input name="socialGithub" defaultValue={activeProject?.socialGithub || ""} placeholder="https://github.com/username" className="w-full rounded-lg border border-border bg-white px-3 py-2.5 text-sm font-mono focus:border-navy focus:outline-none focus:ring-1 focus:ring-navy" />
+                    </label>
+                    <label className="space-y-1.5">
+                      <span className="text-xs font-semibold text-navy">LinkedIn</span>
+                      <input name="socialLinkedin" defaultValue={activeProject?.socialLinkedin || ""} placeholder="https://linkedin.com/in/username" className="w-full rounded-lg border border-border bg-white px-3 py-2.5 text-sm font-mono focus:border-navy focus:outline-none focus:ring-1 focus:ring-navy" />
+                    </label>
+                    <label className="space-y-1.5">
+                      <span className="text-xs font-semibold text-navy">YouTube</span>
+                      <input name="socialYoutube" defaultValue={activeProject?.socialYoutube || ""} placeholder="https://youtube.com/@channel" className="w-full rounded-lg border border-border bg-white px-3 py-2.5 text-sm font-mono focus:border-navy focus:outline-none focus:ring-1 focus:ring-navy" />
+                    </label>
+                    <label className="space-y-1.5">
+                      <span className="text-xs font-semibold text-navy">Instagram</span>
+                      <input name="socialInstagram" defaultValue={activeProject?.socialInstagram || ""} placeholder="https://instagram.com/username" className="w-full rounded-lg border border-border bg-white px-3 py-2.5 text-sm font-mono focus:border-navy focus:outline-none focus:ring-1 focus:ring-navy" />
+                    </label>
+                  </div>
+                  <div className="flex justify-end pt-2 border-t border-border">
+                    <button type="submit" disabled={saving} className="inline-flex items-center gap-1.5 rounded-lg bg-navy px-4 py-2 text-sm font-semibold text-white hover:bg-black disabled:opacity-50">
+                      {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />} Save Social Links
                     </button>
                   </div>
                 </form>

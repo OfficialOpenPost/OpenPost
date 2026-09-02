@@ -40,7 +40,8 @@ import {
   Indent,
   Outdent,
 } from "lucide-react";
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { ColorPickerPopover } from "./ColorPickerPopover";
 import { InsertBlockModal } from "../InsertBlockModal";
 
@@ -99,17 +100,51 @@ export function EditorRibbon({
   const [activeModal, setActiveModal] = useState<any>(null);
 
   const menuContainerRef = useRef<HTMLDivElement>(null);
+  const linkBtnRef = useRef<HTMLButtonElement>(null);
+  const tableBtnRef = useRef<HTMLButtonElement>(null);
+  const [linkPopoverPos, setLinkPopoverPos] = useState<{ top: number; left: number } | null>(null);
+  const [tablePopoverPos, setTablePopoverPos] = useState<{ top: number; left: number } | null>(null);
 
   useEffect(() => {
     const handleOutside = (e: MouseEvent) => {
       if (menuContainerRef.current && !menuContainerRef.current.contains(e.target as Node)) {
         setActiveMenu(null);
         setShowTableGridPicker(false);
+        setShowLinkPopover(false);
+        setLinkPopoverPos(null);
+        setTablePopoverPos(null);
       }
     };
     document.addEventListener("mousedown", handleOutside);
     return () => document.removeEventListener("mousedown", handleOutside);
   }, []);
+
+  const toggleLinkPopover = useCallback(() => {
+    if (showLinkPopover) {
+      setShowLinkPopover(false);
+      setLinkPopoverPos(null);
+    } else {
+      setLinkUrl(editor?.getAttributes("link").href || "");
+      const rect = linkBtnRef.current?.getBoundingClientRect();
+      if (rect) {
+        setLinkPopoverPos({ top: rect.bottom + 4, left: rect.left });
+      }
+      setShowLinkPopover(true);
+    }
+  }, [showLinkPopover, editor]);
+
+  const toggleTablePopover = useCallback(() => {
+    if (showTableGridPicker) {
+      setShowTableGridPicker(false);
+      setTablePopoverPos(null);
+    } else {
+      const rect = tableBtnRef.current?.getBoundingClientRect();
+      if (rect) {
+        setTablePopoverPos({ top: rect.bottom + 4, left: rect.left });
+      }
+      setShowTableGridPicker(true);
+    }
+  }, [showTableGridPicker]);
 
   if (!editor) return null;
 
@@ -122,6 +157,7 @@ export function EditorRibbon({
       editor.chain().focus().setLink({ href: formatted, target: openInNewTab ? "_blank" : undefined }).run();
     }
     setShowLinkPopover(false);
+    setLinkPopoverPos(null);
   };
 
   const handleExportHtml = () => {
@@ -213,10 +249,10 @@ export function EditorRibbon({
   return (
     <div
       ref={menuContainerRef}
-      className="w-full rounded-2xl border border-border bg-white shadow-sm select-none transition-all text-navy"
+      className="w-full border border-border bg-white shadow-sm select-none transition-all text-navy"
     >
       {/* TIER 1: WORD-STYLE TOP MENU BAR (File, Edit, Insert, Format, View, Tools) */}
-      <div className="flex items-center gap-1.5 px-3.5 py-1.5 border-b border-border/80 text-xs font-bold bg-[#F8FAFC] rounded-t-2xl">
+      <div className="flex items-center gap-1.5 px-3.5 py-1.5 border-b border-border/80 text-xs font-bold bg-[#F8FAFC]">
         {/* FILE MENU */}
         <div className="relative">
           <button
@@ -501,15 +537,15 @@ export function EditorRibbon({
         </button>
       </div>
 
-      {/* TIER 2: PRIMARY RIBBON ACTION BAR (Segmented Tool Cards) */}
-      <div className="flex flex-wrap items-center gap-2 p-2 overflow-x-auto text-navy">
-        {/* Card 1: Undo / Redo */}
-        <div className="flex items-center gap-0.5 bg-[#F8FAFC] border border-border/80 rounded-xl p-1 shadow-2xs">
+      {/* TIER 2: PROFESSIONAL TOOLBAR — single bar with thin separators (no excessive cards) */}
+      <div className="flex flex-wrap items-center gap-0.5 p-1.5 overflow-x-auto text-navy border-t border-border/60 bg-white">
+        {/* Undo / Redo */}
+        <div className="flex items-center gap-0.5 pr-2 border-r border-border/60 mr-1">
           <button
             type="button"
             onClick={() => editor.chain().focus().undo().run()}
             disabled={!editor.can().undo()}
-            className="flex h-7 w-7 items-center justify-center rounded-lg text-navy hover:bg-white hover:shadow-xs disabled:opacity-30 transition"
+            className="flex h-7 w-7 items-center justify-center rounded-md text-navy hover:bg-slate-100 disabled:opacity-30 transition"
             title="Undo (Ctrl+Z)"
           >
             <Undo2 className="h-3.5 w-3.5" />
@@ -518,15 +554,15 @@ export function EditorRibbon({
             type="button"
             onClick={() => editor.chain().focus().redo().run()}
             disabled={!editor.can().redo()}
-            className="flex h-7 w-7 items-center justify-center rounded-lg text-navy hover:bg-white hover:shadow-xs disabled:opacity-30 transition"
+            className="flex h-7 w-7 items-center justify-center rounded-md text-navy hover:bg-slate-100 disabled:opacity-30 transition"
             title="Redo (Ctrl+Y)"
           >
             <Redo2 className="h-3.5 w-3.5" />
           </button>
         </div>
 
-        {/* Card 2: Typography (Headings, Font Family, Font Size) */}
-        <div className="flex items-center gap-1 bg-[#F8FAFC] border border-border/80 rounded-xl p-1 shadow-2xs">
+        {/* Typography */}
+        <div className="flex items-center gap-1 pr-2 border-r border-border/60 mr-1">
           <select
             value={
               editor.isActive("heading", { level: 1 })
@@ -553,15 +589,15 @@ export function EditorRibbon({
               if (val === "quote") editor.chain().focus().toggleBlockquote().run();
               if (val === "code") editor.chain().focus().toggleCodeBlock().run();
             }}
-            className="h-7 rounded-lg border border-border/80 bg-white px-2 text-xs font-bold text-navy focus:border-brand focus:outline-none cursor-pointer shadow-2xs"
+            className="h-7 rounded-md border border-slate-200 bg-white px-2 text-xs font-medium text-navy focus:border-slate-300 focus:outline-none cursor-pointer"
           >
-            <option value="p">Normal Text</option>
+            <option value="p">Paragraph</option>
             <option value="h1">Heading 1</option>
             <option value="h2">Heading 2</option>
             <option value="h3">Heading 3</option>
             <option value="h4">Heading 4</option>
             <option value="quote">Quote</option>
-            <option value="code">Code Block</option>
+            <option value="code">Code</option>
           </select>
           <select
             onChange={(e) => {
@@ -569,7 +605,7 @@ export function EditorRibbon({
               if (!val) (editor.chain().focus() as any).unsetFontFamily?.().run();
               else (editor.chain().focus() as any).setFontFamily?.(val).run();
             }}
-            className="h-7 rounded-lg border border-border/80 bg-white px-2 text-xs text-navy focus:border-brand focus:outline-none cursor-pointer hidden sm:block max-w-[105px] shadow-2xs"
+            className="h-7 rounded-md border border-slate-200 bg-white px-2 text-xs text-navy focus:border-slate-300 focus:outline-none cursor-pointer hidden sm:block max-w-[110px]"
           >
             {FONT_FAMILIES.map((f) => (
               <option key={f.label} value={f.value}>
@@ -577,12 +613,12 @@ export function EditorRibbon({
               </option>
             ))}
           </select>
-          <div className="flex items-center gap-0.5 hidden md:flex">
+          <div className="hidden md:flex items-center gap-0.5">
             <button
               type="button"
               onClick={() => changeFontSizeStep(-2)}
-              title="Decrease Font Size (A−)"
-              className="flex h-7 w-6 items-center justify-center rounded-lg border border-border/80 bg-white text-xs font-bold text-navy hover:bg-surface-raised shadow-2xs"
+              title="Decrease Font Size"
+              className="flex h-7 w-6 items-center justify-center rounded-md border border-slate-200 bg-white text-xs font-bold text-navy hover:bg-slate-50"
             >
               A−
             </button>
@@ -593,7 +629,7 @@ export function EditorRibbon({
                 if (!val) (editor.chain().focus() as any).unsetFontSize?.().run();
                 else (editor.chain().focus() as any).setFontSize?.(val).run();
               }}
-              className="h-7 rounded-lg border border-border/80 bg-white px-1.5 text-xs font-mono text-navy focus:border-brand focus:outline-none cursor-pointer shadow-2xs"
+              className="h-7 rounded-md border border-slate-200 bg-white px-1.5 text-xs font-mono text-navy focus:border-slate-300 focus:outline-none cursor-pointer"
             >
               {FONT_SIZES.map((sz) => (
                 <option key={sz.value} value={sz.value}>
@@ -604,23 +640,21 @@ export function EditorRibbon({
             <button
               type="button"
               onClick={() => changeFontSizeStep(2)}
-              title="Increase Font Size (A+)"
-              className="flex h-7 w-6 items-center justify-center rounded-lg border border-border/80 bg-white text-xs font-bold text-navy hover:bg-surface-raised shadow-2xs"
+              title="Increase Font Size"
+              className="flex h-7 w-6 items-center justify-center rounded-md border border-slate-200 bg-white text-xs font-bold text-navy hover:bg-slate-50"
             >
               A+
             </button>
           </div>
         </div>
 
-        {/* Card 3: Formatting (B, I, U, S, Code, Tx) */}
-        <div className="flex items-center gap-0.5 bg-[#F8FAFC] border border-border/80 rounded-xl p-1 shadow-2xs">
+        {/* Formatting */}
+        <div className="flex items-center gap-0.5 pr-2 border-r border-slate-200 mr-1">
           <button
             type="button"
             onClick={() => editor.chain().focus().toggleBold().run()}
-            className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs transition ${
-              editor.isActive("bold")
-                ? "bg-brand text-navy font-bold shadow-xs"
-                : "text-navy hover:bg-white hover:shadow-xs"
+            className={`flex h-7 w-7 items-center justify-center rounded-md text-xs transition ${
+              editor.isActive("bold") ? "bg-slate-900 text-white" : "text-navy hover:bg-slate-100"
             }`}
             title="Bold (Ctrl+B)"
           >
@@ -629,10 +663,8 @@ export function EditorRibbon({
           <button
             type="button"
             onClick={() => editor.chain().focus().toggleItalic().run()}
-            className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs transition ${
-              editor.isActive("italic")
-                ? "bg-brand text-navy font-bold shadow-xs"
-                : "text-navy hover:bg-white hover:shadow-xs"
+            className={`flex h-7 w-7 items-center justify-center rounded-md text-xs transition ${
+              editor.isActive("italic") ? "bg-slate-900 text-white" : "text-navy hover:bg-slate-100"
             }`}
             title="Italic (Ctrl+I)"
           >
@@ -641,10 +673,8 @@ export function EditorRibbon({
           <button
             type="button"
             onClick={() => editor.chain().focus().toggleUnderline().run()}
-            className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs transition ${
-              editor.isActive("underline")
-                ? "bg-brand text-navy font-bold shadow-xs"
-                : "text-navy hover:bg-white hover:shadow-xs"
+            className={`flex h-7 w-7 items-center justify-center rounded-md text-xs transition ${
+              editor.isActive("underline") ? "bg-slate-900 text-white" : "text-navy hover:bg-slate-100"
             }`}
             title="Underline (Ctrl+U)"
           >
@@ -653,10 +683,8 @@ export function EditorRibbon({
           <button
             type="button"
             onClick={() => editor.chain().focus().toggleStrike().run()}
-            className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs transition ${
-              editor.isActive("strike")
-                ? "bg-brand text-navy font-bold shadow-xs"
-                : "text-navy hover:bg-white hover:shadow-xs"
+            className={`flex h-7 w-7 items-center justify-center rounded-md text-xs transition ${
+              editor.isActive("strike") ? "bg-slate-900 text-white" : "text-navy hover:bg-slate-100"
             }`}
             title="Strikethrough"
           >
@@ -665,34 +693,28 @@ export function EditorRibbon({
           <button
             type="button"
             onClick={() => (editor.chain().focus() as any).toggleSuperscript?.().run()}
-            className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs transition hidden lg:flex ${
-              editor.isActive("superscript")
-                ? "bg-brand text-navy font-bold shadow-xs"
-                : "text-navy hover:bg-white hover:shadow-xs"
+            className={`hidden lg:flex h-7 w-7 items-center justify-center rounded-md text-xs transition ${
+              editor.isActive("superscript") ? "bg-slate-900 text-white" : "text-navy hover:bg-slate-100"
             }`}
-            title="Superscript (X²)"
+            title="Superscript"
           >
             <span className="font-mono text-[11px] font-bold">X²</span>
           </button>
           <button
             type="button"
             onClick={() => (editor.chain().focus() as any).toggleSubscript?.().run()}
-            className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs transition hidden lg:flex ${
-              editor.isActive("subscript")
-                ? "bg-brand text-navy font-bold shadow-xs"
-                : "text-navy hover:bg-white hover:shadow-xs"
+            className={`hidden lg:flex h-7 w-7 items-center justify-center rounded-md text-xs transition ${
+              editor.isActive("subscript") ? "bg-slate-900 text-white" : "text-navy hover:bg-slate-100"
             }`}
-            title="Subscript (X₁)"
+            title="Subscript"
           >
             <span className="font-mono text-[11px] font-bold">X₁</span>
           </button>
           <button
             type="button"
             onClick={() => editor.chain().focus().toggleCode().run()}
-            className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs transition ${
-              editor.isActive("code")
-                ? "bg-brand text-navy font-bold shadow-xs"
-                : "text-navy hover:bg-white hover:shadow-xs"
+            className={`flex h-7 w-7 items-center justify-center rounded-md text-xs transition ${
+              editor.isActive("code") ? "bg-slate-900 text-white" : "text-navy hover:bg-slate-100"
             }`}
             title="Inline Code"
           >
@@ -701,27 +723,24 @@ export function EditorRibbon({
           <button
             type="button"
             onClick={() => editor.chain().focus().unsetAllMarks().clearNodes().run()}
-            className="flex h-7 w-7 items-center justify-center rounded-lg text-xs text-navy hover:bg-white hover:shadow-xs transition"
-            title="Clear Formatting (Tx)"
+            className="flex h-7 w-7 items-center justify-center rounded-md text-navy hover:bg-slate-100 transition"
+            title="Clear Formatting"
           >
-            <RemoveFormatting className="h-3.5 w-3.5 text-text-tertiary" />
+            <RemoveFormatting className="h-3.5 w-3.5 text-slate-400" />
           </button>
         </div>
 
-        {/* Card 4: Colors (Text & Highlight) */}
-        <div className="flex items-center gap-0.5 bg-[#F8FAFC] border border-border/80 rounded-xl p-1 shadow-2xs">
+        {/* Colors */}
+        <div className="flex items-center gap-0.5 pr-2 border-r border-slate-200 mr-1">
           <div className="relative">
             <button
               type="button"
               onClick={() => setShowTextColorPicker(!showTextColorPicker)}
-              className="flex h-7 w-7 flex-col items-center justify-center rounded-lg text-navy hover:bg-white hover:shadow-xs transition"
+              className="flex h-7 w-7 flex-col items-center justify-center rounded-md text-navy hover:bg-slate-100 transition"
               title="Text Color"
             >
               <Baseline className="h-3.5 w-3.5" />
-              <div
-                className="h-1 w-3.5 rounded-full mt-0.5"
-                style={{ backgroundColor: editor.getAttributes("textStyle").color || "#FEA611" }}
-              />
+              <div className="h-1 w-3.5 rounded-full mt-0.5" style={{ backgroundColor: editor.getAttributes("textStyle").color || "#0f172a" }} />
             </button>
             <ColorPickerPopover
               isOpen={showTextColorPicker}
@@ -738,17 +757,17 @@ export function EditorRibbon({
             <button
               type="button"
               onClick={() => setShowHighlightColorPicker(!showHighlightColorPicker)}
-              className="flex h-7 w-7 flex-col items-center justify-center rounded-lg text-navy hover:bg-white hover:shadow-xs transition"
-              title="Highlight Color"
+              className="flex h-7 w-7 flex-col items-center justify-center rounded-md text-navy hover:bg-slate-100 transition"
+              title="Highlight"
             >
               <Highlighter className="h-3.5 w-3.5" />
-              <div className="h-1 w-3.5 rounded-full mt-0.5 bg-brand" />
+              <div className="h-1 w-3.5 rounded-full mt-0.5 bg-amber-400" />
             </button>
             <ColorPickerPopover
               isOpen={showHighlightColorPicker}
               onClose={() => setShowHighlightColorPicker(false)}
               isHighlight
-              title="Highlight Background"
+              title="Highlight"
               onSelectColor={(c) => {
                 if (!c) editor.chain().focus().unsetHighlight().run();
                 else editor.chain().focus().setHighlight({ color: c }).run();
@@ -757,68 +776,48 @@ export function EditorRibbon({
           </div>
         </div>
 
-        {/* Card 5: Alignments */}
-        <div className="flex items-center gap-0.5 bg-[#F8FAFC] border border-border/80 rounded-xl p-1 shadow-2xs">
+        {/* Alignments */}
+        <div className="flex items-center gap-0.5 pr-2 border-r border-slate-200 mr-1">
           <button
             type="button"
             onClick={() => handleAlign("left")}
-            className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs transition ${
-              isLeftActive
-                ? "bg-brand text-navy font-bold shadow-xs"
-                : "text-navy hover:bg-white hover:shadow-xs"
-            }`}
-            title="Align Left (Ctrl+L)"
+            className={`flex h-7 w-7 items-center justify-center rounded-md text-xs transition ${isLeftActive ? "bg-slate-900 text-white" : "text-navy hover:bg-slate-100"}`}
+            title="Align Left"
           >
             <AlignLeft className="h-3.5 w-3.5" />
           </button>
           <button
             type="button"
             onClick={() => handleAlign("center")}
-            className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs transition ${
-              isCenterActive
-                ? "bg-brand text-navy font-bold shadow-xs"
-                : "text-navy hover:bg-white hover:shadow-xs"
-            }`}
-            title="Align Center (Ctrl+E)"
+            className={`flex h-7 w-7 items-center justify-center rounded-md text-xs transition ${isCenterActive ? "bg-slate-900 text-white" : "text-navy hover:bg-slate-100"}`}
+            title="Align Center"
           >
             <AlignCenter className="h-3.5 w-3.5" />
           </button>
           <button
             type="button"
             onClick={() => handleAlign("right")}
-            className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs transition ${
-              isRightActive
-                ? "bg-brand text-navy font-bold shadow-xs"
-                : "text-navy hover:bg-white hover:shadow-xs"
-            }`}
-            title="Align Right (Ctrl+R)"
+            className={`flex h-7 w-7 items-center justify-center rounded-md text-xs transition ${isRightActive ? "bg-slate-900 text-white" : "text-navy hover:bg-slate-100"}`}
+            title="Align Right"
           >
             <AlignRight className="h-3.5 w-3.5" />
           </button>
           <button
             type="button"
             onClick={() => handleAlign("justify")}
-            className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs transition hidden sm:flex ${
-              isJustifyActive
-                ? "bg-brand text-navy font-bold shadow-xs"
-                : "text-navy hover:bg-white hover:shadow-xs"
-            }`}
-            title="Justify (Ctrl+J)"
+            className={`hidden sm:flex h-7 w-7 items-center justify-center rounded-md text-xs transition ${isJustifyActive ? "bg-slate-900 text-white" : "text-navy hover:bg-slate-100"}`}
+            title="Justify"
           >
             <AlignJustify className="h-3.5 w-3.5" />
           </button>
         </div>
 
-        {/* Card 6: Lists & Tasks */}
-        <div className="flex items-center gap-0.5 bg-[#F8FAFC] border border-border/80 rounded-xl p-1 shadow-2xs">
+        {/* Lists */}
+        <div className="flex items-center gap-0.5 pr-2 border-r border-slate-200 mr-1">
           <button
             type="button"
             onClick={() => editor.chain().focus().toggleBulletList().run()}
-            className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs transition ${
-              editor.isActive("bulletList")
-                ? "bg-brand text-navy font-bold shadow-xs"
-                : "text-navy hover:bg-white hover:shadow-xs"
-            }`}
+            className={`flex h-7 w-7 items-center justify-center rounded-md text-xs transition ${editor.isActive("bulletList") ? "bg-slate-900 text-white" : "text-navy hover:bg-slate-100"}`}
             title="Bullet List"
           >
             <List className="h-3.5 w-3.5" />
@@ -826,11 +825,7 @@ export function EditorRibbon({
           <button
             type="button"
             onClick={() => editor.chain().focus().toggleOrderedList().run()}
-            className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs transition ${
-              editor.isActive("orderedList")
-                ? "bg-brand text-navy font-bold shadow-xs"
-                : "text-navy hover:bg-white hover:shadow-xs"
-            }`}
+            className={`flex h-7 w-7 items-center justify-center rounded-md text-xs transition ${editor.isActive("orderedList") ? "bg-slate-900 text-white" : "text-navy hover:bg-slate-100"}`}
             title="Numbered List"
           >
             <ListOrdered className="h-3.5 w-3.5" />
@@ -838,101 +833,99 @@ export function EditorRibbon({
           <button
             type="button"
             onClick={() => editor.chain().focus().toggleTaskList().run()}
-            className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs transition hidden md:flex ${
-              editor.isActive("taskList")
-                ? "bg-brand text-navy font-bold shadow-xs"
-                : "text-navy hover:bg-white hover:shadow-xs"
-            }`}
-            title="Task / Checklist"
+            className={`hidden md:flex h-7 w-7 items-center justify-center rounded-md text-xs transition ${editor.isActive("taskList") ? "bg-slate-900 text-white" : "text-navy hover:bg-slate-100"}`}
+            title="Checklist"
           >
             <ListChecks className="h-3.5 w-3.5" />
           </button>
           <button
             type="button"
             onClick={() => editor.chain().focus().sinkListItem("listItem").run()}
-            className="flex h-7 w-7 items-center justify-center rounded-lg text-xs text-navy hover:bg-white hover:shadow-xs transition hidden lg:flex"
-            title="Indent (Tab)"
+            className="hidden lg:flex h-7 w-7 items-center justify-center rounded-md text-navy hover:bg-slate-100 transition"
+            title="Indent"
           >
             <Indent className="h-3.5 w-3.5" />
           </button>
           <button
             type="button"
             onClick={() => editor.chain().focus().liftListItem("listItem").run()}
-            className="flex h-7 w-7 items-center justify-center rounded-lg text-xs text-navy hover:bg-white hover:shadow-xs transition hidden lg:flex"
-            title="Outdent (Shift+Tab)"
+            className="hidden lg:flex h-7 w-7 items-center justify-center rounded-md text-navy hover:bg-slate-100 transition"
+            title="Outdent"
           >
             <Outdent className="h-3.5 w-3.5" />
           </button>
         </div>
 
-        {/* Card 7: Insert Blocks & Media */}
-        <div className="flex items-center gap-1 bg-[#F8FAFC] border border-border/80 rounded-xl p-1 shadow-2xs">
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => {
-                setLinkUrl(editor.getAttributes("link").href || "");
-                setShowLinkPopover(!showLinkPopover);
-              }}
-              className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs transition ${
-                editor.isActive("link")
-                  ? "bg-brand text-navy font-bold shadow-xs"
-                  : "text-navy hover:bg-white hover:shadow-xs"
-              }`}
-              title="Insert Link (Ctrl+K)"
+        {/* Insert */}
+        <div className="flex items-center gap-1">
+          <button
+            ref={linkBtnRef}
+            type="button"
+            onClick={toggleLinkPopover}
+            className={`flex h-7 w-7 items-center justify-center rounded-lg text-xs transition ${
+              editor.isActive("link")
+                ? "bg-brand text-navy font-bold shadow-xs"
+                : "text-navy hover:bg-white hover:shadow-xs"
+            }`}
+            title="Insert Link (Ctrl+K)"
+          >
+            <Link2 className="h-3.5 w-3.5" />
+          </button>
+          {showLinkPopover && linkPopoverPos && createPortal(
+            <div
+              className="fixed z-[9999] w-72 rounded-xl border border-border bg-white p-3 shadow-2xl text-xs text-navy"
+              style={{ top: linkPopoverPos.top, left: linkPopoverPos.left }}
+              onMouseDown={(e) => e.stopPropagation()}
             >
-              <Link2 className="h-3.5 w-3.5" />
-            </button>
-            {showLinkPopover && (
-              <div className="absolute top-full left-0 mt-1 z-50 w-72 rounded-xl border border-border bg-white p-3 shadow-2xl text-xs text-navy">
-                <span className="font-bold text-navy mb-1.5 block">Insert Hyperlink</span>
-                <input
-                  type="url"
-                  autoFocus
-                  placeholder="https://example.com"
-                  value={linkUrl}
-                  onChange={(e) => setLinkUrl(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") handleApplyLink();
-                    if (e.key === "Escape") setShowLinkPopover(false);
-                  }}
-                  className="w-full rounded-lg border border-border bg-surface-raised px-2.5 py-1.5 text-xs text-navy focus:border-brand focus:outline-none"
-                />
-                <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-border">
-                  <label className="flex items-center gap-1.5 text-[11px] text-text-secondary cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={openInNewTab}
-                      onChange={(e) => setOpenInNewTab(e.target.checked)}
-                      className="rounded text-brand"
-                    />
-                    Open in new tab
-                  </label>
-                  <div className="flex gap-1.5">
-                    {editor.isActive("link") && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          editor.chain().focus().unsetLink().run();
-                          setShowLinkPopover(false);
-                        }}
-                        className="rounded-lg border border-border px-2 py-1 text-[10px] font-semibold hover:bg-surface-raised"
-                      >
-                        Remove
-                      </button>
-                    )}
+              <span className="font-bold text-navy mb-1.5 block">Insert Hyperlink</span>
+              <input
+                type="url"
+                autoFocus
+                placeholder="https://example.com"
+                value={linkUrl}
+                onChange={(e) => setLinkUrl(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleApplyLink();
+                  if (e.key === "Escape") { setShowLinkPopover(false); setLinkPopoverPos(null); }
+                }}
+                className="w-full rounded-lg border border-border bg-surface-raised px-2.5 py-1.5 text-xs text-navy focus:border-brand focus:outline-none"
+              />
+              <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-border">
+                <label className="flex items-center gap-1.5 text-[11px] text-text-secondary cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={openInNewTab}
+                    onChange={(e) => setOpenInNewTab(e.target.checked)}
+                    className="rounded text-brand"
+                  />
+                  Open in new tab
+                </label>
+                <div className="flex gap-1.5">
+                  {editor.isActive("link") && (
                     <button
                       type="button"
-                      onClick={handleApplyLink}
-                      className="rounded-lg bg-brand px-3 py-1 font-bold text-navy text-[11px] hover:bg-brand-hover"
+                      onClick={() => {
+                        editor.chain().focus().unsetLink().run();
+                        setShowLinkPopover(false);
+                        setLinkPopoverPos(null);
+                      }}
+                      className="rounded-lg border border-border px-2 py-1 text-[10px] font-semibold hover:bg-surface-raised"
                     >
-                      Apply
+                      Remove
                     </button>
-                  </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleApplyLink}
+                    className="rounded-lg bg-brand px-3 py-1 font-bold text-navy text-[11px] hover:bg-brand-hover"
+                  >
+                    Apply
+                  </button>
                 </div>
               </div>
-            )}
-          </div>
+            </div>,
+            document.body
+          )}
           <button
             type="button"
             onClick={() => setActiveModal("image")}
@@ -942,64 +935,69 @@ export function EditorRibbon({
             <ImageIcon className="h-3.5 w-3.5 text-brand" />
             <span className="hidden sm:inline">Image</span>
           </button>
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setShowTableGridPicker(!showTableGridPicker)}
-              className="flex h-7 items-center gap-1 rounded-lg px-2 text-xs font-bold text-navy hover:bg-white hover:shadow-xs transition"
-              title="Insert Table Grid Matrix"
+          <button
+            ref={tableBtnRef}
+            type="button"
+            onClick={toggleTablePopover}
+            className="flex h-7 items-center gap-1 rounded-lg px-2 text-xs font-bold text-navy hover:bg-white hover:shadow-xs transition"
+            title="Insert Table Grid Matrix"
+          >
+            <TableIcon className="h-3.5 w-3.5 text-brand" />
+            <span className="hidden sm:inline">Table</span>
+            <ChevronDown className="h-3 w-3 text-text-tertiary" />
+          </button>
+          {showTableGridPicker && tablePopoverPos && createPortal(
+            <div
+              className="fixed z-[9999] rounded-2xl border border-border bg-white p-3 shadow-2xl text-xs text-navy"
+              style={{ top: tablePopoverPos.top, left: tablePopoverPos.left }}
+              onMouseDown={(e) => e.stopPropagation()}
             >
-              <TableIcon className="h-3.5 w-3.5 text-brand" />
-              <span className="hidden sm:inline">Table</span>
-              <ChevronDown className="h-3 w-3 text-text-tertiary" />
-            </button>
-            {showTableGridPicker && (
-              <div className="absolute top-full left-0 mt-1 z-50 rounded-2xl border border-border bg-white p-3 shadow-2xl text-xs text-navy">
-                <div className="flex items-center justify-between mb-2 pb-1.5 border-b border-border">
-                  <span className="font-bold text-navy">Insert Table</span>
-                  <span className="font-mono text-brand font-bold text-[11px]">
-                    {hoveredTableCols} × {hoveredTableRows}
-                  </span>
-                </div>
-                <div className="grid grid-cols-10 gap-1 p-1 bg-surface-raised rounded-xl border border-border">
-                  {Array.from({ length: 8 }).map((_, r) =>
-                    Array.from({ length: 10 }).map((_, c) => {
-                      const isHighlighted = r < hoveredTableRows && c < hoveredTableCols;
-                      return (
-                        <div
-                          key={`${r}-${c}`}
-                          onMouseEnter={() => {
-                            setHoveredTableRows(r + 1);
-                            setHoveredTableCols(c + 1);
-                          }}
-                          onClick={() => {
-                            editor
-                              .chain()
-                              .focus()
-                              .insertTable({
-                                rows: r + 1,
-                                cols: c + 1,
-                                withHeaderRow: true,
-                              })
-                              .run();
-                            setShowTableGridPicker(false);
-                          }}
-                          className={`h-4 w-4 rounded-xs border cursor-pointer transition-colors ${
-                            isHighlighted
-                              ? "bg-brand border-brand"
-                              : "bg-white border-border hover:border-brand/40"
-                          }`}
-                        />
-                      );
-                    })
-                  )}
-                </div>
-                <p className="mt-2 text-center text-[10px] text-text-tertiary">
-                  Click cell to insert {hoveredTableCols} × {hoveredTableRows} table
-                </p>
+              <div className="flex items-center justify-between mb-2 pb-1.5 border-b border-border">
+                <span className="font-bold text-navy">Insert Table</span>
+                <span className="font-mono text-brand font-bold text-[11px]">
+                  {hoveredTableCols} × {hoveredTableRows}
+                </span>
               </div>
-            )}
-          </div>
+              <div className="grid grid-cols-10 gap-1 p-1 bg-surface-raised rounded-xl border border-border">
+                {Array.from({ length: 8 }).map((_, r) =>
+                  Array.from({ length: 10 }).map((_, c) => {
+                    const isHighlighted = r < hoveredTableRows && c < hoveredTableCols;
+                    return (
+                      <div
+                        key={`${r}-${c}`}
+                        onMouseEnter={() => {
+                          setHoveredTableRows(r + 1);
+                          setHoveredTableCols(c + 1);
+                        }}
+                        onClick={() => {
+                          editor
+                            .chain()
+                            .focus()
+                            .insertTable({
+                              rows: r + 1,
+                              cols: c + 1,
+                              withHeaderRow: true,
+                            })
+                            .run();
+                          setShowTableGridPicker(false);
+                          setTablePopoverPos(null);
+                        }}
+                        className={`h-4 w-4 rounded-xs border cursor-pointer transition-colors ${
+                          isHighlighted
+                            ? "bg-brand border-brand"
+                            : "bg-white border-border hover:border-brand/40"
+                        }`}
+                      />
+                    );
+                  })
+                )}
+              </div>
+              <p className="mt-2 text-center text-[10px] text-text-tertiary">
+                Click cell to insert {hoveredTableCols} × {hoveredTableRows} table
+              </p>
+            </div>,
+            document.body
+          )}
           <button
             type="button"
             onClick={() => setActiveModal("callout")}

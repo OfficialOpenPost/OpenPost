@@ -28,11 +28,13 @@ import { FeaturedImagePicker } from "../FeaturedImagePicker";
 
 interface EditorSidePanelProps {
   editor: Editor | null;
+  title: string;
   slug: string;
   setSlug: (s: string) => void;
   setSlugEdited: (b: boolean) => void;
   category: string;
   setCategory: (c: string) => void;
+  setCategoryId: (id: string | null) => void;
   catOptions: Array<{ id: string; name: string; slug: string }>;
   tags: string[];
   setTags: (t: string[]) => void;
@@ -65,11 +67,13 @@ interface EditorSidePanelProps {
 
 export function EditorSidePanel({
   editor,
+  title,
   slug,
   setSlug,
   setSlugEdited,
   category,
   setCategory,
+  setCategoryId,
   catOptions,
   tags,
   setTags,
@@ -219,13 +223,32 @@ export function EditorSidePanel({
                     className="w-full rounded-lg border border-border bg-[#FCFCF9] px-3 py-2 text-xs font-mono text-navy focus:border-brand focus:outline-none"
                   />
                   <p className="text-[10px] text-text-tertiary mt-1">/blog/{slug}</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const generated = title
+                        .toLowerCase()
+                        .replace(/[^a-z0-9]+/g, "-")
+                        .replace(/(^-|-$)/g, "");
+                      setSlug(generated || "untitled");
+                      setSlugEdited(true);
+                    }}
+                    className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface-raised px-3 py-1.5 text-[11px] font-bold text-navy hover:bg-brand/10 hover:border-brand/30 transition"
+                  >
+                    <Sparkles className="h-3 w-3 text-brand" /> Generate from Title
+                  </button>
                 </div>
 
                 <div>
                   <label className="block font-bold text-navy mb-1">Category</label>
                   <select
                     value={category}
-                    onChange={(e) => setCategory(e.target.value)}
+                    onChange={(e) => {
+                      setCategory(e.target.value);
+                      const match = catOptions.find((c) => c.name === e.target.value);
+                      setCategoryId(match?.id || null);
+                      setSlugEdited(true);
+                    }}
                     className="w-full rounded-lg border border-border bg-white px-3 py-2 text-xs text-navy focus:border-brand focus:outline-none cursor-pointer"
                   >
                     <option value="">Uncategorized</option>

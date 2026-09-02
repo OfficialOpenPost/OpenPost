@@ -11,7 +11,8 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 # OpenPost — Agent Guide (AI Coding Agents)
 
 > **Product:** Multi-tenant headless CMS & Publishing Studio (Next.js 16 App Router + Supabase + Prisma + R2 + Tiptap).
-> **Package manager:** npm (no yarn/pnpm in repo). **CLI:** `openpost-cli` v0.1.2 only (bin `openpost-cli`, no `create-openpost` alias).
+> **Package manager:** npm (no yarn/pnpm in repo). **CLI:** `openpost-cli` v0.2.0 only (bin `openpost-cli`, no `create-openpost` alias).
+> **Database:** Supabase (managed PostgreSQL + Auth + RLS). Self-hosted PostgreSQL requires manual auth setup.
 > **Read this before touching code.**
 
 ## 1) Stack & Structure
@@ -25,8 +26,8 @@ D:/Openpost
 ├── src/lib/                 # rbac.ts (5-tier), auth.ts (getCurrentUser, require*), db.ts, supabase/, storage.ts (R2), webhooks.ts, apiToken.ts, rateLimit.ts
 ├── src/components/project/  # ProjectSwitcher (localStorage openpost_active_project_id + projectChanged event)
 ├── prisma/schema.prisma     # UserRole enum OWNER/ADMIN/EDITOR/AUTHOR/CONTRIBUTOR (+ WRITER alias), Profile, Project, ProjectMember, Author, Blog, Media...
-├── supabase/migrations/     # 001 → 019_canonical_five_roles.sql (run in order via SQL Editor)
-├── cli/                     # openpost-cli v0.1.2 → dist/index.js (single bin openpost-cli)
+├── supabase/migrations/     # 001 → 021_site_config_and_cleanup.sql (run in order via SQL Editor)
+├── cli/                     # openpost-cli v0.2.0 → dist/index.js (single bin openpost-cli)
 ├── templates/nextjs-blog/   # Next.js 15 blog starter copied by CLI
 ├── public/logo.svg          # Icon used in README & UI
 ├── scripts/cms.ts           # cms:doctor, cms:bootstrap (OWNER creation)
@@ -79,13 +80,13 @@ Rules:
 - `POST /api/cron/publish` requires `Authorization: Bearer CRON_SECRET` (fail-closed 500 if missing in prod), no `?secret=`, atomic `updateMany where status=scheduled`.
 - `audit_logs` via `createAuditLog()` on `post.*, user.status_*, project.member_*, author.*, bootstrap.owner_created` → `GET /api/audit` + UI `/dashboard/audit`.
 
-## 9) CLI (`openpost-cli` v0.1.2, single bin)
+## 9) CLI (`openpost-cli` v0.2.0, single bin)
 
 ```
 npx openpost-cli [init|doctor|login|help|version] [--cms-url URL] [--code OP-XXXX] [--project dir] [--skip-health] [--yes]
 ```
 
-- Init prompts `cmsUrl` → `healthCheck` `/api/health` (8s abort, fail fast) → open `${cmsUrl}/cli/connect` → paste `OP-XXXX` → `POST /api/cli/exchange` (3 retries, hashed `op_live_64hex` via `generateApiToken()`, 10-min single-use) → prompt `projectName` → `templates/nextjs-blog` → `.env.local` (`OPENPOST_URL/PROJECT_ID/TOKEN`) + `git init`.
+- Init prompts `cmsUrl` → `healthCheck` `/api/health` (8s abort, fail fast) → open `${cmsUrl}/cli/connect` → paste `OP-XXXX` → `POST /api/cli/exchange` (3 retries, hashed `op_live_64hex` via `generateApiToken()`, 10-min single-use) → receives `siteConfig` from CMS → prompt `projectName` → `templates/nextjs-blog` → `.env.local` (`OPENPOST_URL/PROJECT_ID/TOKEN` + site config env vars) → customizes `layout.tsx`, `Header.tsx`, `Footer.tsx`, `page.tsx` with project name/tagline → `git init`.
 - `doctor` checks `/api/health` + template.
 - Build: `cd cli && npm run build` → `dist/index.js` (shebang, `openpost-cli` bin only).
 
@@ -96,10 +97,10 @@ npm ci
 npx prisma generate
 npm run typecheck   # tsc --noEmit → 0 errors
 npm run test        # vitest 30/30 (rbac 8, api-token 3, storage 7, ssrf 6, slug 3, webhook-signing 3)
-npm run build       # next build (Turbopack) → 47 pages incl. /dashboard/team + /authors/[slug]
+npm run build       # next build (Turbopack) → 67 pages incl. /dashboard/team + /authors/[slug]
 npm run cms:doctor  # checks Node≥18, env, DB connection, tables, user_role enum 5 roles
 npm run cms:bootstrap -- --email admin@example.com --password StrongPass123  # creates OWNER
-cd cli && npm run build && node dist/index.js --help  # → openpost-cli v0.1.2
+cd cli && npm run build && node dist/index.js --help  # → openpost-cli v0.2.0
 node dist/index.js doctor --cms-url http://localhost:3000  # health
 ```
 
@@ -113,7 +114,7 @@ node dist/index.js doctor --cms-url http://localhost:3000  # health
 ## 12) Env & Deployment
 
 - `.env.example` lists `DATABASE_URL, NEXT_PUBLIC_SUPABASE_URL/ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, R2_* , NEXT_PUBLIC_APP_URL, CRON_SECRET, REQUIRE_EMAIL_VERIFICATION, BOOTSTRAP_ADMIN_*`. Never `NEXT_PUBLIC_` for secrets.
-- Migrations `supabase/migrations/README.md` 001→019. `018` backfills `projectId IS NULL` to default project.
+- Migrations `supabase/migrations/README.md` 001→021. `018` backfills `projectId IS NULL` to default project.
 - Vercel: `vercel --prod` + env + cron `POST /api/cron/publish` `Authorization: Bearer CRON_SECRET` every minute.
 - `public/logo.svg` is icon for README & UI.
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, withDbRetry } from "@/lib/db";
 import { requireApprovedUser, requireProjectMember, requirePermission, createAuditLog, AuthError } from "@/lib/auth";
+import { triggerWebhooks } from "@/lib/webhooks";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -86,6 +87,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       action: "post.untrashed",
       targetId: id,
     });
+
+    if (blog.projectId) {
+      triggerWebhooks({
+        projectId: blog.projectId,
+        event: "post.untrashed",
+        payload: { id: blog.id, title: blog.title, slug: blog.slug },
+      }).catch(() => {});
+    }
 
     return NextResponse.json({ data: updated });
   } catch (error: any) {

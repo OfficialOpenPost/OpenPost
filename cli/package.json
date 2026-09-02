@@ -1,10 +1,14 @@
 {
   "name": "openpost-cli",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Official CLI for OpenPost CMS — scaffold a headless Next.js blog in seconds — npx openpost-cli",
   "bin": {
     "openpost-cli": "dist/index.js"
   },
+  "files": [
+    "dist",
+    "templates"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch"

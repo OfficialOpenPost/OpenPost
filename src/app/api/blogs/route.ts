@@ -22,6 +22,9 @@ const createSchema = z.object({
   seo: z.any().optional(),
   id: z.string().uuid().nullable().optional(),
   revisionLabel: z.string().nullable().optional(),
+  editorDocument: z.any().optional(),
+  renderedHtml: z.string().optional(),
+  contentVersion: z.number().optional(),
 }).passthrough();
 
 function extractMediaUrls(content: any): string[] {
@@ -189,6 +192,9 @@ export async function POST(req: NextRequest) {
       seo,
       id,
       revisionLabel,
+      editorDocument,
+      renderedHtml,
+      contentVersion,
     } = parsed.data;
 
     // Resolve target project ID
@@ -357,6 +363,9 @@ export async function POST(req: NextRequest) {
             seo: seo ?? existing.seo,
             categoryId: resolvedCategoryId,
             featuredImageId: resolvedFeaturedImageId,
+            ...(editorDocument !== undefined ? { editorDocument } : {}),
+            ...(renderedHtml !== undefined ? { renderedHtml } : {}),
+            ...(contentVersion !== undefined ? { contentVersion } : {}),
           },
         })
       );
@@ -367,6 +376,9 @@ export async function POST(req: NextRequest) {
           data: {
             blogId: id!,
             content,
+            editorDocument: editorDocument || undefined,
+            renderedHtml: renderedHtml || undefined,
+            contentVersion: contentVersion || undefined,
             createdBy: user.id,
             label: revisionLabel || (status === "published" ? "Published update" : "Autosave"),
           },
@@ -475,6 +487,9 @@ export async function POST(req: NextRequest) {
             projectId: targetProjectId,
             categoryId: resolvedCategoryId,
             featuredImageId: resolvedFeaturedImageId,
+            ...(editorDocument !== undefined ? { editorDocument } : {}),
+            ...(renderedHtml !== undefined ? { renderedHtml } : {}),
+            ...(contentVersion !== undefined ? { contentVersion } : {}),
           },
         })
       );
@@ -499,6 +514,9 @@ export async function POST(req: NextRequest) {
                 projectId: targetProjectId,
                 categoryId: resolvedCategoryId,
                 featuredImageId: resolvedFeaturedImageId,
+                ...(editorDocument !== undefined ? { editorDocument } : {}),
+                ...(renderedHtml !== undefined ? { renderedHtml } : {}),
+                ...(contentVersion !== undefined ? { contentVersion } : {}),
               },
             })
           );
@@ -520,6 +538,9 @@ export async function POST(req: NextRequest) {
         data: {
           blogId: blog.id,
           content,
+          editorDocument: editorDocument || undefined,
+          renderedHtml: renderedHtml || undefined,
+          contentVersion: contentVersion || undefined,
           createdBy: user.id,
           label: revisionLabel || (status === "published" ? "Published initial" : "Created"),
         },
@@ -564,6 +585,15 @@ export async function POST(req: NextRequest) {
         projectId: blog.projectId,
         event: "post.published",
         payload: { id: blog.id, title: blog.title, slug: blog.slug, publishedAt: blog.publishedAt },
+      }).catch(() => {});
+    }
+
+    // Trigger Webhook on any new post
+    if (blog.projectId) {
+      triggerWebhooks({
+        projectId: blog.projectId,
+        event: "post.created",
+        payload: { id: blog.id, title: blog.title, slug: blog.slug, status: blog.status },
       }).catch(() => {});
     }
 

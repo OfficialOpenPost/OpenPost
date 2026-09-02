@@ -96,6 +96,25 @@ export async function POST(req: NextRequest) {
       projectSlug: conn.project.slug,
       projectName: conn.project.name,
       integrationId: integration.id,
+      // Site config for CLI template customization
+      siteConfig: {
+        name: conn.project.siteName || conn.project.name,
+        tagline: conn.project.siteTagline || "",
+        description: conn.project.siteDescription || "",
+        logoUrl: conn.project.siteLogoUrl || "",
+        faviconUrl: conn.project.siteFaviconUrl || "",
+        primaryColor: conn.project.sitePrimaryColor || "#FEA611",
+        url: conn.project.siteUrl || "",
+        language: conn.project.siteLanguage || "en",
+        timezone: conn.project.siteTimezone || "UTC",
+        social: {
+          twitter: conn.project.socialTwitter || "",
+          github: conn.project.socialGithub || "",
+          linkedin: conn.project.socialLinkedin || "",
+          youtube: conn.project.socialYoutube || "",
+          instagram: conn.project.socialInstagram || "",
+        },
+      },
     });
   } catch (error: any) {
     console.error("CLI code exchange error:", error);

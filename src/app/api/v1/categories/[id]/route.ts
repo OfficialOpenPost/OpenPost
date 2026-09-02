@@ -3,6 +3,7 @@ import { db, withDbRetry } from "@/lib/db";
 import { z } from "zod";
 import { slugify } from "@/lib/slug";
 import { requirePermission, AuthError } from "@/lib/auth";
+import { triggerWebhooks } from "@/lib/webhooks";
 
 const updateSchema = z.object({
   name: z.string().min(1).max(100).optional(),
@@ -79,6 +80,14 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       })
     );
 
+    if (existing.projectId) {
+      triggerWebhooks({
+        projectId: existing.projectId,
+        event: "category.updated",
+        payload: { id: updated.id, name: updated.name, slug: updated.slug },
+      }).catch(() => {});
+    }
+
     return NextResponse.json({ data: updated });
   } catch (error: any) {
     const status = error instanceof AuthError ? error.statusCode : 500;
@@ -109,6 +118,15 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     }
 
     await withDbRetry(() => db.category.delete({ where: { id } }));
+
+    if (existing.projectId) {
+      triggerWebhooks({
+        projectId: existing.projectId,
+        event: "category.deleted",
+        payload: { id: existing.id, name: existing.name, slug: existing.slug },
+      }).catch(() => {});
+    }
+
     return NextResponse.json({ data: { success: true } });
   } catch (error: any) {
     const status = error instanceof AuthError ? error.statusCode : 500;

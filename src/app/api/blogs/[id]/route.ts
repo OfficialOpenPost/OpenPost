@@ -105,6 +105,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       authorIds,
       tagIds,
       revisionLabel,
+      editorDocument,
+      renderedHtml,
+      contentVersion,
     } = body;
 
     // If changing to published or scheduled, require permission
@@ -121,20 +124,26 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     }
 
     if (typeof slug === "string" && slug.trim()) {
-      const cleanSlug = slug.trim();
+      let cleanSlug = slug.trim();
       if (cleanSlug !== existing.slug) {
-        // Check slug collision
-        if (existing.projectId) {
-          const dup = await withDbRetry(() =>
-            db.blog.findFirst({
-              where: { slug: cleanSlug, projectId: existing.projectId, id: { not: id } },
-            })
+        // Check slug collision globally — auto-resolve by appending suffix
+        let candidateSlug = cleanSlug;
+        let counter = 1;
+        let dup = await withDbRetry(() =>
+          db.blog.findFirst({ where: { slug: candidateSlug, id: { not: id } } })
+        );
+        while (dup) {
+          counter++;
+          candidateSlug = `${cleanSlug}-${counter}`;
+          dup = await withDbRetry(() =>
+            db.blog.findFirst({ where: { slug: candidateSlug, id: { not: id } } })
           );
-          if (dup) {
-            return NextResponse.json({ error: { code: "SLUG_EXISTS", message: "Slug already in use." } }, { status: 409 });
+          if (counter > 100) {
+            candidateSlug = `${cleanSlug}-${Date.now().toString(36)}`;
+            break;
           }
         }
-        dataToUpdate.slug = cleanSlug;
+        dataToUpdate.slug = candidateSlug;
 
         // Track 301 redirect if published
         if (existing.status === "published") {
@@ -143,7 +152,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
               data: {
                 blogId: id,
                 oldSlug: existing.slug,
-                newSlug: cleanSlug,
+                newSlug: candidateSlug,
               },
             })
           ).catch(() => {});
@@ -156,6 +165,16 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       const wc = countWords(typeof content === "string" ? content : JSON.stringify(content));
       dataToUpdate.wordCount = wc;
       dataToUpdate.readingTime = calcReadingTime(wc);
+    }
+
+    if (editorDocument !== undefined) {
+      dataToUpdate.editorDocument = editorDocument;
+    }
+    if (renderedHtml !== undefined) {
+      dataToUpdate.renderedHtml = renderedHtml;
+    }
+    if (contentVersion !== undefined) {
+      dataToUpdate.contentVersion = contentVersion;
     }
 
     if (status && ["draft", "published", "scheduled", "archived", "trash"].includes(status)) {
@@ -237,12 +256,23 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       dataToUpdate.featuredImageId = resolvedFeaturedImageId;
     }
 
-    const updated = await withDbRetry(() =>
-      db.blog.update({
-        where: { id },
-        data: dataToUpdate,
-      })
-    );
+    let updated: any;
+    try {
+      updated = await withDbRetry(() =>
+        db.blog.update({
+          where: { id },
+          data: dataToUpdate,
+        })
+      );
+    } catch (err: any) {
+      if (err?.code === "P2002" || String(err?.message || "").includes("Unique constraint failed")) {
+        return NextResponse.json(
+          { error: { code: "SLUG_EXISTS", message: "Slug already in use. Please change the title/slug." } },
+          { status: 409 }
+        );
+      }
+      throw err;
+    }
 
     // Save revision snapshot if content changed
     if (content !== undefined) {
@@ -251,6 +281,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
           data: {
             blogId: id,
             content,
+            editorDocument: editorDocument || undefined,
+            renderedHtml: renderedHtml || undefined,
+            contentVersion: contentVersion || undefined,
             createdBy: user.id,
             label: revisionLabel || (status === "published" ? "Published update" : "Autosave"),
           },
@@ -282,6 +315,24 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         projectId: updated.projectId,
         event: "post.published",
         payload: { id: updated.id, title: updated.title, slug: updated.slug, publishedAt: updated.publishedAt },
+      }).catch(() => {});
+    }
+
+    // Webhook on any update
+    if (updated.projectId) {
+      triggerWebhooks({
+        projectId: updated.projectId,
+        event: "post.updated",
+        payload: { id: updated.id, title: updated.title, slug: updated.slug, status: updated.status },
+      }).catch(() => {});
+    }
+
+    // Webhook on schedule
+    if (status === "scheduled" && updated.projectId) {
+      triggerWebhooks({
+        projectId: updated.projectId,
+        event: "post.scheduled",
+        payload: { id: updated.id, title: updated.title, slug: updated.slug, scheduledAt: updated.scheduledAt },
       }).catch(() => {});
     }
 
@@ -324,6 +375,14 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
           data: { status: "trash" },
         })
       );
+
+      if (existing.projectId) {
+        triggerWebhooks({
+          projectId: existing.projectId,
+          event: "post.deleted",
+          payload: { id: existing.id, title: existing.title, slug: existing.slug },
+        }).catch(() => {});
+      }
 
       await createAuditLog({
         actorId: user.id,

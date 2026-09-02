@@ -94,6 +94,7 @@ export function FloatingImageView({
   const imgRef = useRef<HTMLImageElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const currentDragWidthRef = useRef<number>(340);
+  const cachedWidthRef = useRef<number | null>(null);
 
   // Layout states
   const isLeft = float === "left" || layout === "left";
@@ -102,33 +103,45 @@ export function FloatingImageView({
   const isCenter = !isLeft && !isRight && !isWide;
 
   // ── Parse stored width (supports number or string like "45%" or "340px") ──
+  // Cache result so image doesn't shift when containerRef mounts or re-renders
 
   const parseWidthPx = useCallback((): number => {
+    // Return cached width if available (prevents shift on re-render)
+    if (cachedWidthRef.current !== null && liveWidth === null) {
+      return cachedWidthRef.current;
+    }
+
     const editorEl = containerRef.current?.closest(".tiptap") as HTMLElement | null;
     const editorW = editorEl ? editorEl.clientWidth : 760;
 
+    let result: number;
     if (typeof width === "number") {
       if (isLeft || isRight) {
-        return Math.min(Math.round(editorW * 0.8), Math.max(120, width));
+        result = Math.min(Math.round(editorW * 0.8), Math.max(120, width));
+      } else {
+        result = Math.min(editorW, Math.max(120, width));
       }
-      return Math.min(editorW, Math.max(120, width));
-    }
-
-    if (typeof width === "string") {
+    } else if (typeof width === "string") {
       if (width.endsWith("%")) {
         const pct = parseFloat(width) || 42;
         const clampedPct = (isLeft || isRight) ? Math.min(80, Math.max(15, pct)) : Math.min(100, Math.max(15, pct));
-        return Math.round((clampedPct / 100) * editorW);
+        result = Math.round((clampedPct / 100) * editorW);
+      } else {
+        const num = parseFloat(width) || 340;
+        if (isLeft || isRight) {
+          result = Math.min(Math.round(editorW * 0.8), Math.max(120, num));
+        } else {
+          result = Math.min(editorW, Math.max(120, num));
+        }
       }
-      const num = parseFloat(width) || 340;
-      if (isLeft || isRight) {
-        return Math.min(Math.round(editorW * 0.8), Math.max(120, num));
-      }
-      return Math.min(editorW, Math.max(120, num));
+    } else {
+      result = 340;
     }
 
-    return 340;
-  }, [width, isLeft, isRight]);
+    // Cache the result so it stays stable across re-renders
+    cachedWidthRef.current = result;
+    return result;
+  }, [width, isLeft, isRight, liveWidth]);
 
   // ── Image loaded: store natural dimensions ────────────────────────────────
 
@@ -163,6 +176,7 @@ export function FloatingImageView({
       const editorW = editorEl ? editorEl.clientWidth : 760;
       const targetPct = (isLeft || isRight) ? Math.min(80, pct) : Math.min(100, pct);
       const targetPx = Math.round((targetPct / 100) * editorW);
+      cachedWidthRef.current = null;
       updateAttributes({ width: targetPx });
       setLiveWidth(null);
     },
@@ -177,6 +191,7 @@ export function FloatingImageView({
 
       const current = parseWidthPx();
       const next = Math.max(120, Math.min(maxW, current + deltaPx));
+      cachedWidthRef.current = null;
       updateAttributes({ width: next });
       setLiveWidth(null);
     },
@@ -204,6 +219,7 @@ export function FloatingImageView({
         nextFloat = "none";
       }
 
+      cachedWidthRef.current = null;
       updateAttributes({
         layout: nextLayout,
         float: nextFloat,
@@ -913,9 +929,9 @@ export function FloatingImageView({
         </div>
 
         {/* ── TIGHT CARD BOX (Zero extra padding, tight to image boundary) ─── */}
-        <div
-          className={`relative bg-white transition-[box-shadow,border-color] duration-150 ${
-            selected ? "z-10 ring-2 ring-brand/40 shadow-md" : "group-hover/img-wrapper:shadow-sm"
+          <div
+          className={`relative bg-white transition-[border-color] duration-150 ${
+            selected ? "z-10" : "group-hover/img-wrapper:shadow-sm"
           }`}
           style={{
             borderRadius: `${borderRadius}px`,
@@ -949,6 +965,7 @@ export function FloatingImageView({
               padding: 0,
               borderRadius: "inherit",
               objectFit: "contain",
+              transition: "none",
             }}
             className="block max-w-full select-none"
             loading="lazy"

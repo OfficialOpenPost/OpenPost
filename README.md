@@ -13,7 +13,7 @@
 <p align="center">
   <a href="https://github.com/OfficialOpenPost/OpenPost/actions"><img src="https://img.shields.io/badge/build-passing-2ea44f.svg?style=for-the-badge&logo=github-actions&logoColor=white" alt="Build Status" /></a>
   <a href="https://github.com/OfficialOpenPost/OpenPost"><img src="https://img.shields.io/badge/tests-30%2F30%20passed-brightgreen.svg?style=for-the-badge&logo=vitest&logoColor=white" alt="Vitest Tests" /></a>
-  <a href="https://github.com/OfficialOpenPost/OpenPost/releases"><img src="https://img.shields.io/badge/cli-openpost--cli%20v0.1.2-000000.svg?style=for-the-badge&logo=npm&logoColor=white" alt="openpost-cli v0.1.2" /></a>
+  <a href="https://github.com/OfficialOpenPost/OpenPost/releases"><img src="https://img.shields.io/badge/cli-openpost--cli%20v0.2.0-000000.svg?style=for-the-badge&logo=npm&logoColor=white" alt="openpost-cli v0.2.0" /></a>
   <a href="https://nextjs.org"><img src="https://img.shields.io/badge/Next.js-16.3%20(App%20Router)-000000.svg?style=for-the-badge&logo=next.js&logoColor=white" alt="Next.js" /></a>
   <a href="https://www.typescriptlang.org"><img src="https://img.shields.io/badge/TypeScript-5.0-3178C6.svg?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript" /></a>
   <a href="https://supabase.com"><img src="https://img.shields.io/badge/PostgreSQL-Supabase-3ECF8E.svg?style=for-the-badge&logo=supabase&logoColor=white" alt="Supabase" /></a>
@@ -79,7 +79,7 @@ Flow: Supabase Auth → Profile (pending/approved) → ProjectMember (OWNER>ADMI
 | 📊 **Polls** | `single/multiple` + `SHA256 voter fingerprint` dedup `unique[pollId,fingerprint]` `409 ALREADY_VOTED` | `prisma/schema.prisma:258`, `src/app/api/v1/polls/[id]/vote/route.ts` |
 | 📡 **Headless API v1** | `GET /api/v1/posts?limit&category&cursor` caches `s-maxage=60`, `project` via `Bearer op_live_64hex` / `?project` / `X-OpenPost-Project` | `src/app/api/v1/posts/route.ts:6`, `src/lib/apiToken.ts:17` |
 | 🧾 **Audit Logs** | `audit_logs` on `post.*, user.status_*, project.member_*, author.*, bootstrap.owner_created` | `GET /api/audit`, `/dashboard/audit` |
-| 💻 **CLI `openpost-cli` v0.1.2** | **Single bin** `openpost-cli` (no `create-openpost` alias). Health check 8s abort, 3-retries exchange, template copy, `.env.local` + `git init` | `cli/src/index.ts:57`, `cli/package.json:5` |
+| 💻 **CLI `openpost-cli` v0.2.0** | **Single bin** `openpost-cli` (no `create-openpost` alias). Health check 8s abort, 3-retries exchange, template copy, `.env.local` + `git init` | `cli/src/index.ts:57`, `cli/package.json:5` |
 | 🩺 **Doctor & Bootstrap** | `npm run cms:doctor` checks Node, env, DB, tables, `user_role` 5 roles; `npm run cms:bootstrap -- --email admin@example.com` creates `OWNER` | `scripts/cms.ts` |
 
 > **All features have a `UI → API → authz → DB → validation → audit → UI` path — no mock buttons.**
@@ -97,8 +97,20 @@ Flow: Supabase Auth → Profile (pending/approved) → ProjectMember (OWNER>ADMI
 | **Storage** | Cloudflare R2 (S3 compat) | zero egress, presigned `PUT`, `validateMagicBytes` |
 | **Editor** | Tiptap (ProseMirror) | block JSON, `countWords`/`readingTime` |
 | **UI** | Tailwind 4, lucide-react, framer-motion | dashboard, editor, authors, team |
-| **CLI** | `openpost-cli` v0.1.2 | `prompts` + `open` + `chalk` |
+| **CLI** | `openpost-cli` v0.2.0 | `prompts` + `open` + `chalk` |
 | **Test** | Vitest 30/30 | rbac 8, api-token 3, storage 7, ssrf 6, slug 3, webhook 3 |
+
+### Architecture: Supabase vs Self-Hosted
+
+OpenPost uses **Supabase** as its recommended backend platform, which provides managed PostgreSQL, Auth, and Row Level Security out of the box. The codebase is designed around Supabase's `auth.uid()` function and RLS policies.
+
+**Self-hosted PostgreSQL:** You can run OpenPost with plain PostgreSQL, but you must:
+1. Implement `auth.uid()` as a PostgreSQL function (returns the current user ID)
+2. Set up an authentication provider that issues JWTs compatible with Supabase's format
+3. Manually apply all 21 migrations — they assume `auth.uid()` exists for RLS policies
+4. Disable RLS or replicate the policies if your auth differs
+
+**Recommended path:** Use Supabase (free tier works) for auth + RLS. The Docker/self-hosted PostgreSQL path works for the database but requires supplementary auth infrastructure.
 
 ---
 
@@ -148,10 +160,10 @@ D:/Openpost
 │   ├── rateLimit.ts          # 10/min invite
 │   └── slug.ts / publish.ts
 ├── prisma/schema.prisma      # UserRole OWNER/ADMIN/EDITOR/AUTHOR/CONTRIBUTOR (+WRITER alias), Profile, Project, ProjectMember, Author, Blog, Media, Poll, Webhook, Invite, Integration, AuditLog
-├── supabase/migrations/      # 001 → 019_canonical_five_roles.sql (run in order)
-├── cli/                      # openpost-cli v0.1.2 → dist/index.js (single bin)
+├── supabase/migrations/      # 001 → 021_site_config_and_cleanup.sql (run in order)
+├── cli/                      # openpost-cli v0.2.0 → dist/index.js (single bin)
 │   ├── src/index.ts          # init/doctor/login/logout/help/version, healthCheck 8s, 3-retries exchange, copy template, .env.local
-│   └── package.json          # bin: openpost-cli only, v0.1.2
+│   └── package.json          # bin: openpost-cli only, v0.2.0
 ├── templates/nextjs-blog/    # starter copied by CLI (Next 15, /api/revalidate)
 ├── public/logo.svg           # icon (see top) — single brand source
 ├── scripts/cms.ts            # cms:doctor, cms:bootstrap (OWNER)
@@ -173,7 +185,7 @@ cp .env.example .env
 
 ### Step 2: Configure Supabase Database
 1. Create project at [Supabase](https://supabase.com) → **SQL Editor**
-2. Run `supabase/migrations/` **001 → 019** sequentially (paste → Run → Success)
+2. Run `supabase/migrations/` **001 → 021** sequentially (paste → Run → Success)
 3. Fill `.env`:
 
 ```env
@@ -204,13 +216,13 @@ Signup → `pending` → Admin `/dashboard/team` **Approve** → access granted.
 
 ---
 
-## 💻 CLI — `openpost-cli` v0.1.2 (single bin)
+## 💻 CLI — `openpost-cli` v0.2.0 (single bin)
 
-> **Always use `openpost-cli`**. The legacy alias `create-openpost` is **removed** (v0.1.2). Use `npx openpost-cli` everywhere.
+> **Always use `openpost-cli`**. The legacy alias `create-openpost` is **removed** (v0.2.0). Use `npx openpost-cli` everywhere.
 
 ```bash
 npx openpost-cli --help
-npx openpost-cli --version   # → openpost-cli v0.1.2
+npx openpost-cli --version   # → openpost-cli v0.2.0
 npx openpost-cli doctor --cms-url http://localhost:3000
 npx openpost-cli init my-blog
 npx openpost-cli init my-blog --cms-url https://cms.example.com --yes
@@ -219,9 +231,11 @@ npx openpost-cli init my-blog --cms-url https://cms.example.com --yes
 **Workflow (Sanity-like):**
 ```
 ? CMS URL: http://localhost:3000  → healthCheck /api/health (8s, fail-fast)
-✓ Connected → open /cli/connect → paste OP-XXXX-YYYY-ZZZZ (10-min single-use)
-→ POST /api/cli/exchange (3 retries, op_live_64hex)
-? Project dir: my-blog → copy templates/nextjs-blog → .env.local + git init
+✓ Connected → open /cli/connect → paste OP-XXXX (10-min single-use)
+→ POST /api/cli/exchange (3 retries, op_live_64hex, returns siteConfig)
+? Project dir: my-blog → copy templates/nextjs-blog → .env.local (with site config env vars)
+→ customizes layout.tsx, Header.tsx, Footer.tsx, page.tsx with project name/tagline
+→ git init
 
 → cd my-blog && npm install && npm run dev -p 3001
 ```
@@ -261,9 +275,39 @@ SITE_URL=http://localhost:3001
 
 **Enforcement:** `src/lib/rbac.ts:83` `ROLE_HIERARCHY` + `ROLE_PERMISSIONS` (40+ perms). Every API uses `requireProjectMember(projectId, minRole)` or `requirePermission(projectId, perm)` — never trust client `role`.
 
+### Roles & Legacy Compatibility
+
+OpenPost uses a **canonical 5-role model** in the `user_role` PostgreSQL enum: `OWNER`, `ADMIN`, `EDITOR`, `AUTHOR`, `CONTRIBUTOR`. The legacy alias `WRITER` is preserved in the enum for backward compatibility but is automatically normalized to `AUTHOR` via `normalizeRoleStrict()` in `src/lib/rbac.ts:96`. All API endpoints and RLS policies operate on the canonical 5-role set. The `profiles.role` column (Supabase-level) is separate from `project_members.role` (project-scoped RBAC) — the project role is authoritative for permission checks.
+
 ---
 
 ## 📡 Public API Reference (`/api/v1/*`, cached)
+
+### Authentication Contract
+
+All `/api/v1/*` endpoints use a single canonical auth method: **`Authorization: Bearer op_live_<64hex>`**. The project is resolved in this priority order (`resolveProjectContext` in `src/lib/apiToken.ts:103`):
+
+1. `Authorization: Bearer op_live_...` header (project derived from token)
+2. `?project=<slug|id>` query parameter
+3. `X-OpenPost-Project: <id>` header
+4. First project in database (fallback)
+
+**Which endpoints need a token?**
+
+| Endpoint | Auth Required | Notes |
+|---|---|---|
+| `GET /api/v1/posts` | ✅ Bearer token | Published posts, project-scoped |
+| `GET /api/v1/posts/[slug]` | ✅ Bearer token | Single published post |
+| `GET /api/v1/authors` | ✅ Bearer token | Authors, project-scoped |
+| `GET /api/v1/tags` | ✅ Bearer token | Tags, project-scoped |
+| `GET /api/v1/categories` | ✅ Bearer token | Categories, project-scoped |
+| `GET /api/v1/polls` | ✅ Bearer token | Polls, project-scoped |
+| `POST /api/v1/polls/[id]/vote` | ✅ Bearer token | Vote, fingerprint dedup |
+| `POST /api/v1/authors` | ✅ Bearer token | Create author |
+| `GET /api/health` | ❌ None | Public health check |
+| `GET /blog/[slug]` | ❌ None | Public blog render |
+| `GET /authors/[slug]` | ❌ None | Public author archive |
+| Dashboard `/api/blogs`, `/api/media`, etc. | 🔒 Supabase session | Admin API, requires login + project membership |
 
 Project scoping: `Authorization: Bearer op_live_...` (hashed SHA256 `integrations.tokenHash`) → `?project=<slug|id>` → `X-OpenPost-Project: <id>` → first project. `resolveProjectContext` in `src/lib/apiToken.ts:103`.
 
@@ -327,6 +371,8 @@ vercel --prod   # set env from .env.example in Vercel dashboard
 ```
 Cron: Vercel Cron or EventBridge every 60s → `POST https://yourdomain.com/api/cron/publish` `Authorization: Bearer $CRON_SECRET`
 
+> **Note:** Publishing precision depends on your cron frequency. Posts scheduled for a specific time will be published on the next cron run after their `scheduledAt` time. With a 60s cron interval, posts may publish up to 60 seconds late.
+
 ### Docker
 ```bash
 docker build -t openpost:latest .
@@ -364,6 +410,8 @@ npm run cms:bootstrap -- --email admin@example.com --password StrongPass123 --na
 # → approved profile + OWNER membership + project; audit bootstrap.owner_created; --force to re-bootstrap
 ```
 
+**Bootstrap creates:** A user profile with `approved` status, a default project, and `OWNER` membership. The first admin is immediately able to access the dashboard and invite team members.
+
 ---
 
 ## 🛡️ Security & Responsible Disclosure
@@ -376,7 +424,15 @@ npm run cms:bootstrap -- --email admin@example.com --password StrongPass123 --na
 - **Cron** `Bearer` only, atomic `updateMany`.
 - **Audit** `createAuditLog` on all sensitive actions.
 
-Report: `officialopenpost@outlook.com`. See `supabase/migrations/README.md` `001→019` RLS docs + `DEPLOYMENT.md`.
+### Webhook Delivery Behavior
+
+Webhooks are delivered with a **5-second timeout** per attempt. Each webhook event is delivered **once** — there is no automatic retry on failure. The delivery is logged to `webhook_deliveries` with status (`success`/`failed`), response code, and error message. For critical workflows, implement retry logic in your webhook receiver or poll the CMS API as a fallback.
+
+**Supported events:** `post.created`, `post.updated`, `post.published`, `post.scheduled`, `post.deleted`, `post.untrashed`, `category.created`, `category.updated`, `category.deleted`, `tag.created`, `media.uploaded`.
+
+**Security:** All payloads are signed with HMAC-SHA256 (`X-Webhook-Signature` header). Verify using your webhook secret. SSRF protection blocks `localhost`, `10.x`, `192.168.x`, `172.16.x`, `169.254.x`.
+
+Report: `officialopenpost@outlook.com`. See `supabase/migrations/README.md` `001→021` RLS docs + `DEPLOYMENT.md`.
 
 ---
 
@@ -385,5 +441,5 @@ Report: `officialopenpost@outlook.com`. See `supabase/migrations/README.md` `001
 MIT — `LICENSE`. Keep `public/logo.svg` as brand icon.
 
 <div align="center">
-  <sub>Built with ❤️ by the OpenPost Community. <code>openpost-cli v0.1.2</code> — single bin <code>openpost-cli</code> only. Empowering independent writing worldwide.</sub>
+  <sub>Built with ❤️ by the OpenPost Community. <code>openpost-cli v0.2.0</code> — single bin <code>openpost-cli</code> only. Empowering independent writing worldwide.</sub>
 </div>

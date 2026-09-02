@@ -4,6 +4,7 @@ import { z } from "zod";
 import { slugify } from "@/lib/slug";
 import { requirePermission, AuthError } from "@/lib/auth";
 import { resolveProjectContext } from "@/lib/apiToken";
+import { triggerWebhooks } from "@/lib/webhooks";
 
 const createTagSchema = z.object({
   name: z.string().min(1, "Name is required").max(100),
@@ -105,6 +106,12 @@ export async function POST(req: NextRequest) {
         },
       })
     );
+
+    triggerWebhooks({
+      projectId: targetProjectId,
+      event: "tag.created",
+      payload: { id: created.id, name: created.name, slug: created.slug },
+    }).catch(() => {});
 
     return NextResponse.json({ data: created }, { status: 201 });
   } catch (error: any) {

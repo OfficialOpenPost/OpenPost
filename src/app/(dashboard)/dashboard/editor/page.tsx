@@ -10,6 +10,7 @@ import { EditorSidePanel } from "@/components/editor/panels/EditorSidePanel";
 import { SelectionBubbleMenu } from "@/components/editor/BubbleMenus";
 import { FindReplaceBar } from "@/components/editor/toolbar/FindReplaceBar";
 import { EDITOR_STYLES } from "@/components/editor/extensions";
+import { tiptapToEditorDocument, editorDocumentToHtml } from "@/lib/editorDocument";
 import {
   ArrowLeft,
   Sparkles,
@@ -87,6 +88,7 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
   const [isResizing, setIsResizing] = useState(false);
   const [featuredImage, setFeaturedImage] = useState<string | null>(null);
   const [category, setCategory] = useState("");
+  const [categoryId, setCategoryId] = useState<string | null>(null);
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
   const [slugEdited, setSlugEdited] = useState(false);
@@ -100,58 +102,6 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
   const [revisions, setRevisions] = useState<Array<{ id: string; label: string | null; createdAt: string; createdBy: string; content?: any }>>([]);
   const [catOptions, setCatOptions] = useState<Array<{ id: string; name: string; slug: string }>>([]);
   const [loadingInitial, setLoadingInitial] = useState(Boolean(effectiveId));
-  const [userRole, setUserRole] = useState<string | null>(null);
-  const canPublish = useMemo(() => {
-    if (!userRole) return true; // optimistic until loaded — will be checked server-side anyway
-    const r = userRole.toUpperCase();
-    return ["OWNER", "ADMIN", "EDITOR"].includes(r);
-  }, [userRole]);
-
-  // Fetch current user's project role for Sanity-like publish gating
-  useEffect(() => {
-    const activeProjId = typeof window !== "undefined" ? localStorage.getItem("openpost_active_project_id") : null;
-    if (!activeProjId) return;
-    fetch(`/api/projects`, { cache: "no-store" })
-      .then((r) => r.json())
-      .then((j) => {
-        const proj = Array.isArray(j.data) ? j.data.find((p: any) => p.id === activeProjId) : null;
-        // Try to get role from project members via /api/settings/users
-        return fetch(`/api/settings/users?projectId=${activeProjId}`, { cache: "no-store" } as any)
-          .then((r2) => r2.json())
-          .then((j2) => {
-            const me = j2.data?.users?.find((u: any) => u.id === proj?.ownerId || u.memberships?.some((m: any) => m.projectId === activeProjId));
-            // Fallback: try to infer from local membership via /api/projects/[id] members
-            if (me?.role) setUserRole(me.role);
-            else if (proj) {
-              // If owner, treat as OWNER
-              fetch(`/api/projects/${activeProjId}`, { cache: "no-store" } as any)
-                .then((r3) => r3.json())
-                .then((j3) => {
-                  if (j3.data) {
-                    // Use requireProjectMember logic client-side: check if current user is owner
-                    // Simplify: assume EDITOR if fetch succeeds and no role found, will be validated server-side
-                    setUserRole("EDITOR");
-                  }
-                })
-                .catch(() => setUserRole("EDITOR"));
-            }
-          });
-      })
-      .catch(() => setUserRole("EDITOR"));
-    const handler = () => {
-      const pid = localStorage.getItem("openpost_active_project_id");
-      if (!pid) return;
-      fetch(`/api/settings/users?projectId=${pid}`, { cache: "no-store" } as any)
-        .then((r) => r.json())
-        .then((j) => {
-          const me = j.data?.users?.find((u: any) => u.memberships?.some((m: any) => m.projectId === pid));
-          if (me?.role) setUserRole(me.role);
-        })
-        .catch(() => {});
-    };
-    window.addEventListener("projectChanged", handler);
-    return () => window.removeEventListener("projectChanged", handler);
-  }, []);
 
   const [isDirty, setIsDirty] = useState<boolean>(false);
   const [activeSaveAction, setActiveSaveAction] = useState<"draft" | "publish" | "update" | null>(null);
@@ -192,6 +142,7 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
           setSlugEdited(true);
           setStatus(post.status || "draft");
           if (post.category?.name) setCategory(post.category.name);
+          if (post.category?.id) setCategoryId(post.category.id);
           if (post.scheduledAt) setScheduledAt(new Date(post.scheduledAt).toISOString().slice(0, 16));
           if (post.seo) {
             setSeoTitle(post.seo.title || "");
@@ -320,30 +271,17 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
     };
   }, [isResizing]);
 
-  // Load categories — project-scoped like Sanity (per active project)
+  // Load categories
   useEffect(() => {
     const activeProjId = typeof window !== "undefined" ? localStorage.getItem("openpost_active_project_id") : null;
-    const url = activeProjId ? `/api/v1/categories?project=${activeProjId}` : "/api/v1/categories";
-    const headers: Record<string, string> = activeProjId ? { "X-OpenPost-Project": activeProjId } : {};
-    fetch(url, { headers, cache: "no-store" as any })
+    const headers: Record<string, string> = {};
+    if (activeProjId) headers["X-OpenPost-Project"] = activeProjId;
+    fetch("/api/v1/categories", { headers })
       .then((r) => r.json())
       .then((j) => {
         if (Array.isArray(j.data)) setCatOptions(j.data);
       })
       .catch(() => {});
-    const handler = () => {
-      const pid = localStorage.getItem("openpost_active_project_id");
-      const u = pid ? `/api/v1/categories?project=${pid}` : "/api/v1/categories";
-      const h: Record<string, string> = pid ? { "X-OpenPost-Project": pid } : {};
-      fetch(u, { headers: h, cache: "no-store" as any })
-        .then((r) => r.json())
-        .then((j) => {
-          if (Array.isArray(j.data)) setCatOptions(j.data);
-        })
-        .catch(() => {});
-    };
-    window.addEventListener("projectChanged", handler);
-    return () => window.removeEventListener("projectChanged", handler);
   }, []);
 
   // Load revisions
@@ -396,12 +334,22 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
     actionType?: "draft" | "publish" | "update"
   ) => {
     if (loadingInitial || isInitialLoadRef.current) {
-      console.warn("Cannot save while initial content is loading");
       return;
     }
 
     if (isSavingRef.current) {
       pendingSaveRef.current = true;
+      return;
+    }
+
+    // Skip save if nothing actually changed (except for explicit publish/update actions)
+    if (!manualLabel && !isDirty) {
+      return;
+    }
+
+    // For new posts, require at least a title or some content
+    const hasContent = Boolean(title.trim().length > 0 || (editor && !editor.isEmpty));
+    if (!hasContent && !blogIdRef.current) {
       return;
     }
 
@@ -423,16 +371,21 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
     setSaveStatus("saving");
 
     try {
-      const activeProjId = typeof window !== "undefined" ? localStorage.getItem("openpost_active_project_id") : null;
+      const tiptapJson = editor?.getJSON() || {};
+      const editorDoc = tiptapToEditorDocument(tiptapJson);
+      const renderedHtml = `<article class="openpost-article">${editor?.getHTML() || ""}</article>`;
 
       const payload: any = {
         title: title || "Untitled Article",
         slug: slug || "untitled",
-        content: editor?.getJSON() || {},
+        content: tiptapJson,
+        editorDocument: editorDoc,
+        renderedHtml,
+        contentVersion: 1,
         status: targetStatus,
-        ...(activeProjId ? { projectId: activeProjId } : {}),
         featuredImage: featuredImage ? { url: featuredImage } : null,
         category: category ? { name: category } : null,
+        categoryId: categoryId || undefined,
         tags: tags.map((t) => ({ name: t })),
         scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : null,
         seo: {
@@ -453,19 +406,13 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
       if (currentBlogId) {
         res = await fetch(`/api/blogs/${currentBlogId}`, {
           method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            ...(activeProjId ? { "X-OpenPost-Project": activeProjId } : {}),
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
       } else {
         res = await fetch("/api/blogs", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...(activeProjId ? { "X-OpenPost-Project": activeProjId } : {}),
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
       }
@@ -505,19 +452,9 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
           })
           .catch(() => {});
       }
-    } catch (err: any) {
-      const msg = String(err?.message || "");
-      if (msg.includes("permission to publish") || msg.includes("FORBIDDEN")) {
-        // Sanity-like: draft was saved, just not published — show as saved + toast
-        console.warn("Publish blocked (role):", msg);
-        setSaveStatus("saved");
-        // Optionally show a subtle error that will be visible as "Saved" with note
-        // The draft itself is already saved if it was a new post; if it was publish attempt, it remains draft
-        alert("Draft saved — you don't have permission to publish. An Editor will review it.");
-      } else {
-        console.error("Save error:", err);
-        setSaveStatus("error");
-      }
+    } catch (err) {
+      console.error("Save error:", err);
+      setSaveStatus("error");
     } finally {
       isSavingRef.current = false;
       setActiveSaveAction(null);
@@ -536,14 +473,15 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
     }
   };
 
-  // Debounced auto-save (every 4 seconds of inactivity)
+  // Auto-save: 30 seconds after last edit, only if dirty
   useEffect(() => {
+    if (isInitialLoadRef.current || !isDirty) return;
     if (!title && !editor?.getText()?.trim()) return;
     const timer = setTimeout(() => {
-      save();
-    }, 4000);
+      if (isDirty) save();
+    }, 30000);
     return () => clearTimeout(timer);
-  }, [title, html, category, tags, seoTitle, seoDesc, featuredImage, status, scheduledAt]);
+  }, [title, html, category, tags, seoTitle, seoDesc, featuredImage, status, scheduledAt, isDirty]);
 
   if (loadingInitial) {
     return (
@@ -677,8 +615,9 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
             {activeSaveAction === "draft" ? "Saving Draft..." : "Save Draft"}
           </button>
 
-          {/* Publish / Update — Sanity-like: EDITOR+ can publish, AUTHOR/CONTRIBUTOR submit for review */}
+          {/* Publish / Update Button */}
           {status === "published" ? (
+            /* Update Post Button (Visibly Gray & Disabled until user makes changes) */
             <button
               disabled={(isSavingRef.current || saveStatus === "saving") || !isDirty}
               onClick={() => save("Updated post", "published", "update")}
@@ -689,30 +628,41 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
               }`}
               title={isDirty ? "Save changes to live post" : "No unsaved edits to update"}
             >
-              {activeSaveAction === "update" ? <Loader2 className="h-3.5 w-3.5 animate-spin text-navy" /> : <Sparkles className="h-3.5 w-3.5" />}
+              {activeSaveAction === "update" ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-navy" />
+              ) : (
+                <Sparkles className="h-3.5 w-3.5" />
+              )}
               {activeSaveAction === "update" ? "Updating..." : "Update Post"}
             </button>
-          ) : !canPublish ? (
-            <button
-              disabled={(isSavingRef.current || saveStatus === "saving") || !Boolean(title.trim().length > 0 || (editor && !editor.isEmpty))}
-              onClick={() => save("Submitted for review", "draft", "draft")}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-navy px-4 py-1.5 text-xs font-bold text-white hover:bg-black disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
-              title="You don't have publish permission — draft will be saved for Editor review"
-            >
-              {activeSaveAction === "draft" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Clock className="h-3.5 w-3.5" />}
-              {activeSaveAction === "draft" ? "Submitting..." : "Submit for Review"}
-            </button>
           ) : (
+            /* Publish / Schedule Button (Active for drafts and new articles) */
             <button
-              disabled={(isSavingRef.current || saveStatus === "saving") || !Boolean(title.trim().length > 0 || (editor && !editor.isEmpty))}
+              disabled={
+                (isSavingRef.current || saveStatus === "saving") ||
+                !Boolean(title.trim().length > 0 || (editor && !editor.isEmpty))
+              }
               onClick={() => {
-                const target = scheduledAt && new Date(scheduledAt) > new Date() ? "scheduled" : "published";
+                const target =
+                  scheduledAt && new Date(scheduledAt) > new Date()
+                    ? "scheduled"
+                    : "published";
                 save("Published post", target, "publish");
               }}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-brand px-4 py-1.5 text-xs font-bold text-navy shadow-xs hover:bg-brand-hover hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-brand px-4 py-1.5 text-xs font-bold text-navy shadow-xs hover:bg-brand-hover hover:text-white disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-brand disabled:hover:text-navy transition cursor-pointer"
             >
-              {activeSaveAction === "publish" ? <Loader2 className="h-3.5 w-3.5 animate-spin text-navy" /> : <Sparkles className="h-3.5 w-3.5" />}
-              {activeSaveAction === "publish" ? (status === "scheduled" ? "Scheduling..." : "Publishing...") : status === "scheduled" ? "Schedule Post" : "Publish Post"}
+              {activeSaveAction === "publish" ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-navy" />
+              ) : (
+                <Sparkles className="h-3.5 w-3.5" />
+              )}
+              {activeSaveAction === "publish"
+                ? status === "scheduled"
+                  ? "Scheduling..."
+                  : "Publishing..."
+                : status === "scheduled"
+                ? "Schedule Post"
+                : "Publish Post"}
             </button>
           )}
 
@@ -864,11 +814,13 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
           >
             <EditorSidePanel
               editor={editor}
+              title={title}
               slug={slug}
               setSlug={(val: string) => { setSlug(val); setSaveStatus("unsaved"); }}
               setSlugEdited={setSlugEdited}
               category={category}
-              setCategory={(val: string) => { setCategory(val); setSaveStatus("unsaved"); }}
+              setCategory={(val: string) => { setCategory(val); setCategoryId(null); setSaveStatus("unsaved"); }}
+              setCategoryId={setCategoryId}
               catOptions={catOptions}
               tags={tags}
               setTags={(val: any) => { setTags(val); setSaveStatus("unsaved"); }}

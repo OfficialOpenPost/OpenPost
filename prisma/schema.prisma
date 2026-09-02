@@ -112,6 +112,9 @@ model Blog {
   slug            String
   content         Json       @default("{}")
   schemaVersion   Int        @default(1) @map("schema_version")
+  editorDocument  Json?      @map("editor_document") @db.JsonB
+  renderedHtml    String?    @map("rendered_html") @db.Text
+  contentVersion  Int        @default(1) @map("content_version")
   status          PostStatus @default(draft)
   featuredImageId String?    @map("featured_image_id")
   categoryId      String?    @map("category_id")
@@ -145,12 +148,17 @@ model Blog {
 }
 
 model BlogRevision {
-  id        String   @id @default(uuid()) @db.Uuid
-  blogId    String   @map("blog_id")
-  content   Json
-  createdAt DateTime @default(now()) @map("created_at")
-  createdBy String   @map("created_by")
-  label     String?
+  id             String   @id @default(uuid()) @db.Uuid
+  blogId         String   @map("blog_id")
+  content        Json
+  editorDocument Json?    @map("editor_document") @db.JsonB
+  renderedHtml   String?  @map("rendered_html") @db.Text
+  contentVersion Int?     @map("content_version")
+  wordCount      Int?     @map("word_count")
+  readingTime    Int?     @map("reading_time")
+  createdAt      DateTime @default(now()) @map("created_at")
+  createdBy      String   @map("created_by")
+  label          String?
 
   blog Blog @relation(fields: [blogId], references: [id], onDelete: Cascade)
   user User @relation(fields: [createdBy], references: [id], onDelete: Restrict)
@@ -378,6 +386,23 @@ model Project {
   description String?
   ownerId     String   @map("owner_id") @db.Uuid
   settings    Json     @default("{}")
+
+  // Site config — used by CLI to customize template
+  siteName            String?  @map("site_name")
+  siteTagline         String?  @map("site_tagline")
+  siteDescription     String?  @map("site_description")
+  siteLogoUrl         String?  @map("site_logo_url")
+  siteFaviconUrl      String?  @map("site_favicon_url")
+  sitePrimaryColor    String?  @default("#FEA611") @map("site_primary_color")
+  siteUrl             String?  @map("site_url")
+  siteLanguage        String?  @default("en") @map("site_language")
+  siteTimezone        String?  @default("UTC") @map("site_timezone")
+  socialTwitter       String?  @map("social_twitter")
+  socialGithub        String?  @map("social_github")
+  socialLinkedin      String?  @map("social_linkedin")
+  socialYoutube       String?  @map("social_youtube")
+  socialInstagram     String?  @map("social_instagram")
+
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db, withDbRetry } from "@/lib/db";
 import { requireApprovedUser, requirePermission, createAuditLog, AuthError } from "@/lib/auth";
 import { uploadBuffer, getPublicUrl, validateMagicBytes } from "@/lib/storage";
+import { triggerWebhooks } from "@/lib/webhooks";
 import crypto from "crypto";
 
 const allowedMimes = [
@@ -100,6 +101,14 @@ export async function POST(req: NextRequest) {
       targetId: mediaRecord.id,
       metadata: { filename: file.name, size: file.size, mimeType },
     });
+
+    if (projectId) {
+      triggerWebhooks({
+        projectId,
+        event: "media.uploaded",
+        payload: { id: mediaRecord.id, filename: file.name, size: file.size, mimeType, url: publicUrl },
+      }).catch(() => {});
+    }
 
     return NextResponse.json(
       {

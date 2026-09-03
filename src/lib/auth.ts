@@ -1,4 +1,5 @@
 import { cache } from "react";
+import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { db, withDbRetry } from "@/lib/db";
 import {
@@ -13,6 +14,27 @@ import {
 } from "./rbac";
 
 export * from "./rbac";
+
+interface CachedSession {
+  user: AuthUser;
+  expiresAt: number;
+}
+
+// In-memory high-speed cache for authenticated user sessions (15-second TTL)
+// Eliminates repetitive external Supabase Auth HTTPS calls and DB queries during dashboard navigation
+const userSessionCache = new Map<string, CachedSession>();
+
+export function clearUserCache(userId?: string) {
+  if (!userId) {
+    userSessionCache.clear();
+    return;
+  }
+  for (const [key, val] of userSessionCache.entries()) {
+    if (val.user.id === userId) {
+      userSessionCache.delete(key);
+    }
+  }
+}
 
 export class AuthError extends Error {
   statusCode: number;
@@ -46,11 +68,30 @@ export interface AuthUser {
 
 /**
  * Resolves current authenticated session from Supabase, loading Profile status and project memberships.
- * Wrapped in React.cache() to deduplicate repeated calls within the same server request/render.
+ * Uses in-memory TTL caching + React.cache() to deduplicate repeated calls within and across requests.
  * Returns null if unauthenticated or on invalid session.
  */
 export const getCurrentUser = cache(async (): Promise<AuthUser | null> => {
   try {
+    let cacheKey: string | null = null;
+    try {
+      const cookieStore = await cookies();
+      const authTokens = cookieStore
+        .getAll()
+        .filter((c) => c.name.startsWith("sb-") || c.name.includes("auth"))
+        .map((c) => `${c.name}=${c.value.slice(0, 32)}`)
+        .join(";");
+      if (authTokens) {
+        cacheKey = authTokens;
+        const cached = userSessionCache.get(cacheKey);
+        if (cached && cached.expiresAt > Date.now()) {
+          return cached.user;
+        }
+      }
+    } catch {
+      // Outside request context (e.g. build time / scripts)
+    }
+
     const supabase = await createClient();
     if (!supabase) return null;
 
@@ -165,7 +206,7 @@ export const getCurrentUser = cache(async (): Promise<AuthUser | null> => {
     }
     if (memberships.length === 0) highestRole = "CONTRIBUTOR";
 
-    return {
+    const authUser: AuthUser = {
       id: finalProfile.id,
       email: finalProfile.email,
       displayName: finalProfile.displayName,
@@ -174,6 +215,21 @@ export const getCurrentUser = cache(async (): Promise<AuthUser | null> => {
       role: highestRole,
       memberships,
     };
+
+    if (cacheKey) {
+      if (userSessionCache.size > 200) {
+        const now = Date.now();
+        for (const [k, v] of userSessionCache.entries()) {
+          if (v.expiresAt <= now) userSessionCache.delete(k);
+        }
+      }
+      userSessionCache.set(cacheKey, {
+        user: authUser,
+        expiresAt: Date.now() + 15000, // 15 seconds fast TTL
+      });
+    }
+
+    return authUser;
   } catch (err) {
     console.error("Error in getCurrentUser:", err);
     return null;

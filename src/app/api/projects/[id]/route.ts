@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, withDbRetry } from "@/lib/db";
-import { requireProjectMember, requireAdmin, createAuditLog, AuthError } from "@/lib/auth";
+import { requireProjectMember, requireAdmin, requireOwner, createAuditLog, AuthError } from "@/lib/auth";
 import { z } from "zod";
 
 const updateProjectSchema = z.object({
@@ -178,7 +178,7 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    const adminUser = await requireAdmin(id);
+    const { user: ownerUser } = await requireOwner(id);
 
     const project = await withDbRetry(() => db.project.findUnique({ where: { id } }));
     if (!project) {
@@ -239,7 +239,7 @@ export async function DELETE(
     });
 
     await createAuditLog({
-      actorId: adminUser.id,
+      actorId: ownerUser.id,
       action: "project.deleted",
       targetId: id,
       metadata: { name: project.name, slug: project.slug },

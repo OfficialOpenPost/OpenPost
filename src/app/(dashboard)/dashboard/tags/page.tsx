@@ -43,8 +43,14 @@ export default function TagsPage() {
     } catch {}
     finally { setLoading(false); }
   };
-  useEffect(() => { fetchTags(); const h = () => fetchTags(debouncedSearch || undefined); window.addEventListener("projectChanged", h); return () => window.removeEventListener("projectChanged", h); }, []);
-  useEffect(() => { if (debouncedSearch) fetchTags(debouncedSearch); else fetchTags(); }, [debouncedSearch]);
+
+  useEffect(() => {
+    fetchTags(debouncedSearch || undefined);
+    const h = () => fetchTags(debouncedSearch || undefined);
+    window.addEventListener("projectChanged", h);
+    return () => window.removeEventListener("projectChanged", h);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearch]);
 
   const filtered = tags.filter((t) => t.name.toLowerCase().includes(debouncedSearch.toLowerCase()) || t.slug.includes(debouncedSearch.toLowerCase()));
 

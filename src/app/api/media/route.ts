@@ -11,22 +11,20 @@ export async function GET(req: NextRequest) {
     const projectId = searchParams.get("projectId") || req.headers.get("x-openpost-project");
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") ?? "50", 10)));
 
-    // Resolve accessible projects
-    let allowedProjectIds: string[] = [];
-    if (projectId) {
-      await requireProjectMember(projectId, "CONTRIBUTOR");
-      allowedProjectIds = [projectId];
-    } else {
-      allowedProjectIds = user.memberships.map((m) => m.projectId);
-      if (allowedProjectIds.length === 0) return NextResponse.json({ data: [] });
+    let targetProjectId = projectId;
+    if (!targetProjectId) {
+      targetProjectId = user.memberships[0]?.projectId;
+      if (!targetProjectId) return NextResponse.json({ data: [] });
     }
 
+    await requireProjectMember(targetProjectId, "CONTRIBUTOR");
+
     const where: any = {
-      projectId: { in: allowedProjectIds },
+      projectId: targetProjectId,
     };
     if (search) {
       where.AND = [
-        { projectId: { in: allowedProjectIds } },
+        { projectId: targetProjectId },
         {
           OR: [
             { originalFilename: { contains: search, mode: "insensitive" } },

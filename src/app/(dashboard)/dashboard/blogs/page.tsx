@@ -7,7 +7,6 @@ import {
   Filter,
   Plus,
   Trash2,
-  MoreHorizontal,
   ArrowUpDown,
   Eye,
   Edit3,
@@ -20,6 +19,11 @@ import {
   Folder,
   Tag,
   Calendar,
+  ShieldAlert,
+  HelpCircle,
+  X,
+  MessageSquareQuote,
+  ShieldCheck,
 } from "lucide-react";
 import { useDebounce } from "@/hooks/useDebounce";
 
@@ -34,16 +38,29 @@ interface Post {
   category: string;
   tags: string[];
   publishedAt: string | null;
+  updatedAt: string;
   wordCount: number;
   readingTime: number;
+  trashReason?: string;
+  trashedBy?: string;
+  trashedAt?: string;
 }
 
 const statusStyles: Record<Exclude<Status, "all">, string> = {
-  draft: "bg-brand/10 text-brand border-brand/20",
-  published: "bg-success/10 text-success border-success/20",
-  scheduled: "bg-orange/10 text-orange border-orange/20",
+  draft: "bg-brand/10 text-brand-dark border-brand/20",
+  published: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
+  scheduled: "bg-amber-500/10 text-amber-600 border-amber-500/20",
   trash: "bg-flame/10 text-flame border-flame/20",
 };
+
+const COMMON_TRASH_REASONS = [
+  "Outdated information",
+  "Duplicate article",
+  "Author requested removal",
+  "Low quality / inaccurate",
+  "Draft no longer needed",
+  "Replaced by updated post",
+];
 
 export default function BlogsPage() {
   const [posts, setPosts] = useState<Post[]>([]);
@@ -56,9 +73,22 @@ export default function BlogsPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(10);
-  const [deleteTarget, setDeleteTarget] = useState<Post | null>(null);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  // Trashing (Soft Delete) state
+  const [trashTarget, setTrashTarget] = useState<Post | null>(null);
+  const [trashReason, setTrashReason] = useState("");
+  const [trashLoading, setTrashLoading] = useState(false);
+  const [trashError, setTrashError] = useState<string | null>(null);
+
+  // Permanent Delete (Admin Final Delete) state
+  const [permanentTarget, setPermanentTarget] = useState<Post | null>(null);
+  const [permanentLoading, setPermanentLoading] = useState(false);
+  const [permanentError, setPermanentError] = useState<string | null>(null);
+
   const [categoryList, setCategoryList] = useState<Array<{ id: string; name: string }>>([]);
+  const [userRole, setUserRole] = useState<string>("OWNER");
+
+  const isAdmin = userRole === "ADMIN" || userRole === "OWNER";
 
   const fetchPosts = useCallback(async () => {
     setLoading(true);
@@ -66,10 +96,9 @@ export default function BlogsPage() {
       const activeProjId = typeof window !== "undefined" ? localStorage.getItem("openpost_active_project_id") : null;
       const projQuery = activeProjId ? `&projectId=${activeProjId}` : "";
       const catQuery = activeProjId ? `?project=${activeProjId}` : "";
-
       const projHeaders: Record<string, string> = activeProjId ? { "X-OpenPost-Project": activeProjId } : {};
 
-      const [blogsRes, catsRes] = await Promise.all([
+      const [blogsRes, catsRes, statsRes] = await Promise.all([
         fetch(`/api/blogs?limit=100&_t=${Date.now()}${projQuery}`, {
           cache: "no-store",
           headers: projHeaders,
@@ -78,25 +107,40 @@ export default function BlogsPage() {
           cache: "no-store",
           headers: projHeaders,
         }).then((r) => r.json()).catch(() => ({ data: [] })),
+        fetch(`/api/dashboard/stats${activeProjId ? `?projectId=${activeProjId}` : ""}`, {
+          cache: "no-store",
+          headers: projHeaders,
+        }).then((r) => r.json()).catch(() => ({ data: {} })),
       ]);
+
+      if (statsRes?.data?.userRole) {
+        setUserRole(statsRes.data.userRole);
+      }
 
       if (Array.isArray(catsRes.data)) {
         setCategoryList(catsRes.data);
       }
 
       if (Array.isArray(blogsRes.data)) {
-        const mapped: Post[] = blogsRes.data.map((b: any) => ({
-          id: b.id,
-          title: b.title || "Untitled Article",
-          slug: b.slug,
-          status: b.status as Exclude<Status, "all">,
-          author: b.author?.name ?? "You",
-          category: b.category?.name ?? "Uncategorized",
-          tags: [],
-          publishedAt: b.publishedAt ?? b.createdAt ?? null,
-          wordCount: b.wordCount ?? 0,
-          readingTime: b.readingTime ?? 1,
-        }));
+        const mapped: Post[] = blogsRes.data.map((b: any) => {
+          const seo = typeof b.seo === "object" && b.seo !== null ? b.seo : {};
+          return {
+            id: b.id,
+            title: b.title || "Untitled Article",
+            slug: b.slug,
+            status: b.status as Exclude<Status, "all">,
+            author: b.author?.name ?? "Author",
+            category: b.category?.name ?? "Uncategorized",
+            tags: [],
+            publishedAt: b.publishedAt ?? b.createdAt ?? null,
+            updatedAt: b.updatedAt ?? b.createdAt ?? "",
+            wordCount: b.wordCount ?? 0,
+            readingTime: b.readingTime ?? 1,
+            trashReason: seo.trashReason,
+            trashedBy: seo.trashedBy,
+            trashedAt: seo.trashedAt,
+          };
+        });
         setPosts(mapped);
       } else {
         setPosts([]);
@@ -111,21 +155,15 @@ export default function BlogsPage() {
 
   useEffect(() => {
     fetchPosts();
-
-    const handleProjectChanged = () => {
-      fetchPosts();
-    };
-
+    const handleProjectChanged = () => fetchPosts();
     window.addEventListener("projectChanged", handleProjectChanged);
     return () => window.removeEventListener("projectChanged", handleProjectChanged);
   }, [fetchPosts]);
 
-  // Reset page when filter changes
   useEffect(() => {
     setPage(1);
   }, [debouncedSearch, status, selectedCategory, sort]);
 
-  // Extract all available categories from posts + categoryList
   const allCategories = useMemo(() => {
     const set = new Set<string>();
     categoryList.forEach((c) => set.add(c.name));
@@ -143,7 +181,8 @@ export default function BlogsPage() {
         (p) =>
           p.title.toLowerCase().includes(q) ||
           p.slug.toLowerCase().includes(q) ||
-          p.category.toLowerCase().includes(q)
+          p.category.toLowerCase().includes(q) ||
+          (p.trashReason && p.trashReason.toLowerCase().includes(q))
       );
     }
     if (status !== "all") {
@@ -155,9 +194,9 @@ export default function BlogsPage() {
     if (sort === "title") {
       out.sort((a, b) => a.title.localeCompare(b.title));
     } else if (sort === "oldest") {
-      out.sort((a, b) => (a.publishedAt ?? "").localeCompare(b.publishedAt ?? ""));
+      out.sort((a, b) => (a.publishedAt ?? a.updatedAt).localeCompare(b.publishedAt ?? b.updatedAt));
     } else {
-      out.sort((a, b) => (b.publishedAt ?? "").localeCompare(a.publishedAt ?? ""));
+      out.sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""));
     }
     return out;
   }, [posts, debouncedSearch, status, selectedCategory, sort]);
@@ -172,18 +211,60 @@ export default function BlogsPage() {
     setSelected(next);
   };
 
-  const handleDelete = async (post: Post) => {
-    setDeleteError(null);
+  // 1. Soft Delete with Reason
+  const handleConfirmMoveToTrash = async () => {
+    if (!trashTarget) return;
+    setTrashLoading(true);
+    setTrashError(null);
     try {
-      const res = await fetch(`/api/blogs/${post.id}`, { method: "DELETE" });
+      const res = await fetch(`/api/blogs/${trashTarget.id}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: trashReason.trim() || "No reason specified" }),
+      });
       const j = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(j.error?.message ?? "Delete failed");
-      const isTrash = j.data?.status === "trash";
-      if (isTrash) setPosts((prev) => prev.map((p) => (p.id === post.id ? { ...p, status: "trash" as const } : p)));
-      else setPosts((prev) => prev.filter((p) => p.id !== post.id));
-      setDeleteTarget(null);
+      if (!res.ok) throw new Error(j.error?.message ?? "Failed to move article to trash");
+
+      setPosts((prev) =>
+        prev.map((p) =>
+          p.id === trashTarget.id
+            ? {
+                ...p,
+                status: "trash" as const,
+                trashReason: trashReason.trim() || "No reason specified",
+              }
+            : p
+        )
+      );
+      setTrashTarget(null);
+      setTrashReason("");
     } catch (e: any) {
-      setDeleteError(e.message);
+      setTrashError(e.message);
+    } finally {
+      setTrashLoading(false);
+    }
+  };
+
+  // 2. Final Permanent Delete (Admin/Owner)
+  const handleConfirmPermanentDelete = async () => {
+    if (!permanentTarget) return;
+    setPermanentLoading(true);
+    setPermanentError(null);
+    try {
+      const res = await fetch(`/api/blogs/${permanentTarget.id}?permanent=true`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ permanent: true }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j.error?.message ?? "Permanent delete failed. Only administrators can delete from trash.");
+
+      setPosts((prev) => prev.filter((p) => p.id !== permanentTarget.id));
+      setPermanentTarget(null);
+    } catch (e: any) {
+      setPermanentError(e.message);
+    } finally {
+      setPermanentLoading(false);
     }
   };
 
@@ -192,27 +273,37 @@ export default function BlogsPage() {
       const res = await fetch(`/api/blogs/${post.id}/restore`, { method: "POST" });
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j.error?.message ?? "Restore failed");
-      setPosts((prev) => prev.map((p) => (p.id === post.id ? { ...p, status: (j.data?.status ?? "draft") as any } : p)));
-    } catch {}
+      setPosts((prev) =>
+        prev.map((p) => (p.id === post.id ? { ...p, status: (j.data?.status ?? "draft") as any, trashReason: undefined } : p))
+      );
+    } catch (err: any) {
+      alert(err.message || "Failed to restore article");
+    }
   };
 
   const handleBulkTrash = async () => {
     for (const id of selected) {
-      await fetch(`/api/blogs/${id}`, { method: "DELETE" }).catch(() => {});
+      await fetch(`/api/blogs/${id}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: "Bulk moved to trash" }),
+      }).catch(() => {});
     }
-    setPosts((prev) => prev.map((p) => (selected.has(p.id) ? { ...p, status: "trash" as const } : p)));
+    setPosts((prev) =>
+      prev.map((p) => (selected.has(p.id) ? { ...p, status: "trash" as const, trashReason: "Bulk moved to trash" } : p))
+    );
     setSelected(new Set());
   };
 
   return (
-    <div className="min-h-screen bg-[#F0F0F1] p-6 md:p-8">
-      <div className="mx-auto max-w-7xl">
+    <div className="min-h-screen bg-[#F0F0F1] p-4 sm:p-6 lg:p-8">
+      <div className="mx-auto max-w-7xl space-y-6">
         {/* Header bar */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/80 pb-5">
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold text-navy">
-                Articles & Posts
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-navy">
+                Articles & Publications
               </h1>
               <Link
                 href="/dashboard/editor"
@@ -221,41 +312,53 @@ export default function BlogsPage() {
                 <Plus className="h-3.5 w-3.5" /> New Article
               </Link>
             </div>
-            <p className="mt-1 text-xs sm:text-sm text-text-secondary">
-              {posts.length} total articles · {posts.filter((p) => p.status === "published").length} published · {posts.filter((p) => p.status === "draft").length} drafts
+            <p className="mt-1 text-xs sm:text-sm text-text-secondary flex items-center gap-2 flex-wrap">
+              <span>{posts.length} total articles</span>
+              <span>·</span>
+              <span className="text-emerald-600 font-semibold">{posts.filter((p) => p.status === "published").length} published</span>
+              <span>·</span>
+              <span className="text-brand font-semibold">{posts.filter((p) => p.status === "draft").length} drafts</span>
+              {posts.some((p) => p.status === "trash") && (
+                <>
+                  <span>·</span>
+                  <span className="text-flame font-semibold">{posts.filter((p) => p.status === "trash").length} in trash</span>
+                </>
+              )}
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={fetchPosts}
-            className="inline-flex items-center gap-1.5 self-start sm:self-auto rounded-xl border border-border bg-surface px-3 py-1.5 text-xs font-semibold text-text-secondary hover:bg-surface-raised transition shadow-xs"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin text-brand" : ""}`} /> Refresh
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={fetchPosts}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-white px-3.5 py-2 text-xs font-semibold text-navy hover:bg-surface-raised transition shadow-xs cursor-pointer"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin text-brand" : ""}`} /> Refresh
+            </button>
+          </div>
         </div>
 
         {/* Filter Controls Row */}
-        <div className="mt-6 flex flex-col md:flex-row gap-3">
+        <div className="flex flex-col md:flex-row gap-3">
           {/* Search bar */}
           <div className="relative flex-1">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-text-tertiary" />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search title, slug, category..."
-              className="h-11 w-full rounded-2xl border border-border bg-surface pl-10 pr-4 text-sm placeholder:text-text-tertiary focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20 shadow-xs"
+              placeholder="Search by title, slug, category, or delete reason..."
+              className="h-11 w-full rounded-2xl border border-border bg-white pl-10 pr-4 text-sm placeholder:text-text-tertiary focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20 shadow-xs"
             />
           </div>
 
           <div className="flex gap-2 flex-wrap items-center">
             {/* Category Dropdown Filter */}
-            <div className="flex items-center gap-2 rounded-2xl border border-border bg-surface px-3 shadow-xs">
+            <div className="flex items-center gap-2 rounded-2xl border border-border bg-white px-3 shadow-xs">
               <Folder className="h-4 w-4 text-text-tertiary" />
               <select
                 value={selectedCategory}
                 onChange={(e) => setSelectedCategory(e.target.value)}
-                className="h-11 bg-transparent text-xs sm:text-sm font-medium text-text-primary focus:outline-none cursor-pointer"
+                className="h-11 bg-transparent text-xs sm:text-sm font-medium text-navy focus:outline-none cursor-pointer"
               >
                 <option value="all">All Categories</option>
                 {allCategories.map((c) => (
@@ -267,12 +370,12 @@ export default function BlogsPage() {
             </div>
 
             {/* Status Dropdown Filter */}
-            <div className="flex items-center gap-2 rounded-2xl border border-border bg-surface px-3 shadow-xs">
+            <div className="flex items-center gap-2 rounded-2xl border border-border bg-white px-3 shadow-xs">
               <Filter className="h-4 w-4 text-text-tertiary" />
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value as Status)}
-                className="h-11 bg-transparent text-xs sm:text-sm font-medium text-text-primary focus:outline-none cursor-pointer"
+                className="h-11 bg-transparent text-xs sm:text-sm font-medium text-navy focus:outline-none cursor-pointer"
               >
                 <option value="all">All Status</option>
                 <option value="draft">Drafts</option>
@@ -283,14 +386,14 @@ export default function BlogsPage() {
             </div>
 
             {/* Sort Dropdown */}
-            <div className="flex items-center gap-2 rounded-2xl border border-border bg-surface px-3 shadow-xs">
+            <div className="flex items-center gap-2 rounded-2xl border border-border bg-white px-3 shadow-xs">
               <ArrowUpDown className="h-4 w-4 text-text-tertiary" />
               <select
                 value={sort}
                 onChange={(e) => setSort(e.target.value as never)}
-                className="h-11 bg-transparent text-xs sm:text-sm font-medium text-text-primary focus:outline-none cursor-pointer"
+                className="h-11 bg-transparent text-xs sm:text-sm font-medium text-navy focus:outline-none cursor-pointer"
               >
-                <option value="newest">Newest First</option>
+                <option value="newest">Recently Updated</option>
                 <option value="oldest">Oldest First</option>
                 <option value="title">Title A-Z</option>
               </select>
@@ -299,21 +402,21 @@ export default function BlogsPage() {
         </div>
 
         {/* Status Quick-Filter Tabs */}
-        <div className="mt-4 flex gap-2 overflow-x-auto pb-1 select-none">
+        <div className="flex gap-2 overflow-x-auto pb-1 select-none">
           {[
-            { key: "all", label: "All", count: posts.length },
-            { key: "draft", label: "Drafts", count: posts.filter((p) => p.status === "draft").length },
+            { key: "all", label: "All Articles", count: posts.length },
             { key: "published", label: "Published", count: posts.filter((p) => p.status === "published").length },
+            { key: "draft", label: "Drafts", count: posts.filter((p) => p.status === "draft").length },
             { key: "scheduled", label: "Scheduled", count: posts.filter((p) => p.status === "scheduled").length },
-            { key: "trash", label: "Trash", count: posts.filter((p) => p.status === "trash").length },
+            { key: "trash", label: "Trash Bin", count: posts.filter((p) => p.status === "trash").length },
           ].map((tab) => (
             <button
               key={tab.key}
               onClick={() => setStatus(tab.key as Status)}
-              className={`inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-xs font-bold whitespace-nowrap transition ${
+              className={`inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-xs font-bold whitespace-nowrap transition cursor-pointer ${
                 status === tab.key
                   ? "bg-navy text-white border-navy shadow-xs"
-                  : "bg-surface border-border text-text-secondary hover:bg-surface-raised"
+                  : "bg-white border-border text-text-secondary hover:bg-surface-raised"
               }`}
             >
               {tab.label}{" "}
@@ -330,56 +433,176 @@ export default function BlogsPage() {
 
         {/* Bulk Actions Bar */}
         {selected.size > 0 && (
-          <div className="mt-4 flex items-center gap-2 rounded-2xl border border-brand/20 bg-brand/5 p-3 animate-in fade-in duration-150">
-            <span className="text-xs sm:text-sm font-bold text-navy">{selected.size} selected</span>
+          <div className="flex items-center gap-2 rounded-2xl border border-brand/20 bg-brand/5 p-3.5 shadow-xs">
+            <span className="text-xs sm:text-sm font-bold text-navy">{selected.size} articles selected</span>
             <div className="ml-auto flex gap-2">
               <button
                 onClick={handleBulkTrash}
-                className="rounded-xl border border-border bg-surface px-3 py-1.5 text-xs font-bold text-flame hover:bg-flame/10 transition shadow-xs"
+                className="rounded-xl border border-flame/30 bg-white px-3.5 py-1.5 text-xs font-bold text-flame hover:bg-flame/10 transition shadow-xs cursor-pointer"
               >
-                Move to Trash
+                Move Selected to Trash
               </button>
               <button
                 onClick={() => setSelected(new Set())}
-                className="rounded-xl bg-navy px-3 py-1.5 text-xs font-bold text-white hover:bg-navy/90 transition shadow-xs"
+                className="rounded-xl bg-navy px-3.5 py-1.5 text-xs font-bold text-white hover:bg-navy/90 transition shadow-xs cursor-pointer"
               >
-                Clear
+                Deselect All
               </button>
             </div>
           </div>
         )}
 
-        {/* Delete Confirmation Modal */}
-        {deleteTarget && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy/40 backdrop-blur-sm p-4">
-            <div className="w-full max-w-md rounded-3xl border border-border bg-surface p-6 shadow-2xl animate-in zoom-in-95 duration-150">
-              <div className="flex items-center gap-3 text-amber-600">
-                <AlertTriangle className="h-5 w-5" />
-                <h3 className="font-bold text-navy">Move to trash?</h3>
-              </div>
-              <p className="mt-3 text-xs sm:text-sm text-text-secondary">
-                Move <span className="font-semibold text-navy">{deleteTarget.title}</span> to trash? You can restore it later.
-              </p>
-              {deleteError && (
-                <p className="mt-3 rounded-xl bg-flame/10 p-3 text-xs text-flame font-medium">
-                  {deleteError}
-                </p>
-              )}
-              <div className="mt-6 flex justify-end gap-2">
+        {/* Move to Trash Modal (Soft Delete with Reason) */}
+        {trashTarget && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy/50 backdrop-blur-xs p-4">
+            <div className="w-full max-w-lg rounded-3xl border border-border bg-white p-6 shadow-2xl animate-in zoom-in-95 duration-150">
+              <div className="flex items-center justify-between pb-3 border-b border-border">
+                <div className="flex items-center gap-2.5 text-amber-600">
+                  <AlertTriangle className="h-5 w-5" />
+                  <h3 className="font-extrabold text-navy text-base">Move Article to Trash</h3>
+                </div>
                 <button
                   onClick={() => {
-                    setDeleteTarget(null);
-                    setDeleteError(null);
+                    setTrashTarget(null);
+                    setTrashReason("");
+                    setTrashError(null);
                   }}
-                  className="rounded-xl border border-border px-4 py-2 text-xs font-bold text-navy hover:bg-surface-raised transition"
+                  className="rounded-lg p-1 text-text-tertiary hover:text-navy hover:bg-surface-raised transition"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="mt-4">
+                <p className="text-xs sm:text-sm text-text-secondary">
+                  Moving <span className="font-bold text-navy">"{trashTarget.title}"</span> to trash. The article will be unindexed and unpublished.
+                </p>
+
+                {/* Reason Requirement */}
+                <div className="mt-4">
+                  <label className="block text-xs font-bold text-navy mb-1.5 flex items-center gap-1.5">
+                    <MessageSquareQuote className="h-3.5 w-3.5 text-brand" /> Deletion Reason (Required for Audit Log)
+                  </label>
+                  
+                  {/* Common Preset Chips */}
+                  <div className="flex flex-wrap gap-1.5 mb-2.5">
+                    {COMMON_TRASH_REASONS.map((preset) => (
+                      <button
+                        key={preset}
+                        type="button"
+                        onClick={() => setTrashReason(preset)}
+                        className={`text-[11px] px-2.5 py-1 rounded-lg border transition ${
+                          trashReason === preset
+                            ? "bg-navy text-white border-navy font-bold"
+                            : "bg-surface text-text-secondary border-border hover:bg-surface-raised"
+                        }`}
+                      >
+                        {preset}
+                      </button>
+                    ))}
+                  </div>
+
+                  <textarea
+                    value={trashReason}
+                    onChange={(e) => setTrashReason(e.target.value)}
+                    placeholder="Enter why this article is being moved to trash..."
+                    rows={3}
+                    className="w-full rounded-xl border border-border p-3 text-xs sm:text-sm placeholder:text-text-tertiary focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20 shadow-inner"
+                  />
+                </div>
+
+                {trashError && (
+                  <p className="mt-3 rounded-xl bg-flame/10 p-3 text-xs text-flame font-medium">
+                    {trashError}
+                  </p>
+                )}
+              </div>
+
+              <div className="mt-6 flex justify-end gap-2.5 pt-3 border-t border-border">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTrashTarget(null);
+                    setTrashReason("");
+                    setTrashError(null);
+                  }}
+                  className="rounded-xl border border-border bg-white px-4 py-2 text-xs font-bold text-navy hover:bg-surface-raised transition"
                 >
                   Cancel
                 </button>
                 <button
-                  onClick={() => handleDelete(deleteTarget)}
-                  className="rounded-xl bg-flame px-4 py-2 text-xs font-bold text-white hover:bg-flame/90 transition shadow-xs"
+                  type="button"
+                  disabled={trashLoading}
+                  onClick={handleConfirmMoveToTrash}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-flame px-5 py-2 text-xs font-bold text-white hover:bg-flame/90 transition shadow-xs disabled:opacity-50 cursor-pointer"
                 >
-                  Move to Trash
+                  {trashLoading ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                  Confirm Move to Trash
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Permanent Deletion Confirmation Modal (ADMIN & OWNER Only) */}
+        {permanentTarget && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy/60 backdrop-blur-xs p-4">
+            <div className="w-full max-w-lg rounded-3xl border border-flame/40 bg-white p-6 shadow-2xl animate-in zoom-in-95 duration-150">
+              <div className="flex items-center justify-between pb-3 border-b border-border">
+                <div className="flex items-center gap-2.5 text-flame">
+                  <ShieldAlert className="h-5 w-5" />
+                  <h3 className="font-extrabold text-navy text-base">Permanent Article Purge (Admin Only)</h3>
+                </div>
+                <button
+                  onClick={() => {
+                    setPermanentTarget(null);
+                    setPermanentError(null);
+                  }}
+                  className="rounded-lg p-1 text-text-tertiary hover:text-navy hover:bg-surface-raised transition"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="mt-4 space-y-3">
+                <div className="rounded-xl border border-flame/20 bg-flame/5 p-3.5 text-xs text-flame leading-relaxed">
+                  <strong className="block font-bold">⚠️ Warning: Irreversible Action</strong>
+                  Permanently purging <span className="font-bold underline">{permanentTarget.title}</span> will delete the database record, all associated revisions, media attachments, and reader comments permanently.
+                </div>
+
+                {permanentTarget.trashReason && (
+                  <div className="rounded-xl border border-border bg-surface p-3 text-xs">
+                    <span className="font-bold text-navy">Original Move-to-Trash Reason:</span>
+                    <p className="mt-0.5 text-text-secondary italic">"{permanentTarget.trashReason}"</p>
+                  </div>
+                )}
+
+                {permanentError && (
+                  <p className="rounded-xl bg-flame/10 p-3 text-xs text-flame font-medium">
+                    {permanentError}
+                  </p>
+                )}
+              </div>
+
+              <div className="mt-6 flex justify-end gap-2.5 pt-3 border-t border-border">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPermanentTarget(null);
+                    setPermanentError(null);
+                  }}
+                  className="rounded-xl border border-border bg-white px-4 py-2 text-xs font-bold text-navy hover:bg-surface-raised transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={permanentLoading}
+                  onClick={handleConfirmPermanentDelete}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-flame px-5 py-2 text-xs font-bold text-white hover:bg-flame/90 transition shadow-xs disabled:opacity-50 cursor-pointer"
+                >
+                  {permanentLoading ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                  Purge Article Permanently
                 </button>
               </div>
             </div>
@@ -387,7 +610,7 @@ export default function BlogsPage() {
         )}
 
         {/* Table Container */}
-        <div className="mt-6 overflow-hidden rounded-2xl border border-border/80 bg-white shadow-sm">
+        <div className="overflow-hidden rounded-2xl border border-border/80 bg-white shadow-sm">
           <div className="overflow-x-auto">
             <table className="w-full text-left">
               <thead className="bg-surface-dim border-b border-border">
@@ -402,15 +625,15 @@ export default function BlogsPage() {
                       className="rounded border-border text-brand focus:ring-brand/20 cursor-pointer"
                     />
                   </th>
-                  <th className="px-4 py-3.5">Title & Slug</th>
-                  <th className="px-4 py-3.5">Status</th>
+                  <th className="px-4 py-3.5">Title & Identification</th>
+                  <th className="px-4 py-3.5">Status & Reason</th>
                   <th className="px-4 py-3.5 hidden md:table-cell">Author</th>
                   <th className="px-4 py-3.5 hidden lg:table-cell">Category</th>
-                  <th className="px-4 py-3.5 hidden sm:table-cell">Words</th>
+                  <th className="px-4 py-3.5 hidden sm:table-cell">Word Count</th>
                   <th className="px-4 py-3.5 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border">
+              <tbody className="divide-y divide-border/60">
                 {loading ? (
                   <tr>
                     <td colSpan={7} className="px-4 py-16 text-center">
@@ -427,9 +650,9 @@ export default function BlogsPage() {
                         <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-surface-dim">
                           <SearchX className="h-6 w-6 text-text-tertiary" />
                         </div>
-                        <p className="mt-4 text-sm font-bold text-navy">No articles found</p>
+                        <p className="mt-4 text-sm font-bold text-navy">No matching articles</p>
                         <p className="mt-1 text-xs text-text-secondary">
-                          Try a different search term, category, or clear filters.
+                          Try adjusting search keywords, status filter, or category selection.
                         </p>
                         <button
                           onClick={() => {
@@ -437,9 +660,9 @@ export default function BlogsPage() {
                             setStatus("all");
                             setSelectedCategory("all");
                           }}
-                          className="mt-4 rounded-xl border border-border bg-surface px-4 py-2 text-xs font-bold text-navy hover:bg-surface-raised transition shadow-xs"
+                          className="mt-4 rounded-xl border border-border bg-surface px-4 py-2 text-xs font-bold text-navy hover:bg-surface-raised transition shadow-xs cursor-pointer"
                         >
-                          Clear all filters
+                          Reset Filters
                         </button>
                       </div>
                     </td>
@@ -455,29 +678,36 @@ export default function BlogsPage() {
                           className="rounded border-border text-brand focus:ring-brand/20 cursor-pointer"
                         />
                       </td>
-                      <td className="px-4 py-3.5">
+                      <td className="px-4 py-3.5 max-w-xs sm:max-w-md">
                         <Link
                           href={`/dashboard/editor/${post.id}`}
-                          className="text-sm font-bold text-navy hover:text-brand transition line-clamp-1"
+                          className="text-sm font-bold text-navy hover:text-brand transition line-clamp-1 block"
                         >
                           {post.title}
                         </Link>
-                        <p className="text-xs font-mono text-text-tertiary mt-0.5">
+                        <p className="text-[11px] font-mono text-text-tertiary mt-0.5">
                           /{post.slug} · ~{post.readingTime} min read
                         </p>
                       </td>
                       <td className="px-4 py-3.5">
-                        <span
-                          className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-bold capitalize ${
-                            statusStyles[post.status]
-                          }`}
-                        >
-                          {post.status === "published" && <CheckCircle2 className="h-3 w-3" />}
-                          {post.status === "scheduled" && <Clock className="h-3 w-3" />}
-                          {post.status === "draft" && <Edit3 className="h-3 w-3" />}
-                          {post.status === "trash" && <Trash2 className="h-3 w-3" />}
-                          {post.status}
-                        </span>
+                        <div className="flex flex-col gap-1 items-start">
+                          <span
+                            className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-bold capitalize ${
+                              statusStyles[post.status]
+                            }`}
+                          >
+                            {post.status === "published" && <CheckCircle2 className="h-3 w-3" />}
+                            {post.status === "scheduled" && <Clock className="h-3 w-3" />}
+                            {post.status === "draft" && <Edit3 className="h-3 w-3" />}
+                            {post.status === "trash" && <Trash2 className="h-3 w-3" />}
+                            {post.status}
+                          </span>
+                          {post.status === "trash" && post.trashReason && (
+                            <span className="text-[10px] text-flame/90 font-medium bg-flame/5 px-2 py-0.5 rounded border border-flame/20 max-w-xs truncate" title={post.trashReason}>
+                              Reason: {post.trashReason}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-3.5 hidden md:table-cell text-xs font-medium text-text-secondary">
                         {post.author}
@@ -488,41 +718,67 @@ export default function BlogsPage() {
                         </span>
                       </td>
                       <td className="px-4 py-3.5 hidden sm:table-cell text-xs font-mono text-text-secondary">
-                        {post.wordCount}
+                        {post.wordCount.toLocaleString()}
                       </td>
                       <td className="px-4 py-3.5 text-right">
                         <div className="flex items-center justify-end gap-1.5">
-                          <Link
-                            href={`/dashboard/editor/${post.id}`}
-                            className="flex h-8 w-8 items-center justify-center rounded-xl border border-border bg-white text-text-secondary hover:bg-surface-raised hover:text-navy transition shadow-xs"
-                            title="Edit Article"
-                          >
-                            <Edit3 className="h-3.5 w-3.5" />
-                          </Link>
-                          <Link
-                            href={`/blog/${post.slug}`}
-                            target="_blank"
-                            className="flex h-8 w-8 items-center justify-center rounded-xl border border-border bg-white text-text-secondary hover:bg-surface-raised hover:text-navy transition shadow-xs"
-                            title="View Live"
-                          >
-                            <Eye className="h-3.5 w-3.5" />
-                          </Link>
-                          {post.status === "trash" ? (
-                            <button
-                              onClick={() => handleRestore(post)}
-                              className="flex h-8 w-8 items-center justify-center rounded-xl border border-border bg-white text-success hover:bg-success/10 transition shadow-xs"
-                              title="Restore from Trash"
-                            >
-                              <Archive className="h-3.5 w-3.5" />
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => setDeleteTarget(post)}
-                              className="flex h-8 w-8 items-center justify-center rounded-xl border border-border bg-white text-flame hover:bg-flame/10 transition shadow-xs"
-                              title="Move to Trash"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
+                          {post.status !== "trash" && (
+                            <>
+                              <Link
+                                href={`/dashboard/editor/${post.id}`}
+                                className="flex h-8 w-8 items-center justify-center rounded-xl border border-border bg-white text-text-secondary hover:bg-surface-raised hover:text-navy transition shadow-2xs"
+                                title="Edit Article"
+                              >
+                                <Edit3 className="h-3.5 w-3.5" />
+                              </Link>
+                              {post.status === "published" && (
+                                <Link
+                                  href={`/blog/${post.slug}`}
+                                  target="_blank"
+                                  className="flex h-8 w-8 items-center justify-center rounded-xl border border-border bg-white text-text-secondary hover:bg-surface-raised hover:text-navy transition shadow-2xs"
+                                  title="View Published Page"
+                                >
+                                  <Eye className="h-3.5 w-3.5" />
+                                </Link>
+                              )}
+                              <button
+                                onClick={() => setTrashTarget(post)}
+                                className="flex h-8 w-8 items-center justify-center rounded-xl border border-border bg-white text-flame hover:bg-flame/10 transition shadow-2xs cursor-pointer"
+                                title="Move to Trash"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </>
+                          )}
+
+                          {post.status === "trash" && (
+                            <>
+                              <button
+                                onClick={() => handleRestore(post)}
+                                className="inline-flex items-center gap-1 rounded-xl border border-border bg-white px-2.5 py-1.5 text-xs font-bold text-emerald-600 hover:bg-emerald-50 transition shadow-2xs cursor-pointer"
+                                title="Restore Article"
+                              >
+                                <Archive className="h-3.5 w-3.5" /> Restore
+                              </button>
+                              
+                              {/* Final Delete (Admin / Owner) */}
+                              {isAdmin ? (
+                                <button
+                                  onClick={() => setPermanentTarget(post)}
+                                  className="inline-flex items-center gap-1 rounded-xl bg-flame px-2.5 py-1.5 text-xs font-bold text-white hover:bg-flame/90 transition shadow-2xs cursor-pointer"
+                                  title="Permanently Delete Article (Admin only)"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" /> Purge
+                                </button>
+                              ) : (
+                                <span
+                                  className="inline-flex items-center gap-1 text-[10px] text-text-tertiary bg-surface-dim px-2 py-1 rounded-lg border border-border"
+                                  title="Only Admin / Owner can permanently delete"
+                                >
+                                  <ShieldCheck className="h-3 w-3" /> Admin Purge
+                                </span>
+                              )}
+                            </>
                           )}
                         </div>
                       </td>
@@ -534,12 +790,12 @@ export default function BlogsPage() {
           </div>
 
           {/* Pagination Footer */}
-          <div className="flex items-center justify-between border-t border-border bg-surface-dim px-4 py-3">
+          <div className="flex flex-col sm:flex-row items-center justify-between border-t border-border bg-surface-dim px-4 py-3 gap-3">
             <div className="flex items-center gap-3">
               <p className="text-xs text-text-tertiary">
-                Page {page} of {totalPages} · {filtered.length} matching
+                Page {page} of {totalPages} · {filtered.length} matching articles
               </p>
-              <div className="hidden sm:flex items-center gap-1 text-xs text-text-tertiary">
+              <div className="flex items-center gap-1 text-xs text-text-tertiary">
                 <span>Per page:</span>
                 <select
                   value={perPage}
@@ -557,14 +813,14 @@ export default function BlogsPage() {
               <button
                 disabled={page <= 1}
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
-                className="rounded-xl border border-border bg-surface px-3 py-1.5 text-xs font-bold text-navy disabled:opacity-40 hover:bg-surface-raised transition shadow-xs"
+                className="rounded-xl border border-border bg-white px-3.5 py-1.5 text-xs font-bold text-navy disabled:opacity-40 hover:bg-surface-raised transition shadow-2xs cursor-pointer"
               >
                 Previous
               </button>
               <button
                 disabled={page >= totalPages}
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                className="rounded-xl border border-border bg-surface px-3 py-1.5 text-xs font-bold text-navy disabled:opacity-40 hover:bg-surface-raised transition shadow-xs"
+                className="rounded-xl border border-border bg-white px-3.5 py-1.5 text-xs font-bold text-navy disabled:opacity-40 hover:bg-surface-raised transition shadow-2xs cursor-pointer"
               >
                 Next
               </button>

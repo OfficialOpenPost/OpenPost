@@ -102,57 +102,16 @@ export async function GET(req: NextRequest) {
     const status = searchParams.get("status");
     const projectId = searchParams.get("projectId") || req.headers.get("x-openpost-project");
 
-    if (!projectId) {
-      // Find projects user belongs to — strict project scoping, no legacy null leak
-      const memberships = await withDbRetry(() =>
-        db.projectMember.findMany({
-          where: { userId: user.id },
-          select: { projectId: true },
-        })
-      );
-      const projectIds = memberships.map((m) => m.projectId);
-      if (projectIds.length === 0) {
+    let targetProjectId = projectId;
+    if (!targetProjectId) {
+      targetProjectId = user.memberships[0]?.projectId;
+      if (!targetProjectId) {
         return NextResponse.json({ data: [] });
       }
-
-      const blogListSelect = {
-        id: true,
-        title: true,
-        slug: true,
-        status: true,
-        updatedAt: true,
-        createdAt: true,
-        publishedAt: true,
-        scheduledAt: true,
-        wordCount: true,
-        readingTime: true,
-        projectId: true,
-        categoryId: true,
-        featuredImageId: true,
-        createdBy: true,
-        category: { select: { id: true, name: true, slug: true } },
-        author: { select: { name: true, email: true } },
-        featuredImage: { select: { id: true, variants: true } },
-        project: { select: { id: true, name: true, slug: true } },
-      };
-
-      const blogs = await withDbRetry(() =>
-        db.blog.findMany({
-          where: {
-            projectId: { in: projectIds },
-            ...(status && status !== "all" ? { status: status as any } : {}),
-          },
-          take: Math.min(100, Math.max(1, limit)),
-          orderBy: { updatedAt: "desc" },
-          select: blogListSelect,
-        })
-      );
-
-      return NextResponse.json({ data: blogs });
     }
 
-    // Explicit project requested — verify membership (CONTRIBUTOR minimum to view)
-    await requireProjectMember(projectId, "CONTRIBUTOR");
+    // Strict project scoping — verify membership for targetProjectId
+    await requireProjectMember(targetProjectId, "CONTRIBUTOR");
 
     const blogListSelect = {
       id: true,
@@ -169,6 +128,7 @@ export async function GET(req: NextRequest) {
       categoryId: true,
       featuredImageId: true,
       createdBy: true,
+      seo: true,
       category: { select: { id: true, name: true, slug: true } },
       author: { select: { name: true, email: true } },
       featuredImage: { select: { id: true, variants: true } },
@@ -178,7 +138,7 @@ export async function GET(req: NextRequest) {
     const blogs = await withDbRetry(() =>
       db.blog.findMany({
         where: {
-          projectId,
+          projectId: targetProjectId,
           ...(status && status !== "all" ? { status: status as any } : {}),
         },
         take: Math.min(100, Math.max(1, limit)),

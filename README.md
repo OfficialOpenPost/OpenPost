@@ -68,7 +68,8 @@ Flow: Supabase Auth → Profile (pending/approved) → ProjectMember (OWNER>ADMI
 | :--- | :--- | :--- |
 | 🛡️ **Multi-Tenant Isolation** | Every query scoped `WHERE projectId` + `requireProjectMember(projectId)`; RLS `project_members.user_id = auth.uid()`; composite indexes `019`. IDOR `Project A → Project B` → `404/403` | `src/app/api/blogs/route.ts:90`, `src/app/api/media/route.ts:5`, `supabase/migrations/019_canonical_five_roles.sql` |
 | 👥 **Canonical 5-Tier RBAC** | `OWNER(5) > ADMIN(4) > EDITOR(3) > AUTHOR(2) > CONTRIBUTOR(1)` — `WRITER` deprecated → `AUTHOR`. Explicit perms `posts.edit_others/publish_others`, `members.invite/approve` etc. | `src/lib/rbac.ts:83`, `AGENTS.md:14` |
-| 🗑️ **Project Deletion & Cascade** | `ADMIN` and `OWNER` can delete projects with full automatic database cascade deletion (blogs, revisions, taxonomies, media records, webhooks, audit logs). | `src/app/api/projects/[id]/route.ts:175` |
+| 🗑️ **Project Deletion & Cascade** | `OWNER` only can delete projects with full automatic database cascade deletion (blogs, revisions, taxonomies, media records, webhooks, audit logs). `ADMIN` cannot delete projects. | `src/app/api/projects/[id]/route.ts:175` |
+| 🗑️ **Trash & Admin Purge** | Users move articles to trash with a deletion reason (audited). Only `ADMIN` and `OWNER` can permanently purge articles from the trash bin. | `src/app/api/blogs/[id]/route.ts:367`, `/dashboard/blogs` |
 | ⏳ **User Approval Workflow** | Signup → `pending` → admin `Approve/Reject/Suspend/Reactivate` → `approved` only then access. `REQUIRE_EMAIL_VERIFICATION=true` checks `email_confirmed_at`. | `src/lib/auth.ts:160`, `/dashboard/team`, `supabase/migrations/016_auto_profile_on_signup.sql` |
 | 👤 **Authors vs Users (strict)** | `Author` = public byline `name/slug/bio/photoId/socialLinks/website/email/linkedUserId/projectId` — guest `linkedUserId=null`, linked must be **approved member same project**, photo via `media` same project, slug `unique[projectId,slug]` → `409`, real `_count.blogs`, public `/authors/[slug]` only `published` | `src/app/api/v1/authors/route.ts:8`, `prisma/schema.prisma:82` |
 | 👥 **Team & Invites** | `invites` `gen_random_bytes(32)` hex, 7-day expiry, `tokenPreview` masked, rate-limited `10/min/IP`, `OWNER` only for `OWNER` invites | `src/app/api/settings/users/route.ts:40`, `/dashboard/team` |
@@ -87,12 +88,14 @@ Flow: Supabase Auth → Profile (pending/approved) → ProjectMember (OWNER>ADMI
 | Permission | OWNER | ADMIN | EDITOR | AUTHOR | CONTRIBUTOR |
 | :--- | :---: | :---: | :---: | :---: | :---: |
 | **Project View & Update** | ✅ | ✅ | ✅ (View) | — | — |
-| **Project Cascade Delete** | ✅ | ✅ | — | — | — |
+| **Project Cascade Delete** | ✅ | — | — | — | — |
 | **Team Management & Invites** | ✅ | ✅ | — | — | — |
 | **Manage OWNER Roles** | ✅ | — | — | — | — |
 | **Create & Edit Own Posts** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **Edit Others' Posts** | ✅ | ✅ | ✅ | — | — |
 | **Publish & Schedule Posts** | ✅ | ✅ | ✅ | ✅ (Own) | — (Submit Review) |
+| **Move Posts to Trash (with Reason)**| ✅ | ✅ | ✅ | ✅ (Own) | — |
+| **Permanently Purge Trashed Posts** | ✅ | ✅ | — | — | — |
 | **Media Upload & Management** | ✅ | ✅ | ✅ | ✅ | — |
 | **Taxonomies (Categories/Tags)** | ✅ | ✅ | ✅ | — | — |
 | **Webhooks & API Tokens** | ✅ | ✅ | — | — | — |
@@ -141,7 +144,7 @@ D:/Openpost
 │   │   ├── media/            # GET list (project-scoped), POST metadata (server key), /presign, /upload (magic bytes)
 │   │   ├── v1/posts                 # public cached, project via token/?project/header
 │   │   ├── v1/authors|tags|categories|polls  # authors: guest+linked, slug unique per project
-│   │   ├── projects/         # GET my projects, POST create (OWNER), PATCH/DELETE (ADMIN)
+│   │   ├── projects/         # GET my projects, POST create (OWNER), PATCH (ADMIN), DELETE (OWNER only)
 │   │   ├── settings/users    # GET users+invites (masked), POST invite (rate-limited), PATCH status/role, DELETE remove
 │   │   ├── settings/tokens   # integrations op_live_ hash
 │   │   ├── webhooks/         # GET masked, POST SSRF-checked + HMAC

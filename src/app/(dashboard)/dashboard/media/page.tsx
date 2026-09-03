@@ -57,8 +57,13 @@ export default function MediaPage() {
     finally { setLoading(false); }
   };
 
-  useEffect(() => { fetchMedia(); const h = () => fetchMedia(debouncedSearch || undefined); window.addEventListener("projectChanged", h); return () => window.removeEventListener("projectChanged", h); }, []);
-  useEffect(() => { fetchMedia(debouncedSearch || undefined); }, [debouncedSearch]);
+  useEffect(() => {
+    fetchMedia(debouncedSearch || undefined);
+    const h = () => fetchMedia(debouncedSearch || undefined);
+    window.addEventListener("projectChanged", h);
+    return () => window.removeEventListener("projectChanged", h);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearch]);
 
   const [filterType, setFilterType] = useState<"all" | "images" | "documents">("all");
   const [sortBy, setSortBy] = useState<"date" | "size" | "name">("date");

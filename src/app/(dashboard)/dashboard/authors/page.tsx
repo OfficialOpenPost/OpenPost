@@ -93,8 +93,14 @@ export default function AuthorsPage() {
     } catch {}
     finally { setLoading(false); }
   };
-  useEffect(() => { fetchAuthors(); }, []);
-  useEffect(() => { if (debouncedSearch) fetchAuthors(debouncedSearch); else fetchAuthors(); }, [debouncedSearch]);
+
+  useEffect(() => {
+    fetchAuthors(debouncedSearch || undefined);
+    const h = () => fetchAuthors(debouncedSearch || undefined);
+    window.addEventListener("projectChanged", h);
+    return () => window.removeEventListener("projectChanged", h);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearch]);
 
   const fetchMembers = async () => {
     try {

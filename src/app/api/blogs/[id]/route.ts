@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, withDbRetry } from "@/lib/db";
-import { requireApprovedUser, requireProjectMember, requirePermission, hasPermission, hasMinimumRole, createAuditLog, AuthError } from "@/lib/auth";
+import { requireApprovedUser, requireProjectMember, requirePermission, requireAdmin, hasPermission, hasMinimumRole, createAuditLog, AuthError } from "@/lib/auth";
 import { countWords, readingTime as calcReadingTime } from "@/lib/publish";
 import { triggerWebhooks } from "@/lib/webhooks";
 
@@ -357,14 +357,14 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     });
 
     return NextResponse.json({ data: updated });
-  } catch (error: any) {
+} catch (error: any) {
     const status = error instanceof AuthError ? error.statusCode : 500;
     const code = error instanceof AuthError ? error.code : "UPDATE_FAILED";
     return NextResponse.json({ error: { code, message: error.message || "Failed to update article." } }, { status });
   }
 }
 
-export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
     const user = await requireApprovedUser();
@@ -374,50 +374,100 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: { code: "NOT_FOUND", message: "Article not found." } }, { status: 404 });
     }
 
-    // Require post.delete permission (EDITOR+)
-    if (existing.projectId) {
-      await requirePermission(existing.projectId, "post.delete");
-    }
+    const { searchParams } = new URL(req.url);
+    const isPermanent = searchParams.get("permanent") === "true";
+    const body = await req.json().catch(() => ({}));
+    const reason = (body?.reason || searchParams.get("reason") || "").trim();
 
-    // Soft delete if not already in trash; permanently delete if already in trash
-    if (existing.status !== "trash") {
-      const updated = await withDbRetry(() =>
-        db.blog.update({
-          where: { id },
-          data: { status: "trash" },
-        })
-      );
-
+    // 1. PERMANENT DELETION (Only ADMIN or OWNER can purge articles)
+    if (existing.status === "trash" || isPermanent || body?.permanent === true) {
       if (existing.projectId) {
-        triggerWebhooks({
-          projectId: existing.projectId,
-          event: "post.deleted",
-          payload: { id: existing.id, title: existing.title, slug: existing.slug },
-        }).catch(() => {});
+        await requireAdmin(existing.projectId);
+      } else {
+        await requireAdmin();
       }
+
+      await withDbRetry(async () => {
+        await db.blogRevision.deleteMany({ where: { blogId: id } }).catch(() => {});
+        await db.blogAuthor.deleteMany({ where: { blogId: id } }).catch(() => {});
+        await db.blogTag.deleteMany({ where: { blogId: id } }).catch(() => {});
+        await db.mediaUsage.deleteMany({ where: { blogId: id } }).catch(() => {});
+        await db.redirect.deleteMany({ where: { blogId: id } }).catch(() => {});
+        await db.blog.delete({ where: { id } });
+      });
 
       await createAuditLog({
         actorId: user.id,
         projectId: existing.projectId || undefined,
-        action: "post.trashed",
+        action: "post.deleted_permanent",
         targetId: id,
-        metadata: { title: existing.title },
+        metadata: {
+          title: existing.title,
+          permanent: true,
+          previousTrashReason: (existing.seo as any)?.trashReason,
+        },
       });
 
-      return NextResponse.json({ data: updated });
+      return NextResponse.json({ data: { success: true, id }, message: "Article permanently deleted." });
     }
 
-    await withDbRetry(() => db.blog.delete({ where: { id } }));
+    // 2. SOFT DELETION (Move to Trash with user reason)
+    // Check permission: author can delete own with posts.delete_own; otherwise posts.delete_others (EDITOR+)
+    if (existing.projectId) {
+      const isOwn = existing.createdBy === user.id;
+      const requiredPerm = isOwn ? "posts.delete_own" : "posts.delete_others";
+      const { role } = await requireProjectMember(existing.projectId);
+      if (!hasPermission(role, requiredPerm) && !hasPermission(role, "post.delete")) {
+        throw new AuthError("Insufficient permissions to delete this article.", 403, "FORBIDDEN");
+      }
+    }
+
+    const currentSeo = typeof existing.seo === "object" && existing.seo !== null ? (existing.seo as any) : {};
+    const updatedSeo = {
+      ...currentSeo,
+      trashReason: reason || "No reason specified",
+      trashedBy: user.displayName || user.email,
+      trashedAt: new Date().toISOString(),
+    };
+
+    const updated = await withDbRetry(() =>
+      db.blog.update({
+        where: { id },
+        data: {
+          status: "trash",
+          seo: updatedSeo,
+        },
+      })
+    );
+
+    if (existing.projectId) {
+      triggerWebhooks({
+        projectId: existing.projectId,
+        event: "post.deleted",
+        payload: {
+          id: existing.id,
+          title: existing.title,
+          slug: existing.slug,
+          trashReason: reason || undefined,
+        },
+      }).catch(() => {});
+    }
 
     await createAuditLog({
       actorId: user.id,
       projectId: existing.projectId || undefined,
-      action: "post.deleted_permanent",
+      action: "post.trashed",
       targetId: id,
-      metadata: { title: existing.title },
+      metadata: {
+        title: existing.title,
+        reason: reason || "No reason specified",
+      },
     });
 
-    return NextResponse.json({ data: { success: true } });
+    return NextResponse.json({
+      data: updated,
+      message: "Article moved to trash.",
+    });
   } catch (error: any) {
     const status = error instanceof AuthError ? error.statusCode : 500;
     const code = error instanceof AuthError ? error.code : "DELETE_FAILED";

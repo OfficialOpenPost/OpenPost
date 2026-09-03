@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
   Globe,
@@ -24,23 +24,29 @@ export interface ProjectItem {
   };
 }
 
+// Global client-side memory cache for zero-latency instant project switching
+let globalProjectsCache: ProjectItem[] | null = null;
+let globalActiveProjectCache: ProjectItem | null = null;
+
 export function ProjectSwitcher() {
   const router = useRouter();
-  const [projects, setProjects] = useState<ProjectItem[]>([]);
-  const [activeProject, setActiveProject] = useState<ProjectItem | null>(null);
+  const [projects, setProjects] = useState<ProjectItem[]>(() => globalProjectsCache || []);
+  const [activeProject, setActiveProject] = useState<ProjectItem | null>(() => globalActiveProjectCache);
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!globalProjectsCache);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const loadProjects = async () => {
+  const loadProjects = useCallback(async (silent = false) => {
     try {
-      setLoading(true);
-      const res = await fetch("/api/projects");
+      if (!silent && !globalProjectsCache) setLoading(true);
+      const res = await fetch("/api/projects", { cache: "no-store" });
       const json = await res.json();
       if (Array.isArray(json.data) && json.data.length > 0) {
+        globalProjectsCache = json.data;
         setProjects(json.data);
         const savedId = typeof window !== "undefined" ? localStorage.getItem("openpost_active_project_id") : null;
         const matched = json.data.find((p: ProjectItem) => p.id === savedId) || json.data[0];
+        globalActiveProjectCache = matched;
         setActiveProject(matched);
         if (typeof window !== "undefined") {
           localStorage.setItem("openpost_active_project_id", matched.id);
@@ -51,13 +57,15 @@ export function ProjectSwitcher() {
     } finally {
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    loadProjects();
   }, []);
 
+  useEffect(() => {
+    // If cache is present, load silently in background; otherwise load with spinner
+    loadProjects(Boolean(globalProjectsCache));
+  }, [loadProjects]);
+
   const handleSelectProject = (project: ProjectItem) => {
+    globalActiveProjectCache = project;
     setActiveProject(project);
     if (typeof window !== "undefined") {
       localStorage.setItem("openpost_active_project_id", project.id);
@@ -76,18 +84,20 @@ export function ProjectSwitcher() {
         alert(json.error?.message || "Failed to delete project.");
         return;
       }
+      globalProjectsCache = null;
       if (proj.id === activeProject?.id) {
         const remaining = projects.filter((p) => p.id !== proj.id);
         if (remaining.length > 0) {
           handleSelectProject(remaining[0]);
         } else {
           setActiveProject(null);
+          globalActiveProjectCache = null;
           if (typeof window !== "undefined") {
             localStorage.removeItem("openpost_active_project_id");
           }
         }
       }
-      await loadProjects();
+      await loadProjects(false);
     } catch (err: any) {
       alert(err.message || "Failed to delete project.");
     } finally {
@@ -112,7 +122,7 @@ export function ProjectSwitcher() {
       {/* Main Switcher Button */}
       <button
         onClick={() => setDropdownOpen(!dropdownOpen)}
-        className="w-full flex items-center justify-between gap-2 rounded-xl border border-border bg-white p-2.5 shadow-xs hover:border-brand/40 hover:shadow-sm transition text-left"
+        className="w-full flex items-center justify-between gap-2 rounded-xl border border-border bg-white p-2.5 shadow-xs hover:border-brand/40 hover:shadow-sm transition text-left cursor-pointer"
       >
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand/15 text-navy font-extrabold text-xs">
@@ -120,7 +130,7 @@ export function ProjectSwitcher() {
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-xs font-bold text-navy truncate">
-              {loading ? "Loading websites..." : activeProject?.name || "Main Publication"}
+              {loading && !activeProject ? "Loading websites..." : activeProject?.name || "Main Publication"}
             </p>
             <p className="text-[10px] font-mono text-text-tertiary truncate">
               /{activeProject?.slug || "main"}
@@ -143,7 +153,7 @@ export function ProjectSwitcher() {
                 <div key={proj.id} className={`flex items-center rounded-lg transition ${isSelected ? "bg-brand/15" : "hover:bg-surface-dim"}`}>
                   <button
                     onClick={() => handleSelectProject(proj)}
-                    className={`flex-1 flex items-center justify-between px-2.5 py-2 text-left text-xs min-w-0 ${isSelected ? "font-bold text-navy" : "text-text-secondary"}`}
+                    className={`flex-1 flex items-center justify-between px-2.5 py-2 text-left text-xs min-w-0 cursor-pointer ${isSelected ? "font-bold text-navy" : "text-text-secondary"}`}
                   >
                     <div className="min-w-0 pr-2">
                       <p className="truncate font-semibold">{proj.name}</p>
@@ -159,7 +169,7 @@ export function ProjectSwitcher() {
                       handleDeleteProject(proj);
                     }}
                     disabled={deletingId === proj.id}
-                    className="mr-1.5 p-1.5 rounded-md text-text-tertiary hover:text-red-600 hover:bg-red-50 transition disabled:opacity-50"
+                    className="mr-1.5 p-1.5 rounded-md text-text-tertiary hover:text-red-600 hover:bg-red-50 transition disabled:opacity-50 cursor-pointer"
                     title={`Delete ${proj.name}`}
                   >
                     {deletingId === proj.id ? (
@@ -176,7 +186,7 @@ export function ProjectSwitcher() {
           <div className="mt-1 pt-1 border-t border-border">
             <button
               onClick={handleNewProject}
-              className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-surface-dim p-2 text-xs font-bold text-navy hover:bg-brand hover:text-navy transition"
+              className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-surface-dim p-2 text-xs font-bold text-navy hover:bg-brand hover:text-navy transition cursor-pointer"
             >
               <Plus className="h-3.5 w-3.5" /> Create New Website
             </button>

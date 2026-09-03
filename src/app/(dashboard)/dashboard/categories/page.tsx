@@ -51,15 +51,10 @@ export default function CategoriesPage() {
   };
 
   useEffect(() => {
-    fetchCats();
+    fetchCats(debouncedSearch || undefined);
     const h = () => fetchCats(debouncedSearch || undefined);
     window.addEventListener("projectChanged", h);
     return () => window.removeEventListener("projectChanged", h);
-  }, []);
-
-  useEffect(() => {
-    if (debouncedSearch) fetchCats(debouncedSearch);
-    else fetchCats();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedSearch]);
 

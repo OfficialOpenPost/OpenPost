@@ -188,30 +188,55 @@ export async function DELETE(
       );
     }
 
-    // Check if project has real content
-    const counts = await withDbRetry(() =>
-      Promise.all([
-        db.blog.count({ where: { projectId: id } }),
-        db.media.count({ where: { projectId: id } }),
-      ])
-    );
-    const blogCount = counts[0];
-    const mediaCount = counts[1];
+    // Cascade delete all project-related entities in proper dependency order
+    await withDbRetry(async () => {
+      // 1. Clean up blogs and their dependent relations
+      const blogs = await db.blog.findMany({
+        where: { projectId: id },
+        select: { id: true },
+      });
+      const blogIds = blogs.map((b) => b.id);
 
-    if (blogCount > 0 || mediaCount > 0) {
-      return NextResponse.json(
-        {
-          error: {
-            code: "PROJECT_HAS_CONTENT",
-            message: `Cannot delete project with existing content (${blogCount} posts, ${mediaCount} media). Delete all content first or transfer ownership.`,
-          },
-        },
-        { status: 400 }
-      );
-    }
+      if (blogIds.length > 0) {
+        await db.blogRevision.deleteMany({ where: { blogId: { in: blogIds } } }).catch(() => {});
+        await db.blogAuthor.deleteMany({ where: { blogId: { in: blogIds } } }).catch(() => {});
+        await db.blogTag.deleteMany({ where: { blogId: { in: blogIds } } }).catch(() => {});
+        await db.mediaUsage.deleteMany({ where: { blogId: { in: blogIds } } }).catch(() => {});
+        await db.redirect.deleteMany({ where: { blogId: { in: blogIds } } }).catch(() => {});
+        await db.blog.deleteMany({ where: { id: { in: blogIds } } }).catch(() => {});
+      }
 
-    // Delete project — cascades handle all related records
-    await withDbRetry(() => db.project.delete({ where: { id } }));
+      // 2. Clean up polls
+      await db.poll.deleteMany({ where: { projectId: id } }).catch(() => {});
+
+      // 3. Clean up categories, tags, authors, media
+      await db.category.deleteMany({ where: { projectId: id } }).catch(() => {});
+      await db.tag.deleteMany({ where: { projectId: id } }).catch(() => {});
+      await db.author.deleteMany({ where: { projectId: id } }).catch(() => {});
+      await db.media.deleteMany({ where: { projectId: id } }).catch(() => {});
+
+      // 4. Clean up webhooks and deliveries
+      const webhooks = await db.webhook.findMany({
+        where: { projectId: id },
+        select: { id: true },
+      });
+      const webhookIds = webhooks.map((w) => w.id);
+      if (webhookIds.length > 0) {
+        await db.webhookDelivery.deleteMany({ where: { webhookId: { in: webhookIds } } }).catch(() => {});
+        await db.webhook.deleteMany({ where: { id: { in: webhookIds } } }).catch(() => {});
+      }
+
+      // 5. Clean up invites, codes, tokens, audit logs, memberships
+      await db.invite.deleteMany({ where: { projectId: id } }).catch(() => {});
+      await db.connectionCode.deleteMany({ where: { projectId: id } }).catch(() => {});
+      await db.cliAuthCode.deleteMany({ where: { projectId: id } }).catch(() => {});
+      await db.integration.deleteMany({ where: { projectId: id } }).catch(() => {});
+      await db.auditLog.deleteMany({ where: { projectId: id } }).catch(() => {});
+      await db.projectMember.deleteMany({ where: { projectId: id } }).catch(() => {});
+
+      // 6. Delete project record
+      await db.project.delete({ where: { id } });
+    });
 
     await createAuditLog({
       actorId: adminUser.id,

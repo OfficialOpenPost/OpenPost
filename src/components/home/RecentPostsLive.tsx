@@ -12,6 +12,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { FadeIn } from "@/components/motion";
+import { Tilt3DCard } from "./Tilt3DCard";
 
 interface PostItem {
   id: string;
@@ -50,7 +51,7 @@ export function RecentPostsLive() {
 
   return (
     <section className="bg-white py-16 sm:py-24 border-b border-border">
-      <div className="mx-auto max-w-7xl px-6">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-8 border-b border-border">
           <div>
@@ -107,41 +108,48 @@ export function RecentPostsLive() {
                   : "General";
 
               return (
-                <Link
+                <Tilt3DCard
                   key={post.id}
-                  href={`/blog/${post.slug}`}
-                  className="group rounded-2xl border border-border bg-white p-5 hover:border-brand/40 hover:shadow-md transition block"
+                  depth={8}
+                  className="group hover:border-brand/50 hover:shadow-lg transition-all duration-300"
                 >
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="rounded-full bg-brand/15 px-2.5 py-0.5 font-bold text-navy text-[11px]">
-                      {catName}
-                    </span>
-                    <span className="flex items-center gap-1 text-text-tertiary font-mono text-[11px]">
-                      <Clock className="h-3 w-3" />
-                      {post.readingTime ?? 5} min read
-                    </span>
-                  </div>
+                  <Link
+                    href={`/blog/${post.slug}`}
+                    className="p-5 block h-full flex flex-col justify-between"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="rounded-full bg-brand/15 px-2.5 py-0.5 font-bold text-navy text-[11px]">
+                          {catName}
+                        </span>
+                        <span className="flex items-center gap-1 text-text-tertiary font-mono text-[11px]">
+                          <Clock className="h-3 w-3" />
+                          {post.readingTime ?? 5} min read
+                        </span>
+                      </div>
 
-                  <h3 className="mt-3 text-base font-bold text-navy leading-snug group-hover:text-brand line-clamp-2 transition-colors">
-                    {post.title}
-                  </h3>
-                  <p className="mt-1 font-mono text-xs text-text-tertiary">/{post.slug}</p>
+                      <h3 className="mt-3 text-base font-bold text-navy leading-snug group-hover:text-brand line-clamp-2 transition-colors">
+                        {post.title}
+                      </h3>
+                      <p className="mt-1 font-mono text-xs text-text-tertiary">/{post.slug}</p>
+                    </div>
 
-                  <div className="mt-4 pt-3 border-t border-border flex items-center justify-between text-[11px] text-text-tertiary">
-                    <span>
-                      {post.publishedAt
-                        ? new Date(post.publishedAt).toLocaleDateString(undefined, {
-                            month: "short",
-                            day: "numeric",
-                            year: "numeric",
-                          })
-                        : "Published"}
-                    </span>
-                    <span className="flex items-center gap-0.5 font-bold text-navy group-hover:text-brand">
-                      Read <ChevronRight className="h-3.5 w-3.5" />
-                    </span>
-                  </div>
-                </Link>
+                    <div className="mt-4 pt-3 border-t border-border flex items-center justify-between text-[11px] text-text-tertiary">
+                      <span>
+                        {post.publishedAt
+                          ? new Date(post.publishedAt).toLocaleDateString(undefined, {
+                              month: "short",
+                              day: "numeric",
+                              year: "numeric",
+                            })
+                          : "Published"}
+                      </span>
+                      <span className="flex items-center gap-0.5 font-bold text-navy group-hover:text-brand">
+                        Read <ChevronRight className="h-3.5 w-3.5" />
+                      </span>
+                    </div>
+                  </Link>
+                </Tilt3DCard>
               );
             })}
           </div>

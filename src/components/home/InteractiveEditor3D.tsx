@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import Image from "next/image";
 import {
   Code2,
@@ -18,12 +18,32 @@ import {
   Zap,
   Copy,
   Check,
+  Plus,
+  Trash2,
+  Bold,
+  Italic,
+  Underline,
+  Heading1,
+  Heading2,
+  Quote,
+  Table as TableIcon,
+  Cpu,
+  Activity,
+  Gauge,
 } from "lucide-react";
-import { FadeIn } from "@/components/motion";
+import { FadeIn, ScaleIn } from "@/components/motion";
+import { Tilt3DCard } from "./Tilt3DCard";
 
 export function InteractiveEditor3D() {
   const [device, setDevice] = useState<"desktop" | "tablet" | "mobile">("desktop");
   const [activeTab, setActiveTab] = useState<"visual" | "json">("visual");
+
+  // Interactive formatting toggles
+  const [activeFormats, setActiveFormats] = useState({
+    bold: true,
+    italic: false,
+    underline: false,
+  });
 
   // Interactive poll state
   const [pollVotes, setPollVotes] = useState<Record<string, number>>({
@@ -40,9 +60,11 @@ export function InteractiveEditor3D() {
     code: true,
     poll: true,
     callout: true,
+    table: true,
   });
 
   const [copied, setCopied] = useState(false);
+  const [showSlashMenu, setShowSlashMenu] = useState(false);
 
   const totalVotes = Object.values(pollVotes).reduce((a, b) => a + b, 0);
 
@@ -55,9 +77,18 @@ export function InteractiveEditor3D() {
     setHasVoted(id);
   };
 
+  const toggleFormat = (format: "bold" | "italic" | "underline") => {
+    setActiveFormats((prev) => ({ ...prev, [format]: !prev[format] }));
+  };
+
   const generatedJson = {
     type: "doc",
     version: "1.4.0",
+    meta: {
+      readingTimeMinutes: 5,
+      wordCount: 1480,
+      seoScore: 98,
+    },
     content: [
       enabledBlocks.heading && {
         type: "heading",
@@ -69,19 +100,23 @@ export function InteractiveEditor3D() {
         content: [
           {
             type: "text",
+            marks: [
+              activeFormats.bold ? { type: "bold" } : null,
+              activeFormats.italic ? { type: "italic" } : null,
+            ].filter(Boolean),
             text: "OpenPost stores all document content in safe, structured JSON. No arbitrary HTML parsing, no script injections, and instant edge compilation.",
           },
         ],
       },
       enabledBlocks.callout && {
         type: "callout",
-        attrs: { variant: "success", title: "SEO Optimization" },
-        content: [{ type: "text", text: "Readability score: 98/100 · Optimal title length (48 chars)" }],
+        attrs: { variant: "success", title: "SEO Optimization Engine" },
+        content: [{ type: "text", text: "Readability score: 98/100 · Optimal title length (48 chars) · Schema.org ready" }],
       },
       enabledBlocks.code && {
         type: "codeBlock",
         attrs: { language: "typescript" },
-        content: [{ type: "text", text: 'const { data } = await openpost.posts.get("crafting-content");' }],
+        content: [{ type: "text", text: 'const { data } = await openpost.posts.get("crafting-content");\nexport default function Page() { return <Renderer content={data} />; }' }],
       },
       enabledBlocks.poll && {
         type: "poll",
@@ -94,6 +129,14 @@ export function InteractiveEditor3D() {
           ],
         },
       },
+      enabledBlocks.table && {
+        type: "table",
+        attrs: { rows: 2, cols: 3 },
+        content: [
+          { row: 1, cells: ["Feature", "OpenPost Engine", "Legacy WP"] },
+          { row: 2, cells: ["Storage AST", "Safe JSONB", "Raw Vulnerable HTML"] },
+        ],
+      },
     ].filter(Boolean),
   };
 
@@ -105,7 +148,7 @@ export function InteractiveEditor3D() {
 
   return (
     <section id="interactive-editor" className="bg-[#FAF9F5] py-16 sm:py-24 border-b border-border">
-      <div className="mx-auto max-w-7xl px-6">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6">
         {/* Header */}
         <FadeIn>
           <div className="mx-auto max-w-3xl text-center">
@@ -122,7 +165,7 @@ export function InteractiveEditor3D() {
         </FadeIn>
 
         {/* Studio Controls Bar */}
-        <div className="mt-8 mx-auto max-w-4xl flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-white p-3 shadow-xs">
+        <div className="mt-8 mx-auto max-w-5xl flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-white p-3 shadow-xs">
           {/* Block toggles */}
           <div className="flex flex-wrap items-center gap-1.5 text-xs">
             <span className="font-semibold text-text-tertiary mr-1 flex items-center gap-1">
@@ -134,6 +177,7 @@ export function InteractiveEditor3D() {
               { id: "callout", label: "SEO Callout" },
               { id: "code", label: "TypeScript Code" },
               { id: "poll", label: "Live Poll" },
+              { id: "table", label: "Data Table" },
             ].map((b) => (
               <button
                 key={b.id}
@@ -155,7 +199,7 @@ export function InteractiveEditor3D() {
             ))}
           </div>
 
-          {/* View Switcher & JSON Switch */}
+          {/* Device & Mode Switcher */}
           <div className="flex items-center gap-2">
             <div className="flex items-center rounded-lg bg-surface-dim p-0.5 border border-border">
               <button
@@ -190,94 +234,165 @@ export function InteractiveEditor3D() {
             <div className="flex items-center rounded-lg bg-surface-dim p-0.5 border border-border text-xs font-semibold">
               <button
                 onClick={() => setActiveTab("visual")}
-                className={`px-2.5 py-1 rounded-md transition ${
-                  activeTab === "visual" ? "bg-white text-navy shadow-xs" : "text-text-tertiary hover:text-navy"
+                className={`px-3 py-1 rounded-md transition ${
+                  activeTab === "visual" ? "bg-white text-navy shadow-xs font-bold" : "text-text-tertiary hover:text-navy"
                 }`}
               >
-                Canvas
+                Studio Canvas
               </button>
               <button
                 onClick={() => setActiveTab("json")}
-                className={`px-2.5 py-1 rounded-md transition ${
+                className={`px-3 py-1 rounded-md transition ${
                   activeTab === "json" ? "bg-brand text-navy shadow-xs font-bold" : "text-text-tertiary hover:text-navy"
                 }`}
               >
-                JSON Schema
+                JSON AST
               </button>
             </div>
           </div>
         </div>
 
-        {/* Canvas Viewport */}
+        {/* 3D Canvas Studio Viewport */}
         <div className="mt-6 mx-auto flex justify-center">
           <div
             className={`transition-all duration-300 w-full ${
               device === "desktop"
-                ? "max-w-4xl"
+                ? "max-w-5xl"
                 : device === "tablet"
-                ? "max-w-xl"
+                ? "max-w-2xl"
                 : "max-w-sm"
             }`}
           >
-            <div className="rounded-2xl border border-border bg-white shadow-lg shadow-navy/5 overflow-hidden">
-              {/* Window Bar */}
-              <div className="flex items-center justify-between border-b border-border bg-[#F9FAFB] px-4 py-2.5 text-xs">
-                <div className="flex items-center gap-1.5">
-                  <div className="h-2.5 w-2.5 rounded-full bg-red-400" />
-                  <div className="h-2.5 w-2.5 rounded-full bg-amber-400" />
-                  <div className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
-                  <span className="ml-2 font-mono text-[11px] text-text-tertiary">
-                    openpost-editor.tsx
+            <Tilt3DCard depth={4} className="shadow-2xl shadow-navy/10 overflow-hidden border-border bg-white">
+              {/* Window Bar with Live Telemetry */}
+              <div className="flex items-center justify-between border-b border-border bg-[#F9FAFB] px-4 py-3 text-xs">
+                <div className="flex items-center gap-2">
+                  <div className="h-3 w-3 rounded-full bg-red-400" />
+                  <div className="h-3 w-3 rounded-full bg-amber-400" />
+                  <div className="h-3 w-3 rounded-full bg-emerald-400" />
+                  <span className="ml-2 font-mono text-[11px] text-text-tertiary hidden sm:inline">
+                    openpost-studio/article-editor.tsx
                   </span>
                 </div>
 
-                <div className="flex items-center gap-2 text-[11px]">
-                  <span className="flex items-center gap-1 text-emerald-600 font-semibold">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    Autosaved
+                <div className="flex items-center gap-3 text-xs">
+                  <span className="flex items-center gap-1.5 text-emerald-600 font-semibold">
+                    <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                    Live Autosave
                   </span>
                   <span className="text-text-tertiary">|</span>
-                  <span className="text-text-secondary font-mono">1,480 words</span>
+                  <span className="text-text-secondary font-mono">1,480 words (5 min read)</span>
+                  <span className="hidden sm:inline-block rounded-md bg-emerald-100 text-emerald-800 px-2 py-0.5 font-mono text-[10px] font-bold">
+                    SEO: 98/100
+                  </span>
                 </div>
               </div>
 
-              {/* Toolbar */}
-              <div className="flex flex-wrap items-center gap-1 border-b border-border bg-white px-4 py-2 text-xs text-text-secondary">
-                {["B", "I", "U", "S"].map((f) => (
+              {/* Rich Formatting Toolbar */}
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-white px-4 py-2 text-xs">
+                <div className="flex items-center gap-1">
                   <button
-                    key={f}
-                    className="flex h-6 w-6 items-center justify-center rounded-md bg-surface-dim font-bold hover:bg-surface-raised"
+                    onClick={() => toggleFormat("bold")}
+                    className={`flex h-7 w-7 items-center justify-center rounded-lg font-bold transition ${
+                      activeFormats.bold ? "bg-navy text-white" : "bg-surface-dim text-text-secondary hover:bg-surface-raised"
+                    }`}
+                    title="Bold"
                   >
-                    {f}
+                    <Bold className="h-3.5 w-3.5" />
                   </button>
-                ))}
-                <div className="h-3.5 w-px bg-border mx-1" />
-                {["H1", "H2", "H3"].map((h) => (
                   <button
-                    key={h}
-                    className="rounded-md bg-surface-dim px-2 py-0.5 text-[10px] font-semibold hover:bg-surface-raised"
+                    onClick={() => toggleFormat("italic")}
+                    className={`flex h-7 w-7 items-center justify-center rounded-lg font-bold transition ${
+                      activeFormats.italic ? "bg-navy text-white" : "bg-surface-dim text-text-secondary hover:bg-surface-raised"
+                    }`}
+                    title="Italic"
                   >
-                    {h}
+                    <Italic className="h-3.5 w-3.5" />
                   </button>
-                ))}
-                <div className="h-3.5 w-px bg-border mx-1" />
-                {["List", "Quote", "Table", "Code", "Poll"].map((item) => (
                   <button
-                    key={item}
-                    className="rounded-md bg-surface-dim px-2 py-0.5 text-[10px] font-medium hover:bg-brand/10 hover:text-navy"
+                    onClick={() => toggleFormat("underline")}
+                    className={`flex h-7 w-7 items-center justify-center rounded-lg font-bold transition ${
+                      activeFormats.underline ? "bg-navy text-white" : "bg-surface-dim text-text-secondary hover:bg-surface-raised"
+                    }`}
+                    title="Underline"
                   >
-                    {item}
+                    <Underline className="h-3.5 w-3.5" />
                   </button>
-                ))}
+
+                  <div className="h-4 w-px bg-border mx-1" />
+
+                  <button
+                    onClick={() => setEnabledBlocks((p) => ({ ...p, heading: !p.heading }))}
+                    className={`flex items-center gap-1 rounded-lg px-2 py-1 font-semibold text-[11px] transition ${
+                      enabledBlocks.heading ? "bg-brand/15 text-navy border border-brand/30" : "bg-surface-dim text-text-secondary"
+                    }`}
+                  >
+                    <Heading1 className="h-3.5 w-3.5 text-brand" /> H1
+                  </button>
+                  <button
+                    onClick={() => setEnabledBlocks((p) => ({ ...p, code: !p.code }))}
+                    className={`flex items-center gap-1 rounded-lg px-2 py-1 font-semibold text-[11px] transition ${
+                      enabledBlocks.code ? "bg-brand/15 text-navy border border-brand/30" : "bg-surface-dim text-text-secondary"
+                    }`}
+                  >
+                    <Code2 className="h-3.5 w-3.5 text-brand" /> Code
+                  </button>
+                  <button
+                    onClick={() => setEnabledBlocks((p) => ({ ...p, poll: !p.poll }))}
+                    className={`flex items-center gap-1 rounded-lg px-2 py-1 font-semibold text-[11px] transition ${
+                      enabledBlocks.poll ? "bg-brand/15 text-navy border border-brand/30" : "bg-surface-dim text-text-secondary"
+                    }`}
+                  >
+                    <BarChart3 className="h-3.5 w-3.5 text-[#FE4F01]" /> Poll
+                  </button>
+                </div>
+
+                {/* Quick Insert / Slash Command Helper */}
+                <div className="relative">
+                  <button
+                    onClick={() => setShowSlashMenu(!showSlashMenu)}
+                    className="flex items-center gap-1.5 rounded-lg border border-border bg-[#F9FAFB] px-2.5 py-1 text-xs font-semibold text-navy hover:bg-surface-raised transition shadow-xs"
+                  >
+                    <Plus className="h-3.5 w-3.5 text-brand" />
+                    <span>Insert Block</span>
+                    <kbd className="rounded bg-white border border-border px-1 py-0.2 text-[10px] text-text-tertiary font-mono">/</kbd>
+                  </button>
+
+                  {showSlashMenu && (
+                    <div className="absolute right-0 top-9 z-20 w-56 rounded-xl border border-border bg-white p-2 shadow-xl shadow-navy/10 animate-in fade-in slide-in-from-top-2">
+                      <p className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-text-tertiary">
+                        Available Blocks
+                      </p>
+                      {[
+                        { label: "Interactive Poll", icon: BarChart3, key: "poll" },
+                        { label: "TypeScript Code", icon: Code2, key: "code" },
+                        { label: "SEO Callout", icon: CheckCircle2, key: "callout" },
+                        { label: "Data Table", icon: TableIcon, key: "table" },
+                      ].map((item) => (
+                        <button
+                          key={item.key}
+                          onClick={() => {
+                            setEnabledBlocks((p) => ({ ...p, [item.key]: true }));
+                            setShowSlashMenu(false);
+                          }}
+                          className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs font-semibold text-navy hover:bg-surface-dim transition"
+                        >
+                          <item.icon className="h-3.5 w-3.5 text-brand" />
+                          <span>{item.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
 
-              {/* Canvas Content */}
-              <div className="min-h-[380px] p-6 bg-white">
+              {/* Canvas Content Body */}
+              <div className="min-h-[420px] p-6 sm:p-8 bg-white">
                 {activeTab === "visual" ? (
-                  <div className="space-y-4">
-                    {/* Small thumbnail preview banner */}
-                    <div className="flex items-center gap-4 rounded-xl border border-border bg-[#FCFCF9] p-3">
-                      <div className="relative h-16 w-24 shrink-0 rounded-lg overflow-hidden border border-border">
+                  <div className="space-y-5">
+                    {/* Header Image / Cover Preview */}
+                    <div className="flex items-center gap-4 rounded-xl border border-border bg-[#FCFCF9] p-3.5">
+                      <div className="relative h-16 w-24 shrink-0 rounded-lg overflow-hidden border border-border shadow-xs">
                         <Image
                           src="/images/editor_showcase_3d.jpg"
                           alt="Editor Preview"
@@ -287,54 +402,68 @@ export function InteractiveEditor3D() {
                         />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs font-bold text-navy">Tiptap ProseMirror Engine</p>
-                        <p className="text-[11px] text-text-tertiary truncate">
-                          Zero XSS vulnerabilities · Structured AST output · 60fps typing
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-navy">Tiptap ProseMirror Engine</span>
+                          <span className="rounded bg-brand/15 px-2 py-0.2 text-[10px] font-bold text-navy">
+                            AST Safe
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-text-tertiary truncate mt-0.5">
+                          Zero XSS vulnerabilities · 60fps typing · Clean JSON output
                         </p>
                       </div>
                     </div>
 
-                    {/* Heading */}
+                    {/* H1 Heading */}
                     {enabledBlocks.heading && (
-                      <h1 className="text-xl sm:text-2xl font-extrabold text-navy tracking-tight">
+                      <h1 className="text-xl sm:text-2xl md:text-3xl font-extrabold text-navy tracking-tight leading-tight">
                         Crafting High-Performance Content with OpenPost
                       </h1>
                     )}
 
                     {/* Paragraph */}
                     {enabledBlocks.paragraph && (
-                      <p className="text-sm leading-relaxed text-text-secondary">
+                      <p
+                        className={`text-sm sm:text-base leading-relaxed text-text-secondary ${
+                          activeFormats.bold ? "font-semibold text-navy" : ""
+                        } ${activeFormats.italic ? "italic" : ""} ${
+                          activeFormats.underline ? "underline underline-offset-4 decoration-brand" : ""
+                        }`}
+                      >
                         Modern content creators demand extreme performance, instant autosaving,
                         and frictionless publishing. OpenPost stores every document as validated,
-                        versioned JSON nodes — eliminating raw HTML vulnerabilities.
+                        versioned JSON nodes — eliminating raw HTML vulnerabilities and enabling sub-50ms headless API delivery.
                       </p>
                     )}
 
                     {/* SEO Callout */}
                     {enabledBlocks.callout && (
-                      <div className="rounded-xl border border-emerald-200 bg-emerald-50/80 p-3.5">
-                        <div className="flex items-start gap-2.5">
-                          <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                      <div className="rounded-xl border border-emerald-200 bg-emerald-50/80 p-4">
+                        <div className="flex items-start gap-3">
+                          <CheckCircle2 className="h-4.5 w-4.5 text-emerald-600 shrink-0 mt-0.5" />
                           <div>
                             <h4 className="text-xs font-bold text-emerald-900">
                               Lighthouse SEO 100/100 Validated
                             </h4>
                             <p className="mt-0.5 text-[11px] text-emerald-800 leading-relaxed">
-                              OpenGraph metadata, Schema.org JSON-LD, and WebP media variants ready.
+                              OpenGraph metadata, Schema.org JSON-LD, and WebP media variants automatically generated.
                             </p>
                           </div>
                         </div>
                       </div>
                     )}
 
-                    {/* Code Block in 100% Light Mode */}
+                    {/* TypeScript Code Block */}
                     {enabledBlocks.code && (
-                      <div className="overflow-hidden rounded-xl border border-border bg-[#F3F4F6] p-3.5">
-                        <div className="flex items-center justify-between border-b border-border pb-1.5 mb-2">
-                          <span className="text-[11px] font-mono text-brand font-bold">typescript</span>
-                          <span className="text-[10px] text-text-tertiary font-mono">CODE_BLOCK</span>
+                      <div className="overflow-hidden rounded-xl border border-border bg-[#F3F4F6] p-4">
+                        <div className="flex items-center justify-between border-b border-border pb-2 mb-2.5">
+                          <div className="flex items-center gap-1.5">
+                            <Code2 className="h-3.5 w-3.5 text-brand" />
+                            <span className="text-[11px] font-mono text-navy font-bold">typescript</span>
+                          </div>
+                          <span className="text-[10px] text-text-tertiary font-mono">AST_NODE_CODE</span>
                         </div>
-                        <pre className="overflow-x-auto text-[11px] font-mono text-navy leading-relaxed">
+                        <pre className="overflow-x-auto text-xs font-mono text-navy leading-relaxed">
                           <code>{`const post = await openpost.posts.getBySlug("crafting-content");
 export default function BlogPost() {
   return <OpenPostRenderer content={post.content} />;
@@ -348,13 +477,13 @@ export default function BlogPost() {
                       <div className="rounded-xl border border-brand/30 bg-[#FFFBF5] p-4">
                         <div className="flex items-center justify-between mb-2.5">
                           <div className="flex items-center gap-1.5">
-                            <BarChart3 className="h-3.5 w-3.5 text-brand" />
+                            <BarChart3 className="h-4 w-4 text-brand" />
                             <span className="text-[11px] font-bold uppercase tracking-wider text-navy">
-                              Reader Poll Widget
+                              Interactive Reader Poll Widget
                             </span>
                           </div>
                           <span className="text-[10px] text-text-tertiary font-mono">
-                            {totalVotes} Votes
+                            {totalVotes} Votes Cast
                           </span>
                         </div>
 
@@ -387,7 +516,7 @@ export default function BlogPost() {
                                   style={{ width: `${percent}%` }}
                                 />
                                 <div className="relative flex items-center justify-between text-xs">
-                                  <span className="text-navy flex items-center gap-1.5">
+                                  <span className="text-navy flex items-center gap-1.5 font-medium">
                                     {isSelected && <Check className="h-3.5 w-3.5 text-brand" />}
                                     {option.label}
                                   </span>
@@ -401,30 +530,61 @@ export default function BlogPost() {
                         </div>
                       </div>
                     )}
+
+                    {/* Data Table */}
+                    {enabledBlocks.table && (
+                      <div className="overflow-x-auto rounded-xl border border-border bg-white shadow-xs">
+                        <table className="w-full text-left text-xs">
+                          <thead className="border-b border-border bg-[#F9FAFB] font-bold text-navy">
+                            <tr>
+                              <th className="p-2.5">Architecture Feature</th>
+                              <th className="p-2.5">OpenPost Engine</th>
+                              <th className="p-2.5">Legacy Systems</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-border font-mono text-[11px] text-text-secondary">
+                            <tr>
+                              <td className="p-2.5 font-bold text-navy font-sans">Storage Model</td>
+                              <td className="p-2.5 text-emerald-600 font-bold">ProseMirror JSONB AST</td>
+                              <td className="p-2.5 text-red-500">Unstructured HTML Blobs</td>
+                            </tr>
+                            <tr>
+                              <td className="p-2.5 font-bold text-navy font-sans">Security</td>
+                              <td className="p-2.5 text-emerald-600 font-bold">5-Tier Strict RBAC + RLS</td>
+                              <td className="p-2.5 text-amber-600">Plugin Vulnerabilities</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   /* JSON AST Tab */
                   <div>
                     <div className="flex items-center justify-between pb-2 border-b border-border mb-3">
-                      <span className="text-xs font-mono text-text-tertiary">Schema: openpost/ast/v1.4</span>
+                      <div className="flex items-center gap-2">
+                        <Cpu className="h-4 w-4 text-brand" />
+                        <span className="text-xs font-mono font-bold text-navy">ProseMirror Document AST (openpost/v1.4)</span>
+                      </div>
                       <button
                         onClick={copyJson}
-                        className="flex items-center gap-1 rounded-md bg-surface-dim border border-border px-2.5 py-1 text-xs font-semibold text-navy hover:bg-surface-raised"
+                        className="flex items-center gap-1.5 rounded-lg bg-navy px-3 py-1.5 text-xs font-bold text-white hover:bg-navy-dark transition shadow-xs"
                       >
-                        {copied ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
-                        {copied ? "Copied" : "Copy JSON"}
+                        {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+                        <span>{copied ? "Copied" : "Copy JSON AST"}</span>
                       </button>
                     </div>
-                    <pre className="overflow-x-auto text-[11px] font-mono text-navy leading-relaxed max-h-72 p-2 bg-[#F9FAFB] rounded-lg border border-border">
+                    <pre className="overflow-x-auto text-[11px] font-mono text-navy leading-relaxed max-h-96 p-4 bg-[#F9FAFB] rounded-xl border border-border">
                       <code>{JSON.stringify(generatedJson, null, 2)}</code>
                     </pre>
                   </div>
                 )}
               </div>
-            </div>
+            </Tilt3DCard>
           </div>
         </div>
       </div>
     </section>
   );
 }
+

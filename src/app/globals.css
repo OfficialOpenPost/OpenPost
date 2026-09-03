@@ -207,3 +207,183 @@ a, button {
   background-image: radial-gradient(rgba(45, 52, 64, 0.08) 1px, transparent 1px);
   background-size: 20px 20px;
 }
+
+/* 3D Spatial Canvas Utilities (Lag-free GPU Composited) */
+.preserve-3d {
+  transform-style: preserve-3d;
+  -webkit-transform-style: preserve-3d;
+}
+
+.perspective-1000 {
+  perspective: 1000px;
+  -webkit-perspective: 1000px;
+}
+
+.perspective-1200 {
+  perspective: 1200px;
+  -webkit-perspective: 1200px;
+}
+
+.backface-hidden {
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.gpu-accelerated {
+  transform: translateZ(0);
+  will-change: transform;
+}
+
+/* Subtle 3D Glass Surface */
+.glass-surface-light {
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(229, 231, 235, 0.9);
+}
+
+/* Diverse 3D Surface & Animation Utilities */
+.card-glass-specular {
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(229, 231, 235, 0.85);
+  box-shadow: 0 4px 20px -2px rgba(45, 52, 64, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.card-glass-specular:hover {
+  border-color: rgba(254, 166, 17, 0.4);
+  box-shadow: 0 12px 32px -4px rgba(45, 52, 64, 0.08), 0 0 0 1px rgba(254, 166, 17, 0.15), inset 0 1px 0 rgba(255, 255, 255, 1);
+  transform: translateY(-3px);
+}
+
+/* Linear-style Laser Glowing Border Container */
+.laser-border-container {
+  position: relative;
+  border-radius: 1rem;
+  background: #12161D;
+  padding: 1px;
+  overflow: hidden;
+}
+
+.laser-border-container::before {
+  content: "";
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    transparent 60deg,
+    #FEA611 120deg,
+    #FE4F01 180deg,
+    transparent 240deg,
+    transparent 360deg
+  );
+  animation: laser-rotate 6s linear infinite;
+}
+
+@keyframes laser-rotate {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Diagonal Prismatic Glass Shimmer */
+.shimmer-surface {
+  position: relative;
+  overflow: hidden;
+}
+
+.shimmer-surface::after {
+  content: "";
+  position: absolute;
+  top: -100%;
+  left: -100%;
+  width: 300%;
+  height: 300%;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0) 30%,
+    rgba(254, 166, 17, 0.08) 48%,
+    rgba(255, 255, 255, 0.25) 50%,
+    rgba(254, 79, 1, 0.08) 52%,
+    rgba(255, 255, 255, 0) 70%
+  );
+  transform: translateX(-100%) translateY(-100%);
+  transition: transform 0.75s ease-in-out;
+  pointer-events: none;
+}
+
+.shimmer-surface:hover::after {
+  transform: translateX(50%) translateY(50%);
+}
+
+/* Sleek Custom Scrollbars */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(45, 52, 64, 0.18) transparent;
+}
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(45, 52, 64, 0.18);
+  border-radius: 9999px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(254, 166, 17, 0.5);
+}
+
+.custom-scrollbar-dark {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+.custom-scrollbar-dark::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+.custom-scrollbar-dark::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar-dark::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 9999px;
+}
+.custom-scrollbar-dark::-webkit-scrollbar-thumb:hover {
+  background: rgba(254, 166, 17, 0.6);
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Accessibility: Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  
+  .animate-subtle-float,
+  .animate-subtle-float-reverse,
+  .animate-pulse-soft,
+  .animate-drift,
+  .laser-border-container::before {
+    animation: none !important;
+  }
+}

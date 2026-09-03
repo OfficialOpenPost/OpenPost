@@ -7,7 +7,7 @@ import { execSync } from "child_process";
 
 // --- helpers ---
 const pkg = (() => {
-  try { return JSON.parse(fs.readFileSync(path.join(__dirname, "../package.json"), "utf-8")); } catch { return { version: "0.1.2", name: "openpost-cli" }; }
+  try { return JSON.parse(fs.readFileSync(path.join(__dirname, "../package.json"), "utf-8")); } catch { return { version: "0.2.2", name: "openpost-cli" }; }
 })();
 const VERSION = pkg.version;
 const NAME = "openpost-cli";

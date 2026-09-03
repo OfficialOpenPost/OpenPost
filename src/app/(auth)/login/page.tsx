@@ -29,14 +29,7 @@ export default function LoginPage() {
       if (authError) throw authError;
 
       setAuthState("redirecting");
-      // Use router.push and fallback to window.location if taking longer
-      router.push("/dashboard");
-      router.refresh();
-      setTimeout(() => {
-        if (typeof window !== "undefined" && window.location.pathname !== "/dashboard") {
-          window.location.href = "/dashboard";
-        }
-      }, 1500);
+      window.location.href = "/dashboard";
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Invalid email or password";
       setError(message);

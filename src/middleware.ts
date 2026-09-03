@@ -11,24 +11,12 @@ export async function middleware(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname;
 
-  // Skip session refresh for truly public API routes — they don't need auth cookie rotation
+  // Skip middleware only for static machine-to-machine APIs (health, cron, webhooks, cli handshake)
   if (
-    pathname.startsWith("/api/v1") ||
     pathname.startsWith("/api/health") ||
     pathname.startsWith("/api/cron") ||
     pathname.startsWith("/api/cli") ||
     pathname.startsWith("/api/webhooks")
-  ) {
-    return NextResponse.next();
-  }
-
-  // Skip auth for public page routes
-  if (
-    pathname.startsWith("/blog") ||
-    pathname.startsWith("/authors") ||
-    pathname.startsWith("/login") ||
-    pathname.startsWith("/signup") ||
-    pathname === "/"
   ) {
     return NextResponse.next();
   }
@@ -41,23 +29,24 @@ export async function middleware(request: NextRequest) {
         return request.cookies.getAll();
       },
       setAll(cookiesToSet) {
-        cookiesToSet.forEach(({ name, value, options }) => request.cookies.set(name, value));
+        cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
         supabaseResponse = NextResponse.next({ request });
-        cookiesToSet.forEach(({ name, value, options }) => supabaseResponse.cookies.set(name, value, options));
+        cookiesToSet.forEach(({ name, value, options }) =>
+          supabaseResponse.cookies.set(name, value, options)
+        );
       },
     },
   });
 
-  // Refresh session
+  // Calling getUser() refreshes the auth token cookie automatically
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const isAuthRoute = pathname.startsWith("/login") || pathname.startsWith("/signup");
+  const isAuthRoute = pathname === "/login" || pathname === "/signup";
   const isDashboardRoute = pathname.startsWith("/dashboard");
-  const isPendingApprovalRoute = pathname === "/pending-approval";
 
-  // Unauthenticated user trying to access dashboard -> redirect to login
+  // 1. Unauthenticated user trying to access dashboard -> redirect to login
   if (!user && isDashboardRoute) {
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = "/login";
@@ -65,7 +54,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(redirectUrl);
   }
 
-  // Authenticated user on login/signup -> redirect to dashboard
+  // 2. Authenticated user visiting login/signup -> redirect to dashboard
   if (user && isAuthRoute) {
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = "/dashboard";
@@ -76,5 +65,7 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.svg|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|icon.svg|logo.svg|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+  ],
 };

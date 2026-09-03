@@ -1,4 +1,4 @@
-# openpost-cli v0.2.1 — Connect any frontend to OpenPost CMS
+# openpost-cli v0.2.2 — Connect any frontend to OpenPost CMS
 
 <p align="center"><img src="../public/logo.svg" width="64" height="64" alt="OpenPost Logo" /></p>
 

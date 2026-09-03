@@ -68,6 +68,7 @@ Flow: Supabase Auth → Profile (pending/approved) → ProjectMember (OWNER>ADMI
 | :--- | :--- | :--- |
 | 🛡️ **Multi-Tenant Isolation** | Every query scoped `WHERE projectId` + `requireProjectMember(projectId)`; RLS `project_members.user_id = auth.uid()`; composite indexes `019`. IDOR `Project A → Project B` → `404/403` | `src/app/api/blogs/route.ts:90`, `src/app/api/media/route.ts:5`, `supabase/migrations/019_canonical_five_roles.sql` |
 | 👥 **Canonical 5-Tier RBAC** | `OWNER(5) > ADMIN(4) > EDITOR(3) > AUTHOR(2) > CONTRIBUTOR(1)` — `WRITER` deprecated → `AUTHOR`. Explicit perms `posts.edit_others/publish_others`, `members.invite/approve` etc. | `src/lib/rbac.ts:83`, `AGENTS.md:14` |
+| 🗑️ **Project Deletion & Cascade** | `ADMIN` and `OWNER` can delete projects with full automatic database cascade deletion (blogs, revisions, taxonomies, media records, webhooks, audit logs). | `src/app/api/projects/[id]/route.ts:175` |
 | ⏳ **User Approval Workflow** | Signup → `pending` → admin `Approve/Reject/Suspend/Reactivate` → `approved` only then access. `REQUIRE_EMAIL_VERIFICATION=true` checks `email_confirmed_at`. | `src/lib/auth.ts:160`, `/dashboard/team`, `supabase/migrations/016_auto_profile_on_signup.sql` |
 | 👤 **Authors vs Users (strict)** | `Author` = public byline `name/slug/bio/photoId/socialLinks/website/email/linkedUserId/projectId` — guest `linkedUserId=null`, linked must be **approved member same project**, photo via `media` same project, slug `unique[projectId,slug]` → `409`, real `_count.blogs`, public `/authors/[slug]` only `published` | `src/app/api/v1/authors/route.ts:8`, `prisma/schema.prisma:82` |
 | 👥 **Team & Invites** | `invites` `gen_random_bytes(32)` hex, 7-day expiry, `tokenPreview` masked, rate-limited `10/min/IP`, `OWNER` only for `OWNER` invites | `src/app/api/settings/users/route.ts:40`, `/dashboard/team` |
@@ -80,6 +81,22 @@ Flow: Supabase Auth → Profile (pending/approved) → ProjectMember (OWNER>ADMI
 | 🧾 **Audit Logs** | `audit_logs` on `post.*, user.status_*, project.member_*, author.*, bootstrap.owner_created` | `GET /api/audit`, `/dashboard/audit` |
 | 💻 **CLI `openpost-cli` v0.2.1** | **Single bin** `openpost-cli` (no `create-openpost` alias). Health check 8s abort, 3-retries exchange, template copy, `.env.local` + `git init` | `cli/src/index.ts:57`, `cli/package.json:5` |
 | 🩺 **Doctor & Bootstrap** | `npm run cms:doctor` checks Node, env, DB, tables, `user_role` 5 roles; `npm run cms:bootstrap -- --email admin@example.com` creates `OWNER` | `scripts/cms.ts` |
+
+### 🔐 RBAC Permissions Matrix
+
+| Permission | OWNER | ADMIN | EDITOR | AUTHOR | CONTRIBUTOR |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **Project View & Update** | ✅ | ✅ | ✅ (View) | — | — |
+| **Project Cascade Delete** | ✅ | ✅ | — | — | — |
+| **Team Management & Invites** | ✅ | ✅ | — | — | — |
+| **Manage OWNER Roles** | ✅ | — | — | — | — |
+| **Create & Edit Own Posts** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Edit Others' Posts** | ✅ | ✅ | ✅ | — | — |
+| **Publish & Schedule Posts** | ✅ | ✅ | ✅ | ✅ (Own) | — (Submit Review) |
+| **Media Upload & Management** | ✅ | ✅ | ✅ | ✅ | — |
+| **Taxonomies (Categories/Tags)** | ✅ | ✅ | ✅ | — | — |
+| **Webhooks & API Tokens** | ✅ | ✅ | — | — | — |
+| **Audit Logs Inspection** | ✅ | ✅ | — | — | — |
 
 > **All features have a `UI → API → authz → DB → validation → audit → UI` path — no mock buttons.**
 
@@ -97,7 +114,7 @@ Flow: Supabase Auth → Profile (pending/approved) → ProjectMember (OWNER>ADMI
 | **Editor** | Tiptap (ProseMirror) | block JSON, `countWords`/`readingTime` |
 | **UI** | Tailwind 4, lucide-react, framer-motion | dashboard, editor, authors, team |
 | **CLI** | `openpost-cli` v0.2.1 | `prompts` + `open` + `chalk` |
-| **Test** | Vitest 30/30 | rbac 8, api-token 3, storage 7, ssrf 6, slug 3, webhook 3 |
+| **Test** | Vitest 33/33 | rbac 8, api-token 3, storage 7, ssrf 6, slug 3, webhook 3, cron 3 |
 
 ### Architecture: Supabase vs Self-Hosted
 

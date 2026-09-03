@@ -107,10 +107,13 @@ export default function DashboardPage() {
     try {
       setLoading(true);
       const activeProjId = typeof window !== "undefined" ? localStorage.getItem("openpost_active_project_id") : null;
-      const projQuery = activeProjId ? `?projectId=${activeProjId}` : "";
+      const params = new URLSearchParams();
+      if (activeProjId) params.set("projectId", activeProjId);
+      params.set("_t", Date.now().toString());
+
       const projHeaders: Record<string, string> = activeProjId ? { "X-OpenPost-Project": activeProjId } : {};
 
-      const res = await fetch(`/api/dashboard/stats${projQuery}&_t=${Date.now()}`, {
+      const res = await fetch(`/api/dashboard/stats?${params.toString()}`, {
         cache: "no-store",
         headers: projHeaders,
       });

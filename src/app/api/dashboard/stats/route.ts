@@ -24,29 +24,41 @@ export async function GET(req: NextRequest) {
 
     const projectWhere = targetProjectId ? { projectId: targetProjectId } : {};
 
-    const [
-      publishedCount,
-      draftsCount,
-      scheduledCount,
-      trashCount,
-      categoriesCount,
-      tagsCount,
-      authorsCount,
-      mediaCount,
-      webhooksCount,
-      aggregates,
-      recentBlogs,
-    ] = await withDbRetry(() =>
+    // 1. Group blogs by status in a SINGLE query instead of 4 separate queries
+    const statusGroups = await withDbRetry(() =>
+      db.blog.groupBy({
+        by: ["status"],
+        where: projectWhere,
+        _count: { _all: true },
+      })
+    );
+
+    let publishedCount = 0;
+    let draftsCount = 0;
+    let scheduledCount = 0;
+    let trashCount = 0;
+
+    for (const group of statusGroups) {
+      if (group.status === "published") publishedCount = group._count._all;
+      else if (group.status === "draft") draftsCount = group._count._all;
+      else if (group.status === "scheduled") scheduledCount = group._count._all;
+      else if (group.status === "trash") trashCount = group._count._all;
+    }
+
+    // 2. Fetch taxonomies and media counts in a small parallel batch
+    const [categoriesCount, tagsCount, authorsCount, mediaCount, webhooksCount] = await withDbRetry(() =>
       Promise.all([
-        db.blog.count({ where: { ...projectWhere, status: "published" } }),
-        db.blog.count({ where: { ...projectWhere, status: "draft" } }),
-        db.blog.count({ where: { ...projectWhere, status: "scheduled" } }),
-        db.blog.count({ where: { ...projectWhere, status: "trash" } }),
         db.category.count({ where: projectWhere }),
         db.tag.count({ where: projectWhere }),
         db.author.count({ where: projectWhere }),
         db.media.count({ where: projectWhere }),
         db.webhook.count({ where: projectWhere }),
+      ])
+    );
+
+    // 3. Fetch aggregates & top 6 recent articles
+    const [aggregates, recentBlogs] = await withDbRetry(() =>
+      Promise.all([
         db.blog.aggregate({
           where: projectWhere,
           _sum: { wordCount: true },

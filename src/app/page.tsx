@@ -10,6 +10,7 @@ import { BlockShowcase3D } from "@/components/home/BlockShowcase3D";
 import { ComparisonBenchmark3D } from "@/components/home/ComparisonBenchmark3D";
 import { DeployEcosystem3D } from "@/components/home/DeployEcosystem3D";
 import { Testimonials3D } from "@/components/home/Testimonials3D";
+import { RecentPostsLive } from "@/components/home/RecentPostsLive";
 import { Cta3D } from "@/components/home/Cta3D";
 
 export default function Home() {
@@ -21,30 +22,32 @@ export default function Home() {
       {/* 2. Interactive Block Editor Studio Playground */}
       <InteractiveEditor3D />
 
-
-      {/* 4. Structured Content Modeling & Schemas */}
+      {/* 3. Structured Content Modeling & Schemas */}
       <ContentModelingStudio />
 
-      {/* 5. Headless REST API Playground & Multi-Framework SDKs */}
+      {/* 4. Headless REST API Playground & Multi-Framework SDKs */}
       <ApiPlayground3D />
 
-      {/* 6. Editorial Operations Pipeline & 5-Tier RBAC */}
+      {/* 5. Editorial Operations Pipeline & 5-Tier RBAC */}
       <DashboardAnalytics3D />
 
-      {/* 7. Search-Ready SEO Engine & Lossless Media Pipeline */}
+      {/* 6. Search-Ready SEO Engine & Lossless Media Pipeline */}
       <SeoPerformance3D />
 
-      {/* 8. Interactive Content Block Playground */}
+      {/* 7. Interactive Content Block Playground */}
       <BlockShowcase3D />
 
-      {/* 9. Publishing Architecture & Delivery Flow */}
+      {/* 8. Publishing Architecture & Delivery Flow */}
       <ComparisonBenchmark3D />
 
-      {/* 10. Deployment Freedom (openpost-cli, Docker, Supabase, Vercel) */}
+      {/* 9. Developer CLI & Ecosystem (openpost-cli, Docker, Supabase, Vercel) */}
       <DeployEcosystem3D />
 
-      {/* 11. Open-Source Integrity & Product Proof */}
+      {/* 10. Open-Source Integrity & Product Proof */}
       <Testimonials3D />
+
+      {/* 11. Live Published Articles Feed (Real Data) */}
+      <RecentPostsLive />
 
       {/* 12. Final Call to Action */}
       <Cta3D />

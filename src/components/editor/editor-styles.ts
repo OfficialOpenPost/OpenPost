@@ -115,7 +115,7 @@ export const EDITOR_STYLES = `
 
   /* ── Tiptap Table ── */
   .tiptap .tableWrapper {
-    overflow: hidden;
+    overflow-x: auto;
     margin: 1.5rem 0;
     clear: both;
     max-width: 100%;
@@ -126,6 +126,7 @@ export const EDITOR_STYLES = `
     border-collapse: collapse;
     table-layout: auto;
     width: 100%;
+    max-width: 100%;
     margin: 0;
     background-color: #FFFFFF;
     box-sizing: border-box;
@@ -134,15 +135,16 @@ export const EDITOR_STYLES = `
   .tiptap table td,
   .tiptap table th {
     min-width: 2rem;
+    max-width: 50%;
     border: 1px solid #CBD5E1;
     padding: 0.75rem 1rem;
     vertical-align: top;
     box-sizing: border-box;
     position: relative;
     font-size: 0.9375rem;
-    overflow: hidden;
     word-wrap: break-word;
     overflow-wrap: break-word;
+    white-space: normal;
   }
 
   .tiptap table th {

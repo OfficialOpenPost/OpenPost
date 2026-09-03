@@ -11,7 +11,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 # OpenPost — Agent Guide (AI Coding Agents)
 
 > **Product:** Multi-tenant headless CMS & Publishing Studio (Next.js 16 App Router + Supabase + Prisma + R2 + Tiptap).
-> **Package manager:** npm (no yarn/pnpm in repo). **CLI:** `openpost-cli` v0.2.0 only (bin `openpost-cli`, no `create-openpost` alias).
+> **Package manager:** npm (no yarn/pnpm in repo). **CLI:** `openpost-cli` v0.2.1 only (bin `openpost-cli`, no `create-openpost` alias).
 > **Database:** Supabase (managed PostgreSQL + Auth + RLS). Self-hosted PostgreSQL requires manual auth setup.
 > **Read this before touching code.**
 
@@ -27,7 +27,7 @@ D:/Openpost
 ├── src/components/project/  # ProjectSwitcher (localStorage openpost_active_project_id + projectChanged event)
 ├── prisma/schema.prisma     # UserRole enum OWNER/ADMIN/EDITOR/AUTHOR/CONTRIBUTOR (+ WRITER alias), Profile, Project, ProjectMember, Author, Blog, Media...
 ├── supabase/migrations/     # 001 → 021_site_config_and_cleanup.sql (run in order via SQL Editor)
-├── cli/                     # openpost-cli v0.2.0 → dist/index.js (single bin openpost-cli)
+├── cli/                     # openpost-cli v0.2.1 → dist/index.js (single bin openpost-cli)
 ├── templates/nextjs-blog/   # Next.js 15 blog starter copied by CLI
 ├── public/logo.svg          # Icon used in README & UI
 ├── scripts/cms.ts           # cms:doctor, cms:bootstrap (OWNER creation)
@@ -80,7 +80,7 @@ Rules:
 - `POST /api/cron/publish` requires `Authorization: Bearer CRON_SECRET` (fail-closed 500 if missing in prod), no `?secret=`, atomic `updateMany where status=scheduled`.
 - `audit_logs` via `createAuditLog()` on `post.*, user.status_*, project.member_*, author.*, bootstrap.owner_created` → `GET /api/audit` + UI `/dashboard/audit`.
 
-## 9) CLI (`openpost-cli` v0.2.0, single bin)
+## 9) CLI (`openpost-cli` v0.2.1, single bin)
 
 ```
 npx openpost-cli [init|doctor|login|help|version] [--cms-url URL] [--code OP-XXXX] [--project dir] [--skip-health] [--yes]
@@ -100,7 +100,7 @@ npm run test        # vitest 30/30 (rbac 8, api-token 3, storage 7, ssrf 6, slug
 npm run build       # next build (Turbopack) → 67 pages incl. /dashboard/team + /authors/[slug]
 npm run cms:doctor  # checks Node≥18, env, DB connection, tables, user_role enum 5 roles
 npm run cms:bootstrap -- --email admin@example.com --password StrongPass123  # creates OWNER
-cd cli && npm run build && node dist/index.js --help  # → openpost-cli v0.2.0
+cd cli && npm run build && node dist/index.js --help  # → openpost-cli v0.2.1
 node dist/index.js doctor --cms-url http://localhost:3000  # health
 ```
 

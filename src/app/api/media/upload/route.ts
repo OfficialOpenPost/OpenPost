@@ -28,9 +28,14 @@ export async function POST(req: NextRequest) {
     const file = form.get("file") as File | null;
     const projectId = (form.get("projectId") as string) || undefined;
 
-    if (projectId) {
-      await requirePermission(projectId, "media.upload");
+    if (!projectId) {
+      return NextResponse.json(
+        { error: { code: "VALIDATION_ERROR", message: "projectId is required." } },
+        { status: 400 }
+      );
     }
+
+    await requirePermission(projectId, "media.upload");
 
     if (!file) {
       return NextResponse.json({ error: { code: "NO_FILE", message: "No file provided for upload." } }, { status: 400 });
@@ -61,7 +66,7 @@ export async function POST(req: NextRequest) {
 
     const checksum = crypto.createHash("sha256").update(buffer).digest("hex");
     const ext = (file.name.split(".").pop() || "bin").toLowerCase().replace(/[^a-z0-9]/g, "");
-    const key = `openpost-media/${Date.now()}-${crypto.randomUUID()}.${ext}`;
+    const key = `openpost-media/${projectId}/${Date.now()}-${crypto.randomUUID()}.${ext}`;
 
     // Upload to Cloudflare R2
     let publicUrl = "";
@@ -69,6 +74,12 @@ export async function POST(req: NextRequest) {
       const uploadResult = await uploadBuffer(key, buffer, mimeType);
       publicUrl = uploadResult.url;
     } catch (storageErr) {
+      if (process.env.NODE_ENV === "production") {
+        return NextResponse.json(
+          { error: { code: "STORAGE_ERROR", message: "Failed to upload media to storage." } },
+          { status: 502 }
+        );
+      }
       console.warn("Direct R2 upload failed, falling back to data URL for dev preview:", storageErr);
       const base64 = buffer.toString("base64");
       publicUrl = `data:${mimeType};base64,${base64}`;

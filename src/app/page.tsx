@@ -2,6 +2,7 @@
 
 import { Hero3DSection } from "@/components/home/Hero3DSection";
 import { InteractiveEditor3D } from "@/components/home/InteractiveEditor3D";
+import { ContentModelingStudio } from "@/components/home/ContentModelingStudio";
 import { ApiPlayground3D } from "@/components/home/ApiPlayground3D";
 import { DashboardAnalytics3D } from "@/components/home/DashboardAnalytics3D";
 import { SeoPerformance3D } from "@/components/home/SeoPerformance3D";
@@ -24,7 +25,10 @@ export default function Home() {
       {/* 3. Interactive Block Editor Studio Playground */}
       <InteractiveEditor3D />
 
-      {/* 4. Headless REST API Playground & Architecture */}
+      {/* 4. Structured Content Modeling & Schemas (Sanity/Strapi style) */}
+      <ContentModelingStudio />
+
+      {/* 5. Headless REST API Playground & Multi-Framework SDKs */}
       <ApiPlayground3D />
 
       {/* 5. Content Management Pipeline & RBAC */}

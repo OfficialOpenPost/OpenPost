@@ -2,8 +2,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { db, withDbRetry } from "@/lib/db";
 import { generateApiToken } from "@/lib/apiToken";
 import { createAuditLog } from "@/lib/auth";
+import { rateLimit, getClientIp } from "@/lib/rateLimit";
 
 export async function POST(req: NextRequest) {
+  const ip = getClientIp(req as unknown as Request);
+  const rl = rateLimit(`cli-exchange:${ip}`, { windowMs: 60_000, max: 20 });
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: { code: "RATE_LIMITED", message: "Too many requests." } },
+      { status: 429, headers: { "Retry-After": Math.ceil((rl.resetAt - Date.now()) / 1000).toString() } }
+    );
+  }
+
   try {
     const body = await req.json().catch(() => ({}));
     const { code } = body as { code?: string };

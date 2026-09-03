@@ -8,7 +8,6 @@ const allowedTypes = [
   "image/png",
   "image/webp",
   "image/gif",
-  "image/svg+xml",
   "image/avif",
   "application/pdf",
   "video/mp4",
@@ -26,13 +25,18 @@ export async function POST(req: NextRequest) {
       projectId?: string;
     };
 
-    if (projectId) {
-      await requirePermission(projectId, "media.upload");
+    if (!projectId) {
+      return NextResponse.json(
+        { error: { code: "VALIDATION_ERROR", message: "projectId is required." } },
+        { status: 400 }
+      );
     }
+
+    await requirePermission(projectId, "media.upload");
 
     if (!contentType || !allowedTypes.includes(contentType.toLowerCase())) {
       return NextResponse.json(
-        { error: { code: "INVALID_TYPE", message: `Unsupported media MIME type: ${contentType}` } },
+        { error: { code: "INVALID_TYPE", message: `Unsupported media MIME type: ${contentType}. SVG direct presign is not permitted; upload SVGs via the validated upload endpoint.` } },
         { status: 400 }
       );
     }
@@ -52,7 +56,7 @@ export async function POST(req: NextRequest) {
     }
 
     const ext = (filename.split(".").pop() || "bin").toLowerCase().replace(/[^a-z0-9]/g, "");
-    const key = `openpost-media/${Date.now()}-${crypto.randomUUID()}.${ext}`;
+    const key = `openpost-media/${projectId}/${Date.now()}-${crypto.randomUUID()}.${ext}`;
 
     const presignedUrl = await getSignedUploadUrl(key, contentType, 300);
     const publicUrl = getPublicUrl(key);

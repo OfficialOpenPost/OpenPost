@@ -143,10 +143,33 @@ export function validateMagicBytes(buffer: Buffer, mimeType: string): boolean {
     return buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46;
   }
 
-  // SVG: text/xml containing <svg
+  // SVG: XML text containing <svg without any scripts, event handlers, or active content
   if (mime === "image/svg+xml") {
-    const text = buffer.slice(0, 1024).toString("utf-8").toLowerCase();
-    return text.includes("<svg") && !text.includes("<script");
+    const text = buffer.toString("utf-8");
+    const lower = text.toLowerCase();
+    if (!lower.includes("<svg")) return false;
+
+    // Disallow dangerous elements, event attributes, javascript links, and data URI scripts
+    const dangerousPatterns = [
+      /<script[\s>]/i,
+      /<\/script>/i,
+      /\bon[a-z]+\s*=/i, // onload=, onerror=, onclick=, onmouseover=, etc.
+      /<foreignobject[\s>]/i,
+      /<animate[\s>]/i,
+      /<set[\s>]/i,
+      /<embed[\s>]/i,
+      /<object[\s>]/i,
+      /<applet[\s>]/i,
+      /<meta[\s>]/i,
+      /href\s*=\s*["']?\s*javascript:/i,
+      /xlink:href\s*=\s*["']?\s*javascript:/i,
+      /href\s*=\s*["']?\s*data:(?!image\/)/i,
+    ];
+
+    for (const pattern of dangerousPatterns) {
+      if (pattern.test(text)) return false;
+    }
+    return true;
   }
 
   // AVIF: ....ftypavif

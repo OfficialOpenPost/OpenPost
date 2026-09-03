@@ -32,8 +32,9 @@ docker compose up -d
   {
     id: "vercel",
     title: "Vercel + Supabase",
-    cmd: `npx create-openpost --template vercel
-# Link Supabase project URL and API keys in environment settings`,
+    cmd: `git clone https://github.com/OfficialOpenPost/OpenPost.git
+# Deploy directly to Vercel with PostgreSQL + Supabase Auth
+vercel --prod`,
   },
 ];
 

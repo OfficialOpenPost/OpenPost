@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Eye, EyeOff, ArrowRight, Mail, Lock, User, Sparkles, Check } from "lucide-react";
+import { Eye, EyeOff, ArrowRight, Mail, Lock, User, Sparkles, Check, Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
 const ALLOW_PUBLIC_SIGNUP = process.env.NEXT_PUBLIC_ALLOW_SIGNUP === "true";
@@ -12,7 +12,7 @@ const ALLOW_PUBLIC_SIGNUP = process.env.NEXT_PUBLIC_ALLOW_SIGNUP === "true";
 export default function SignupPage() {
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [signupState, setSignupState] = useState<"idle" | "creating" | "success">("idle");
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({ name: "", email: "", password: "", agree: false });
 
@@ -32,8 +32,8 @@ export default function SignupPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.agree) return;
-    setLoading(true);
+    if (!form.agree || signupState !== "idle") return;
+    setSignupState("creating");
     setError(null);
 
     try {
@@ -47,11 +47,14 @@ export default function SignupPage() {
       });
       if (signUpError) throw signUpError;
 
-      router.push("/login");
+      setSignupState("success");
+      setTimeout(() => {
+        router.push("/login");
+      }, 1000);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Failed to create account";
       setError(message);
-      setLoading(false);
+      setSignupState("idle");
     }
   };
 
@@ -160,15 +163,50 @@ export default function SignupPage() {
 
               <button
                 type="submit"
-                disabled={loading || !form.agree}
-                className="group inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-brand text-sm font-bold text-navy shadow-md shadow-brand/20 transition hover:bg-brand-hover disabled:opacity-60"
+                disabled={signupState !== "idle" || !form.agree}
+                className={`relative overflow-hidden group inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl text-sm font-bold shadow-md transition-all duration-300 ${
+                  signupState === "success"
+                    ? "bg-emerald-600 text-white shadow-emerald-500/25 ring-2 ring-emerald-400/40"
+                    : signupState === "creating"
+                    ? "bg-brand text-navy opacity-95 shadow-brand/30 cursor-wait"
+                    : "bg-brand text-navy shadow-brand/20 hover:bg-brand-hover hover:shadow-brand/30 active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed"
+                }`}
               >
-                {loading ? (
-                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-navy/30 border-t-navy" />
-                ) : (
-                  <>
+                {/* Subtle animated shimmer effect */}
+                {signupState !== "idle" && (
+                  <motion.div
+                    className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -skew-x-12"
+                    initial={{ x: "-100%" }}
+                    animate={{ x: "200%" }}
+                    transition={{ repeat: Infinity, duration: 1.2, ease: "linear" }}
+                  />
+                )}
+
+                {signupState === "creating" && (
+                  <span className="relative flex items-center gap-2.5">
+                    <Loader2 className="h-4 w-4 animate-spin text-navy" />
+                    <span>Creating your workspace...</span>
+                  </span>
+                )}
+
+                {signupState === "success" && (
+                  <span className="relative flex items-center gap-2.5">
+                    <motion.span
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      transition={{ type: "spring", stiffness: 400, damping: 15 }}
+                      className="flex h-5 w-5 items-center justify-center rounded-full bg-white/20"
+                    >
+                      <Check className="h-3.5 w-3.5 text-white stroke-[3]" />
+                    </motion.span>
+                    <span>Account created! Redirecting to login...</span>
+                  </span>
+                )}
+
+                {signupState === "idle" && (
+                  <span className="relative flex items-center gap-2">
                     Create account <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
-                  </>
+                  </span>
                 )}
               </button>
 

@@ -11,9 +11,8 @@
 **Write like WordPress &middot; Deliver like Sanity &middot; Own like Ghost**
 
 <p align="center">
-  <a href="https://github.com/OfficialOpenPost/OpenPost/actions"><img src="https://img.shields.io/badge/build-passing-2ea44f.svg?style=for-the-badge&logo=github-actions&logoColor=white" alt="Build Status" /></a>
   <a href="https://github.com/OfficialOpenPost/OpenPost"><img src="https://img.shields.io/badge/tests-30%2F30%20passed-brightgreen.svg?style=for-the-badge&logo=vitest&logoColor=white" alt="Vitest Tests" /></a>
-  <a href="https://github.com/OfficialOpenPost/OpenPost/releases"><img src="https://img.shields.io/badge/cli-openpost--cli%20v0.2.0-000000.svg?style=for-the-badge&logo=npm&logoColor=white" alt="openpost-cli v0.2.0" /></a>
+  <a href="https://github.com/OfficialOpenPost/OpenPost/releases"><img src="https://img.shields.io/badge/cli-openpost--cli%20v0.2.1-000000.svg?style=for-the-badge&logo=npm&logoColor=white" alt="openpost-cli v0.2.1" /></a>
   <a href="https://nextjs.org"><img src="https://img.shields.io/badge/Next.js-16.3%20(App%20Router)-000000.svg?style=for-the-badge&logo=next.js&logoColor=white" alt="Next.js" /></a>
   <a href="https://www.typescriptlang.org"><img src="https://img.shields.io/badge/TypeScript-5.0-3178C6.svg?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript" /></a>
   <a href="https://supabase.com"><img src="https://img.shields.io/badge/PostgreSQL-Supabase-3ECF8E.svg?style=for-the-badge&logo=supabase&logoColor=white" alt="Supabase" /></a>
@@ -79,7 +78,7 @@ Flow: Supabase Auth → Profile (pending/approved) → ProjectMember (OWNER>ADMI
 | 📊 **Polls** | `single/multiple` + `SHA256 voter fingerprint` dedup `unique[pollId,fingerprint]` `409 ALREADY_VOTED` | `prisma/schema.prisma:258`, `src/app/api/v1/polls/[id]/vote/route.ts` |
 | 📡 **Headless API v1** | `GET /api/v1/posts?limit&category&cursor` caches `s-maxage=60`, `project` via `Bearer op_live_64hex` / `?project` / `X-OpenPost-Project` | `src/app/api/v1/posts/route.ts:6`, `src/lib/apiToken.ts:17` |
 | 🧾 **Audit Logs** | `audit_logs` on `post.*, user.status_*, project.member_*, author.*, bootstrap.owner_created` | `GET /api/audit`, `/dashboard/audit` |
-| 💻 **CLI `openpost-cli` v0.2.0** | **Single bin** `openpost-cli` (no `create-openpost` alias). Health check 8s abort, 3-retries exchange, template copy, `.env.local` + `git init` | `cli/src/index.ts:57`, `cli/package.json:5` |
+| 💻 **CLI `openpost-cli` v0.2.1** | **Single bin** `openpost-cli` (no `create-openpost` alias). Health check 8s abort, 3-retries exchange, template copy, `.env.local` + `git init` | `cli/src/index.ts:57`, `cli/package.json:5` |
 | 🩺 **Doctor & Bootstrap** | `npm run cms:doctor` checks Node, env, DB, tables, `user_role` 5 roles; `npm run cms:bootstrap -- --email admin@example.com` creates `OWNER` | `scripts/cms.ts` |
 
 > **All features have a `UI → API → authz → DB → validation → audit → UI` path — no mock buttons.**
@@ -97,7 +96,7 @@ Flow: Supabase Auth → Profile (pending/approved) → ProjectMember (OWNER>ADMI
 | **Storage** | Cloudflare R2 (S3 compat) | zero egress, presigned `PUT`, `validateMagicBytes` |
 | **Editor** | Tiptap (ProseMirror) | block JSON, `countWords`/`readingTime` |
 | **UI** | Tailwind 4, lucide-react, framer-motion | dashboard, editor, authors, team |
-| **CLI** | `openpost-cli` v0.2.0 | `prompts` + `open` + `chalk` |
+| **CLI** | `openpost-cli` v0.2.1 | `prompts` + `open` + `chalk` |
 | **Test** | Vitest 30/30 | rbac 8, api-token 3, storage 7, ssrf 6, slug 3, webhook 3 |
 
 ### Architecture: Supabase vs Self-Hosted
@@ -161,9 +160,9 @@ D:/Openpost
 │   └── slug.ts / publish.ts
 ├── prisma/schema.prisma      # UserRole OWNER/ADMIN/EDITOR/AUTHOR/CONTRIBUTOR (+WRITER alias), Profile, Project, ProjectMember, Author, Blog, Media, Poll, Webhook, Invite, Integration, AuditLog
 ├── supabase/migrations/      # 001 → 021_site_config_and_cleanup.sql (run in order)
-├── cli/                      # openpost-cli v0.2.0 → dist/index.js (single bin)
+├── cli/                      # openpost-cli v0.2.1 → dist/index.js (single bin)
 │   ├── src/index.ts          # init/doctor/login/logout/help/version, healthCheck 8s, 3-retries exchange, copy template, .env.local
-│   └── package.json          # bin: openpost-cli only, v0.2.0
+│   └── package.json          # bin: openpost-cli only, v0.2.1
 ├── templates/nextjs-blog/    # starter copied by CLI (Next 15, /api/revalidate)
 ├── public/logo.svg           # icon (see top) — single brand source
 ├── scripts/cms.ts            # cms:doctor, cms:bootstrap (OWNER)
@@ -216,13 +215,13 @@ Signup → `pending` → Admin `/dashboard/team` **Approve** → access granted.
 
 ---
 
-## 💻 CLI — `openpost-cli` v0.2.0 (single bin)
+## 💻 CLI — `openpost-cli` v0.2.1 (single bin)
 
-> **Always use `openpost-cli`**. The legacy alias `create-openpost` is **removed** (v0.2.0). Use `npx openpost-cli` everywhere.
+> **Always use `openpost-cli`**. The legacy alias `create-openpost` is **removed** (v0.2.1). Use `npx openpost-cli` everywhere.
 
 ```bash
 npx openpost-cli --help
-npx openpost-cli --version   # → openpost-cli v0.2.0
+npx openpost-cli --version   # → openpost-cli v0.2.1
 npx openpost-cli doctor --cms-url http://localhost:3000
 npx openpost-cli init my-blog
 npx openpost-cli init my-blog --cms-url https://cms.example.com --yes
@@ -441,5 +440,5 @@ Report: `officialopenpost@outlook.com`. See `supabase/migrations/README.md` `001
 MIT — `LICENSE`. Keep `public/logo.svg` as brand icon.
 
 <div align="center">
-  <sub>Built with ❤️ by the OpenPost Community. <code>openpost-cli v0.2.0</code> — single bin <code>openpost-cli</code> only. Empowering independent writing worldwide.</sub>
+  <sub>Built with ❤️ by the OpenPost Community. <code>openpost-cli v0.2.1</code> — single bin <code>openpost-cli</code> only. Empowering independent writing worldwide.</sub>
 </div>

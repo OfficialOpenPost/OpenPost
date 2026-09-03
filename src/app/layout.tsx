@@ -18,6 +18,11 @@ export const metadata: Metadata = {
   title: "OpenPost — Professional Blog CMS & Writing Studio",
   description:
     "A professional blog-focused Content Management System and writing studio. Write, organize, and publish content with a block-based editor, SEO tools, and a headless API.",
+  alternates: {
+    types: {
+      "application/rss+xml": "/feed.xml",
+    },
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

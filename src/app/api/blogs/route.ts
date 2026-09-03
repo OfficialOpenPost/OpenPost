@@ -115,6 +115,27 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ data: [] });
       }
 
+      const blogListSelect = {
+        id: true,
+        title: true,
+        slug: true,
+        status: true,
+        updatedAt: true,
+        createdAt: true,
+        publishedAt: true,
+        scheduledAt: true,
+        wordCount: true,
+        readingTime: true,
+        projectId: true,
+        categoryId: true,
+        featuredImageId: true,
+        createdBy: true,
+        category: { select: { id: true, name: true, slug: true } },
+        author: { select: { name: true, email: true } },
+        featuredImage: { select: { id: true, variants: true } },
+        project: { select: { id: true, name: true, slug: true } },
+      };
+
       const blogs = await withDbRetry(() =>
         db.blog.findMany({
           where: {
@@ -123,12 +144,7 @@ export async function GET(req: NextRequest) {
           },
           take: Math.min(100, Math.max(1, limit)),
           orderBy: { updatedAt: "desc" },
-          include: {
-            category: { select: { id: true, name: true, slug: true } },
-            author: { select: { name: true, email: true } },
-            featuredImage: { select: { id: true, variants: true } },
-            project: { select: { id: true, name: true, slug: true } },
-          },
+          select: blogListSelect,
         })
       );
 
@@ -138,6 +154,27 @@ export async function GET(req: NextRequest) {
     // Explicit project requested — verify membership (CONTRIBUTOR minimum to view)
     await requireProjectMember(projectId, "CONTRIBUTOR");
 
+    const blogListSelect = {
+      id: true,
+      title: true,
+      slug: true,
+      status: true,
+      updatedAt: true,
+      createdAt: true,
+      publishedAt: true,
+      scheduledAt: true,
+      wordCount: true,
+      readingTime: true,
+      projectId: true,
+      categoryId: true,
+      featuredImageId: true,
+      createdBy: true,
+      category: { select: { id: true, name: true, slug: true } },
+      author: { select: { name: true, email: true } },
+      featuredImage: { select: { id: true, variants: true } },
+      project: { select: { id: true, name: true, slug: true } },
+    };
+
     const blogs = await withDbRetry(() =>
       db.blog.findMany({
         where: {
@@ -146,12 +183,7 @@ export async function GET(req: NextRequest) {
         },
         take: Math.min(100, Math.max(1, limit)),
         orderBy: { updatedAt: "desc" },
-        include: {
-          category: { select: { id: true, name: true, slug: true } },
-          author: { select: { name: true, email: true } },
-          featuredImage: { select: { id: true, variants: true } },
-          project: { select: { id: true, name: true, slug: true } },
-        },
+        select: blogListSelect,
       })
     );
 

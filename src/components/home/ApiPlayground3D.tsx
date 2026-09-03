@@ -49,7 +49,7 @@ const endpoints: EndpointDef[] = [
 
 export function ApiPlayground3D() {
   const [selectedEndpoint, setSelectedEndpoint] = useState<EndpointDef>(endpoints[0]);
-  const [codeLang, setCodeLang] = useState<"nextjs" | "curl" | "fetch">("nextjs");
+  const [codeLang, setCodeLang] = useState<"nextjs" | "astro" | "remix" | "svelte" | "curl">("nextjs");
   const [copied, setCopied] = useState(false);
   const [realResponse, setRealResponse] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -78,22 +78,50 @@ export function ApiPlayground3D() {
 
   const getCodeSnippet = () => {
     if (codeLang === "curl") {
-      return `curl -X GET "https://your-domain.com${selectedEndpoint.path}" \\
+      return `curl -X GET "https://api.yourdomain.com${selectedEndpoint.path}" \\
+  -H "Authorization: Bearer op_live_64hex" \\
   -H "Accept: application/json"`;
     }
     if (codeLang === "nextjs") {
-      return `// Next.js React Server Component
-export default async function BlogPage() {
+      return `// Next.js 15/16 App Router (React Server Component)
+export default async function BlogIndexPage() {
   const res = await fetch(\`\${process.env.OPENPOST_URL}${selectedEndpoint.path}\`, {
-    next: { revalidate: 60 },
+    headers: { Authorization: \`Bearer \${process.env.OPENPOST_TOKEN}\` },
+    next: { tags: ["openpost-posts"], revalidate: 60 },
   });
-  const json = await res.json();
-  return <div>{JSON.stringify(json.data)}</div>;
+  const { data } = await res.json();
+  return <PostGrid posts={data} />;
 }`;
     }
-    return `const response = await fetch("${selectedEndpoint.path}");
-const data = await response.json();
-console.log(data);`;
+    if (codeLang === "astro") {
+      return `---
+// src/pages/blog/index.astro
+const res = await fetch(\`\${import.meta.env.OPENPOST_URL}${selectedEndpoint.path}\`, {
+  headers: { Authorization: \`Bearer \${import.meta.env.OPENPOST_TOKEN}\` }
+});
+const { data: posts } = await res.json();
+---
+<Layout title="Blog">
+  {posts.map((post) => <ArticleCard post={post} />)}
+</Layout>`;
+    }
+    if (codeLang === "remix") {
+      return `// app/routes/blog._index.tsx
+import { json, type LoaderFunctionArgs } from "@remix-run/node";
+import { useLoaderData } from "@remix-run/react";
+
+export async function loader({ request }: LoaderFunctionArgs) {
+  const res = await fetch(\`\${process.env.OPENPOST_URL}${selectedEndpoint.path}\`);
+  const { data } = await res.json();
+  return json({ posts: data });
+}`;
+    }
+    return `// src/routes/blog/+page.server.ts
+export const load = async ({ fetch }) => {
+  const res = await fetch(\`\${process.env.OPENPOST_URL}${selectedEndpoint.path}\`);
+  const { data } = await res.json();
+  return { posts: data };
+};`;
   };
 
   const copySnippet = () => {
@@ -190,16 +218,16 @@ console.log(data);`;
                 <span className="text-[11px] font-bold uppercase tracking-wider text-text-tertiary">
                   Client Code
                 </span>
-                <div className="flex items-center rounded-lg bg-white p-0.5 border border-border text-xs">
-                  {(["nextjs", "curl", "fetch"] as const).map((l) => (
+                <div className="flex flex-wrap items-center rounded-lg bg-white p-0.5 border border-border text-xs gap-0.5">
+                  {(["nextjs", "astro", "remix", "svelte", "curl"] as const).map((l) => (
                     <button
                       key={l}
                       onClick={() => setCodeLang(l)}
-                      className={`px-2 py-0.5 rounded text-[11px] font-semibold transition ${
-                        codeLang === l ? "bg-navy text-white" : "text-text-tertiary hover:text-navy"
+                      className={`px-2 py-0.5 rounded text-[10px] font-semibold transition ${
+                        codeLang === l ? "bg-navy text-white font-bold" : "text-text-tertiary hover:text-navy"
                       }`}
                     >
-                      {l === "nextjs" ? "Next.js" : l === "curl" ? "cURL" : "Fetch"}
+                      {l === "nextjs" ? "Next.js" : l === "astro" ? "Astro" : l === "remix" ? "Remix" : l === "svelte" ? "Svelte" : "cURL"}
                     </button>
                   ))}
                 </div>

@@ -21,7 +21,7 @@ const updateUserSchema = z.object({
   id: z.string().uuid("Invalid user ID"),
   status: z.enum(["pending", "approved", "rejected", "suspended"]).optional(),
   role: z.enum(["OWNER", "ADMIN", "EDITOR", "AUTHOR", "CONTRIBUTOR", "WRITER"]).optional(),
-  projectId: z.string().uuid().optional(),
+  projectId: z.string().uuid("Valid project ID required"),
 });
 
 const inviteUserSchema = z.object({
@@ -33,14 +33,24 @@ const inviteUserSchema = z.object({
 
 export async function GET(req: NextRequest) {
   try {
-    const adminUser = await requireAdmin();
-
     const { searchParams } = new URL(req.url);
     const projectId = searchParams.get("projectId");
+
+    if (!projectId) {
+      return NextResponse.json(
+        { error: { code: "VALIDATION_ERROR", message: "projectId is required." } },
+        { status: 400 }
+      );
+    }
+
+    const adminUser = await requireAdmin(projectId);
 
     const [profiles, invitesRaw] = await Promise.all([
       withDbRetry(() =>
         db.profile.findMany({
+          where: {
+            memberships: { some: { projectId } },
+          },
           orderBy: { createdAt: "asc" },
           select: {
             id: true,
@@ -50,7 +60,7 @@ export async function GET(req: NextRequest) {
             createdAt: true,
             updatedAt: true,
             memberships: {
-              where: projectId ? { projectId } : undefined,
+              where: { projectId },
               include: {
                 project: {
                   select: { id: true, name: true, slug: true },
@@ -64,7 +74,7 @@ export async function GET(req: NextRequest) {
         db.invite.findMany({
           where: {
             usedAt: null,
-            ...(projectId ? { projectId } : {}),
+            projectId,
           },
           orderBy: { createdAt: "desc" },
         })
@@ -269,6 +279,20 @@ export async function PATCH(req: NextRequest) {
     // 1. Update Profile Status if provided (e.g. pending -> approved, approved -> suspended)
     let updatedProfile = targetProfile;
     if (status && status !== targetProfile.status) {
+      // Verify target user has a membership in this project before allowing status change
+      const targetMembership = await withDbRetry(() =>
+        db.projectMember.findUnique({
+          where: { projectId_userId: { projectId, userId: id } },
+        })
+      ).catch(() => null);
+
+      if (!targetMembership) {
+        return NextResponse.json(
+          { error: { code: "NOT_FOUND", message: "User is not a member of this project." } },
+          { status: 404 }
+        );
+      }
+
       updatedProfile = await withDbRetry(() =>
         db.profile.update({
           where: { id },
@@ -278,7 +302,7 @@ export async function PATCH(req: NextRequest) {
 
       await createAuditLog({
         actorId: adminUser.id,
-        projectId: projectId || null,
+        projectId,
         action: `user.status_${status}`,
         targetId: id,
         metadata: { previousStatus: targetProfile.status, newStatus: status, email: targetProfile.email },
@@ -381,7 +405,14 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
-    const adminUser = await requireAdmin(projectId || undefined);
+    if (!projectId) {
+      return NextResponse.json(
+        { error: { code: "VALIDATION_ERROR", message: "projectId is required." } },
+        { status: 400 }
+      );
+    }
+
+    const adminUser = await requireAdmin(projectId);
 
     // Prevent deleting oneself
     if (adminUser.id === id) {
@@ -391,34 +422,18 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
-    if (projectId) {
-      await withDbRetry(() =>
-        db.projectMember.deleteMany({
-          where: { projectId, userId: id },
-        })
-      );
+    await withDbRetry(() =>
+      db.projectMember.deleteMany({
+        where: { projectId, userId: id },
+      })
+    );
 
-      await createAuditLog({
-        actorId: adminUser.id,
-        projectId,
-        action: "project.member_removed",
-        targetId: id,
-      });
-    } else {
-      // Remove all memberships and mark suspended/rejected
-      await withDbRetry(() =>
-        db.$transaction([
-          db.projectMember.deleteMany({ where: { userId: id } }),
-          db.profile.update({ where: { id }, data: { status: "rejected" } }),
-        ])
-      );
-
-      await createAuditLog({
-        actorId: adminUser.id,
-        action: "user.removed",
-        targetId: id,
-      });
-    }
+    await createAuditLog({
+      actorId: adminUser.id,
+      projectId,
+      action: "project.member_removed",
+      targetId: id,
+    });
 
     return NextResponse.json({ data: { success: true } });
   } catch (error: any) {

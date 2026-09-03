@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, withDbRetry } from "@/lib/db";
+import { rateLimit, getClientIp } from "@/lib/rateLimit";
 import crypto from "crypto";
 
 function getFingerprint(req: NextRequest): string {
@@ -14,6 +15,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   if (!pollId) {
     return NextResponse.json({ error: { code: "BAD_REQUEST", message: "Poll ID required" } }, { status: 400 });
+  }
+
+  const ip = getClientIp(req as unknown as Request);
+  const rl = rateLimit(`vote:${pollId}:${ip}`, { windowMs: 60_000, max: 10 });
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: { code: "RATE_LIMITED", message: "Too many requests." } },
+      { status: 429, headers: { "Retry-After": Math.ceil((rl.resetAt - Date.now()) / 1000).toString() } }
+    );
   }
 
   try {

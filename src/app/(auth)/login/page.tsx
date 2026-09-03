@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Eye, EyeOff, ArrowRight, Mail, Lock, Sparkles } from "lucide-react";
+import { Eye, EyeOff, ArrowRight, Mail, Lock, Sparkles, Check, Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
@@ -12,12 +12,13 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [authState, setAuthState] = useState<"idle" | "authenticating" | "redirecting">("idle");
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
+    if (authState !== "idle") return;
+    setAuthState("authenticating");
     setError(null);
 
     try {
@@ -27,11 +28,19 @@ export default function LoginPage() {
       const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
       if (authError) throw authError;
 
+      setAuthState("redirecting");
+      // Use router.push and fallback to window.location if taking longer
       router.push("/dashboard");
+      router.refresh();
+      setTimeout(() => {
+        if (typeof window !== "undefined" && window.location.pathname !== "/dashboard") {
+          window.location.href = "/dashboard";
+        }
+      }, 1500);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Invalid email or password";
       setError(message);
-      setLoading(false);
+      setAuthState("idle");
     }
   };
 
@@ -178,15 +187,50 @@ export default function LoginPage() {
 
               <button
                 type="submit"
-                disabled={loading}
-                className="group inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-brand text-sm font-bold text-navy shadow-md shadow-brand/20 transition hover:bg-brand-hover disabled:opacity-60"
+                disabled={authState !== "idle"}
+                className={`relative overflow-hidden group inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl text-sm font-bold shadow-md transition-all duration-300 ${
+                  authState === "redirecting"
+                    ? "bg-emerald-600 text-white shadow-emerald-500/25 ring-2 ring-emerald-400/40"
+                    : authState === "authenticating"
+                    ? "bg-brand text-navy opacity-95 shadow-brand/30 cursor-wait"
+                    : "bg-brand text-navy shadow-brand/20 hover:bg-brand-hover hover:shadow-brand/30 active:scale-[0.99]"
+                }`}
               >
-                {loading ? (
-                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-navy/30 border-t-navy" />
-                ) : (
-                  <>
+                {/* Subtle animated shimmer effect */}
+                {authState !== "idle" && (
+                  <motion.div
+                    className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -skew-x-12"
+                    initial={{ x: "-100%" }}
+                    animate={{ x: "200%" }}
+                    transition={{ repeat: Infinity, duration: 1.2, ease: "linear" }}
+                  />
+                )}
+
+                {authState === "authenticating" && (
+                  <span className="relative flex items-center gap-2.5">
+                    <Loader2 className="h-4 w-4 animate-spin text-navy" />
+                    <span>Verifying credentials...</span>
+                  </span>
+                )}
+
+                {authState === "redirecting" && (
+                  <span className="relative flex items-center gap-2.5">
+                    <motion.span
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      transition={{ type: "spring", stiffness: 400, damping: 15 }}
+                      className="flex h-5 w-5 items-center justify-center rounded-full bg-white/20"
+                    >
+                      <Check className="h-3.5 w-3.5 text-white stroke-[3]" />
+                    </motion.span>
+                    <span>Success! Redirecting to dashboard...</span>
+                  </span>
+                )}
+
+                {authState === "idle" && (
+                  <span className="relative flex items-center gap-2">
                     Sign in <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
-                  </>
+                  </span>
                 )}
               </button>
 

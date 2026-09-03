@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, withDbRetry } from "@/lib/db";
 import { triggerWebhooks } from "@/lib/webhooks";
+import crypto from "crypto";
 
 function verifyCronAuth(req: NextRequest): NextResponse | null {
   const cronSecret = process.env.CRON_SECRET;
@@ -16,7 +17,16 @@ function verifyCronAuth(req: NextRequest): NextResponse | null {
 
   const authHeader = req.headers.get("authorization");
   const bearerSecret = authHeader?.replace(/^Bearer\s+/i, "").trim();
-  if (!bearerSecret || bearerSecret !== cronSecret) {
+  if (!bearerSecret) {
+    return NextResponse.json(
+      { error: { code: "UNAUTHORIZED", message: "Invalid or missing CRON_SECRET. Use Authorization: Bearer <CRON_SECRET>." } },
+      { status: 401 }
+    );
+  }
+
+  const bearerHash = crypto.createHash("sha256").update(bearerSecret).digest();
+  const secretHash = crypto.createHash("sha256").update(cronSecret).digest();
+  if (!crypto.timingSafeEqual(bearerHash, secretHash)) {
     return NextResponse.json(
       { error: { code: "UNAUTHORIZED", message: "Invalid or missing CRON_SECRET. Use Authorization: Bearer <CRON_SECRET>." } },
       { status: 401 }

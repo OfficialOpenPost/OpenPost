@@ -1,3 +1,8 @@
+/**
+ * In-memory sliding window rate limiter.
+ * NOTE: This store is per-instance and in-memory only. For multi-instance horizontal scaling,
+ * back with an external store such as Redis or Upstash.
+ */
 type Entry = { count: number; resetAt: number };
 const store = new Map<string, Entry>();
 

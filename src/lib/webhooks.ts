@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import dns from "dns";
 import { db, withDbRetry } from "@/lib/db";
 
 export type WebhookEvent =
@@ -81,6 +82,47 @@ export function isAllowedWebhookUrl(url: string): { allowed: boolean; reason?: s
   }
 }
 
+export function isBlockedResolvedIp(ip: string): { blocked: boolean; reason?: string } {
+  const normalized = ip.toLowerCase();
+  if (
+    normalized === "127.0.0.1" ||
+    normalized === "::1" ||
+    normalized === "0.0.0.0" ||
+    normalized === "[::]" ||
+    normalized.includes("::")
+  ) {
+    return { blocked: true, reason: "Blocked loopback address." };
+  }
+  if (/^10\./.test(normalized) || /^192\.168\./.test(normalized) || /^172\.(1[6-9]|2\d|3[01])\./.test(normalized)) {
+    return { blocked: true, reason: "Blocked RFC-1918 private IPv4 subnet." };
+  }
+  if (normalized === "169.254.169.254" || normalized === "metadata.google.internal") {
+    return { blocked: true, reason: "Blocked cloud instance metadata endpoint." };
+  }
+  if (normalized.startsWith("169.254.")) {
+    return { blocked: true, reason: "Blocked link-local address." };
+  }
+  return { blocked: false };
+}
+
+async function assertResolvedIpsAllowed(hostname: string): Promise<void> {
+  let addresses;
+  try {
+    addresses = await dns.promises.lookup(hostname, { all: true });
+  } catch {
+    throw new Error(`DNS resolution failed for ${hostname}`);
+  }
+  if (!addresses || addresses.length === 0) {
+    throw new Error(`No DNS records found for ${hostname}`);
+  }
+  for (const addr of addresses) {
+    const check = isBlockedResolvedIp(addr.address);
+    if (check.blocked) {
+      throw new Error(`SSRF blocked resolved IP ${addr.address} for ${hostname}: ${check.reason}`);
+    }
+  }
+}
+
 export function isRetryableStatus(status: number): boolean {
   return [408, 429, 500, 502, 503, 504].includes(status);
 }
@@ -96,6 +138,9 @@ export async function deliverWebhook(
   if (!check.allowed) {
     throw new Error(`SSRF blocked: ${check.reason}`);
   }
+
+  const parsedUrl = new URL(url);
+  await assertResolvedIpsAllowed(parsedUrl.hostname);
 
   const deliveryId = crypto.randomUUID();
   const timestamp = new Date().toISOString();
@@ -139,6 +184,8 @@ export async function deliverWebhook(
         if (!redirectCheck.allowed) {
           throw new Error(`SSRF blocked redirect target ${loc}: ${redirectCheck.reason}`);
         }
+        const redirectUrl = new URL(loc, url);
+        await assertResolvedIpsAllowed(redirectUrl.hostname);
       }
     }
 

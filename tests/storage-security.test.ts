@@ -40,12 +40,24 @@ describe("Cloudflare R2 Storage Security & Magic Byte Validation", () => {
     expect(validateMagicBytes(validPdf, "application/pdf")).toBe(true);
   });
 
-  it("blocks SVG containing script tags (XSS prevention)", () => {
+  it("blocks SVG containing script tags, event handlers, and XSS vectors", () => {
     const safeSvg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><circle r="10"/></svg>', "utf-8");
     expect(validateMagicBytes(safeSvg, "image/svg+xml")).toBe(true);
 
-    const maliciousSvg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>', "utf-8");
-    expect(validateMagicBytes(maliciousSvg, "image/svg+xml")).toBe(false);
+    const scriptSvg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>', "utf-8");
+    expect(validateMagicBytes(scriptSvg, "image/svg+xml")).toBe(false);
+
+    const onloadSvg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"><circle r="10"/></svg>', "utf-8");
+    expect(validateMagicBytes(onloadSvg, "image/svg+xml")).toBe(false);
+
+    const onerrorSvg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><image href="x" onerror="alert(1)"/></svg>', "utf-8");
+    expect(validateMagicBytes(onerrorSvg, "image/svg+xml")).toBe(false);
+
+    const foreignObjectSvg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><foreignObject><iframe src="javascript:alert(1)"></iframe></foreignObject></svg>', "utf-8");
+    expect(validateMagicBytes(foreignObjectSvg, "image/svg+xml")).toBe(false);
+
+    const jsHrefSvg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><a href="javascript:alert(1)"><text>Click</text></a></svg>', "utf-8");
+    expect(validateMagicBytes(jsHrefSvg, "image/svg+xml")).toBe(false);
   });
 
   it("generates correct public URL for stored assets", () => {

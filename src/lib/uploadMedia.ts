@@ -2,12 +2,15 @@
 
 import { convertToWebP } from "./imageConvert";
 
-export async function uploadImageWithWebP(file: File): Promise<{ url: string; key: string; webpFile: File }> {
+export async function uploadImageWithWebP(file: File, projectId?: string): Promise<{ url: string; key: string; webpFile: File }> {
+  const activeProjId = projectId || (typeof window !== "undefined" ? localStorage.getItem("openpost_active_project_id") : null);
   const webpFile = await convertToWebP(file, 0.82);
   // Upload via server (avoids CORS + presign 501) — server does S3 PutObject directly
   const form = new FormData();
   form.append("file", webpFile);
-  const upRes = await fetch("/api/media/upload", { method: "POST", body: form });
+  if (activeProjId) form.append("projectId", activeProjId);
+  const headers: Record<string, string> = activeProjId ? { "X-OpenPost-Project": activeProjId } : {};
+  const upRes = await fetch("/api/media/upload", { method: "POST", body: form, headers });
   const upJson = await upRes.json().catch(()=>({}));
   if (!upRes.ok) throw new Error(upJson.error?.message ?? "Upload failed");
   const { key, publicUrl } = upJson.data as { key: string; publicUrl: string };
@@ -23,8 +26,8 @@ export async function uploadImageWithWebP(file: File): Promise<{ url: string; ke
   } catch {}
   fetch("/api/media", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ originalFilename: webpFile.name, mimeType: webpFile.type, sizeBytes: webpFile.size, width, height, key, publicUrl: finalPublicUrl, checksum: `${Date.now()}-${webpFile.name}` }),
+    headers: { "Content-Type": "application/json", ...headers },
+    body: JSON.stringify({ originalFilename: webpFile.name, mimeType: webpFile.type, sizeBytes: webpFile.size, width, height, key, publicUrl: finalPublicUrl, checksum: `${Date.now()}-${webpFile.name}`, projectId: activeProjId }),
   }).catch(() => {});
 
   return { url: publicUrl, key, webpFile };

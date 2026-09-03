@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { db, withDbRetry } from "@/lib/db";
 import {
@@ -45,9 +46,10 @@ export interface AuthUser {
 
 /**
  * Resolves current authenticated session from Supabase, loading Profile status and project memberships.
+ * Wrapped in React.cache() to deduplicate repeated calls within the same server request/render.
  * Returns null if unauthenticated or on invalid session.
  */
-export async function getCurrentUser(): Promise<AuthUser | null> {
+export const getCurrentUser = cache(async (): Promise<AuthUser | null> => {
   try {
     const supabase = await createClient();
     if (!supabase) return null;
@@ -176,7 +178,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
     console.error("Error in getCurrentUser:", err);
     return null;
   }
-}
+});
 
 /**
  * Requires an authenticated user session. Throws 401 if unauthenticated.

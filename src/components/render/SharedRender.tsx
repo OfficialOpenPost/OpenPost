@@ -376,21 +376,44 @@ export function SharedRender({ content }: SharedRenderProps) {
             );
           }
           case "table": {
+            const firstRow = node.content?.[0];
+            const colwidths = firstRow?.content?.map((cell: any) => cell.attrs?.colwidth?.[0] || null) || [];
+            const hasExplicitWidths = colwidths.some((w: any) => w !== null);
+
             return (
               <div key={i} className="my-6 overflow-x-auto clear-both">
-                <table className="w-full border-collapse rounded-2xl overflow-hidden border border-border shadow-xs">
+                <table className="w-full border-collapse" style={{ tableLayout: "auto" }}>
+                  {hasExplicitWidths && (
+                    <colgroup>
+                      {colwidths.map((w: any, idx: number) => (
+                        <col key={idx} style={w ? { width: `${w}px` } : undefined} />
+                      ))}
+                    </colgroup>
+                  )}
                   <tbody>
                     {node.content?.map((row: any, r: number) => (
-                      <tr key={r} className="border-b border-border last:border-0">
+                      <tr key={r} className="border-b border-slate-200 last:border-0">
                         {row.content?.map((cell: any, c: number) => {
                           const Tag2 = cell.type === "tableHeader" ? "th" : "td";
+                          const cellStyle: React.CSSProperties = {};
+                          if (cell.attrs?.style) {
+                            const styles = String(cell.attrs.style).split(";");
+                            for (const s of styles) {
+                              const [k, v] = s.split(":").map((x: string) => x.trim());
+                              if (k === "background-color") cellStyle.backgroundColor = v;
+                              if (k === "vertical-align") cellStyle.verticalAlign = v;
+                            }
+                          }
                           return (
                             <Tag2
                               key={c}
+                              colSpan={cell.attrs?.colspan || 1}
+                              rowSpan={cell.attrs?.rowspan || 1}
+                              style={{ ...cellStyle, padding: "0.75rem 1rem", verticalAlign: "top", lineHeight: "1.5", minHeight: "3rem" }}
                               className={
                                 cell.type === "tableHeader"
-                                  ? "bg-navy text-white p-3.5 text-left font-bold border-r border-white/10 last:border-0 text-xs"
-                                  : "p-3.5 border-r border-border last:border-0 bg-surface text-xs"
+                                  ? "bg-navy text-white text-left font-bold border-r border-white/10 last:border-0 text-[0.9375rem]"
+                                  : "border-r border-slate-200 last:border-0 bg-slate-50 text-[0.9375rem] text-slate-700"
                               }
                             >
                               {renderInline(cell.content?.[0]?.content ?? cell.content ?? [])}

@@ -1,3 +1,4 @@
+import "@/lib/prosemirror-patch";
 import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
 import Link from "@tiptap/extension-link";
@@ -33,6 +34,7 @@ import { SocialEmbed } from "./blocks/SocialEmbed";
 import { PollBlock } from "./blocks/Poll";
 import { VideoBlock } from "./blocks/Video";
 import { EmbedBlock } from "./blocks/Embed";
+import { TrailingNode } from "./extensions/TrailingNode";
 
 const HeadingShortcuts = Extension.create({
   name: "headingShortcuts",
@@ -45,7 +47,6 @@ const HeadingShortcuts = Extension.create({
       "Ctrl-Alt-1": () => this.editor.chain().focus().toggleHeading({ level: 1 }).run(),
       "Ctrl-Alt-2": () => this.editor.chain().focus().toggleHeading({ level: 2 }).run(),
       "Ctrl-Alt-3": () => this.editor.chain().focus().toggleHeading({ level: 3 }).run(),
-      "Ctrl-Alt-4": () => this.editor.chain().focus().toggleHeading({ level: 4 }).run(),
     };
   },
 });
@@ -122,7 +123,7 @@ export const editorExtensions = [
   Table.configure({
     resizable: true,
     HTMLAttributes: {
-      class: "w-full my-6 border-collapse rounded-2xl overflow-hidden border border-border shadow-xs",
+      class: "w-full my-6 border-collapse overflow-hidden border border-border shadow-xs",
     },
   }),
   TableRow.configure({
@@ -169,6 +170,7 @@ export const editorExtensions = [
   PollBlock,
   VideoBlock,
   EmbedBlock,
+  TrailingNode,
   Placeholder.configure({
     placeholder: ({ node }) => {
       if (node.type.name === "heading") return "Heading";

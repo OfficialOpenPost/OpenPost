@@ -23,9 +23,9 @@ export async function GET() {
   const rssXml = `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
-    <title>OpenPost Blog</title>
+    <title>${process.env.SITE_NAME || "OpenPost Blog"}</title>
     <link>${baseUrl}</link>
-    <description>Latest insights and articles powered by OpenPost CMS</description>
+    <description>${process.env.SITE_DESCRIPTION || process.env.SITE_TAGLINE || "Latest articles and insights"}</description>
     <language>en-us</language>
     <lastBuildDate>${new Date().toUTCString()}</lastBuildDate>
     <atom:link href="${baseUrl}/feed.xml" rel="self" type="application/rss+xml"/>

@@ -105,8 +105,7 @@ body {
 
 /* Focus */
 :focus-visible {
-  outline: 2px solid #FEA611;
-  outline-offset: 2px;
+  outline: none;
 }
 
 /* Transitions */

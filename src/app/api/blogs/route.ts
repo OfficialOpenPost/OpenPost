@@ -484,15 +484,17 @@ export async function POST(req: NextRequest) {
     }
 
     // 2. CREATE NEW ARTICLE
-    // Ensure slug uniqueness — DB currently has global unique on slug (not per-project)
-    // Use global check to avoid P2002 race; will be migrated to per-project in future
+    // Ensure slug uniqueness within the same project (different projects can share slugs)
     let candidateSlug = slug || "untitled";
     const baseSlug = candidateSlug.replace(/-\d+$/, "");
 
-    // Batch check: find all existing slugs with this prefix in one query
+    // Batch check: find all existing slugs with this prefix WITHIN the same project
     const existingSlugs = await withDbRetry(() =>
       db.blog.findMany({
-        where: { slug: { startsWith: baseSlug } },
+        where: {
+          slug: { startsWith: baseSlug },
+          projectId: targetProjectId,
+        },
         select: { slug: true },
       })
     );

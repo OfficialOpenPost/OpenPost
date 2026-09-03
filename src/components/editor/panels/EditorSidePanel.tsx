@@ -22,7 +22,6 @@ import {
 } from "lucide-react";
 import React, { useState, useEffect } from "react";
 import { ImageSettingsPanel } from "../image/ImageSettingsPanel";
-import { TableContextMenu } from "../toolbar/TableContextMenu";
 import { DocumentOutline } from "../outline/DocumentOutline";
 import { FeaturedImagePicker } from "../FeaturedImagePicker";
 
@@ -125,16 +124,6 @@ export function EditorSidePanel({
 
   return (
     <div className="flex flex-col h-full bg-white text-navy select-none">
-      {/* Table Context Mode Indicator (only if active table cell) */}
-      {isTableActive && (
-        <div className="p-2.5 bg-brand/10 border-b border-brand/20 flex items-center justify-between text-xs font-bold text-navy">
-          <div className="flex items-center gap-2">
-            <TableIcon className="h-4 w-4 text-brand" />
-            <span>Table Cell Tools</span>
-          </div>
-        </div>
-      )}
-
       {/* Regular Navigation Tabs */}
       <div className="grid grid-cols-6 p-1 border-b border-border bg-[#F9FAFB] gap-0.5 text-[11px] font-bold text-center">
         <button
@@ -204,12 +193,8 @@ export function EditorSidePanel({
 
       {/* Main Panel Content */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 text-xs">
-        {isTableActive && editor ? (
-          <TableContextMenu editor={editor} />
-        ) : (
-          <>
-            {/* TAB 1: POST METADATA */}
-            {activeTab === "post" && (
+        {/* TAB 1: POST METADATA */}
+        {activeTab === "post" && (
               <div className="space-y-4">
                 <div>
                   <label className="block font-bold text-navy mb-1">URL Slug</label>
@@ -526,8 +511,6 @@ export function EditorSidePanel({
             {activeTab === "outline" && (
               <DocumentOutline editor={editor} />
             )}
-          </>
-        )}
       </div>
     </div>
   );

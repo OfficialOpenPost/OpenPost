@@ -1,5 +1,17 @@
 export const EDITOR_STYLES = `
   /* Tiptap / OpenPost Universal Content Styles */
+  .tiptap,
+  .tiptap:focus,
+  .tiptap:focus-visible,
+  .ProseMirror,
+  .ProseMirror:focus,
+  .ProseMirror:focus-visible,
+  .ProseMirror-focused {
+    outline: none !important;
+    outline-width: 0 !important;
+    box-shadow: none !important;
+  }
+
   .tiptap {
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
@@ -101,14 +113,106 @@ export const EDITOR_STYLES = `
     border: none;
   }
 
+  /* ── Tiptap Table ── */
+  .tiptap .tableWrapper {
+    overflow: hidden;
+    margin: 1.5rem 0;
+    clear: both;
+    max-width: 100%;
+    border: 1px solid #CBD5E1;
+  }
+
   .tiptap table {
     border-collapse: collapse;
+    table-layout: auto;
     width: 100%;
-    margin: 1.75rem 0;
-    border-radius: 14px;
+    margin: 0;
+    background-color: #FFFFFF;
+    box-sizing: border-box;
+  }
+
+  .tiptap table td,
+  .tiptap table th {
+    min-width: 2rem;
+    border: 1px solid #CBD5E1;
+    padding: 0.75rem 1rem;
+    vertical-align: top;
+    box-sizing: border-box;
+    position: relative;
+    font-size: 0.9375rem;
     overflow: hidden;
-    border: 1px solid #E2E8F0;
-    clear: both;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+  }
+
+  .tiptap table th {
+    font-weight: 700;
+    text-align: left;
+    background-color: #F1F5F9;
+    color: #0F172A;
+    border-bottom: 2px solid #94A3B8;
+  }
+
+  .tiptap table th p,
+  .tiptap table td p {
+    margin: 0 !important;
+    font-size: inherit;
+    line-height: 1.5;
+    color: inherit;
+  }
+
+  /* ── Column Resize Handle (Tiptap resizable: true) ── */
+  .tiptap table .column-resize-handle {
+    position: absolute;
+    right: -2px;
+    top: 0;
+    bottom: -2px;
+    width: 4px;
+    background-color: #6C63FF;
+    pointer-events: none;
+    z-index: 25;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    border-radius: 2px;
+  }
+
+  .tiptap table td:hover .column-resize-handle,
+  .tiptap table th:hover .column-resize-handle {
+    opacity: 1;
+  }
+
+  .tiptap.resize-cursor {
+    cursor: col-resize;
+  }
+  .tiptap.resize-cursor .column-resize-handle {
+    opacity: 1;
+    background-color: #6C63FF;
+  }
+
+  /* Selected cell highlight */
+  .tiptap .selectedCell:after {
+    z-index: 2;
+    position: absolute;
+    content: "";
+    left: 0; right: 0; top: 0; bottom: 0;
+    background: rgba(108, 99, 255, 0.08) !important;
+    border: 1.5px solid #6C63FF !important;
+    pointer-events: none;
+  }
+
+  /* Selected table outline */
+  .tiptap table.ProseMirror-selectednode {
+    outline: 2px solid #6C63FF !important;
+    outline-offset: 2px;
+  }
+
+  /* Row/column grip handles */
+  .tiptap .grip-column,
+  .tiptap .grip-row {
+    position: absolute;
+    cursor: pointer;
+    background: #E2E8F0;
+    z-index: 10;
   }
 
   .tiptap hr {
@@ -116,7 +220,7 @@ export const EDITOR_STYLES = `
   }
 
   .tiptap ::selection {
-    background: rgba(254,166,17,0.28);
+    background: rgba(108, 99, 255, 0.2);
   }
 
   /* Text alignment */

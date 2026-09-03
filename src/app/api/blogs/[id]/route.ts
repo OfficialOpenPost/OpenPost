@@ -132,10 +132,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       if (typeof slug === "string" && slug.trim()) {
       let cleanSlug = slug.trim();
       if (cleanSlug !== existing.slug) {
-        // Batch check for slug collision — single query instead of loop
+        // Batch check for slug collision within the same project only
         const existingSlugs = await withDbRetry(() =>
           db.blog.findMany({
-            where: { slug: { startsWith: cleanSlug }, id: { not: id } },
+            where: { slug: { startsWith: cleanSlug }, id: { not: id }, projectId: existing.projectId },
             select: { slug: true },
           })
         );

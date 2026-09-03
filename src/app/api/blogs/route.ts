@@ -4,6 +4,7 @@ import { z } from "zod";
 import { requireApprovedUser, requireProjectMember, requirePermission, hasPermission, hasMinimumRole, AuthError, createAuditLog } from "@/lib/auth";
 import { countWords, readingTime as calcReadingTime } from "@/lib/publish";
 import { triggerWebhooks } from "@/lib/webhooks";
+import { slugify } from "@/lib/slug";
 
 const createSchema = z.object({
   title: z.string().optional().default("Untitled Article"),
@@ -335,42 +336,79 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // Track 301 redirect if slug changed and was published
-      if (existing.slug !== slug && existing.status === "published") {
-        await withDbRetry(() =>
-          db.redirect.create({
-            data: {
-              blogId: id!,
-              oldSlug: existing.slug,
-              newSlug: slug,
-            },
-          })
-        ).catch(() => {});
+      let candidateSlug = existing.slug;
+      if (typeof slug === "string" && slug.trim()) {
+        const cleanSlug = slugify(slug.trim()) || "untitled";
+        if (cleanSlug !== existing.slug) {
+          const existingSlugs = await withDbRetry(() =>
+            db.blog.findMany({
+              where: {
+                slug: { startsWith: cleanSlug },
+                id: { not: id },
+                ...(existing.projectId ? { projectId: existing.projectId } : {}),
+              },
+              select: { slug: true },
+            })
+          );
+          const existingSet = new Set(existingSlugs.map((s) => s.slug));
+          candidateSlug = cleanSlug;
+          if (existingSet.has(candidateSlug)) {
+            let counter = 2;
+            while (existingSet.has(`${cleanSlug}-${counter}`)) {
+              counter++;
+            }
+            candidateSlug = `${cleanSlug}-${counter}`;
+          }
+
+          // Track 301 redirect if slug changed and was published
+          if (existing.status === "published") {
+            await withDbRetry(() =>
+              db.redirect.create({
+                data: {
+                  blogId: id!,
+                  oldSlug: existing.slug,
+                  newSlug: candidateSlug,
+                },
+              })
+            ).catch(() => {});
+          }
+        }
       }
 
       const publishedAt = status === "published" ? existing.publishedAt || new Date() : null;
 
-      const updated = await withDbRetry(() =>
-        db.blog.update({
-          where: { id },
-          data: {
-            title,
-            slug,
-            content,
-            status: status as any,
-            wordCount: wc,
-            readingTime: rt,
-            scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
-            publishedAt,
-            seo: seo ?? existing.seo,
-            categoryId: resolvedCategoryId,
-            featuredImageId: resolvedFeaturedImageId,
-            ...(editorDocument !== undefined ? { editorDocument } : {}),
-            ...(renderedHtml !== undefined ? { renderedHtml } : {}),
-            ...(contentVersion !== undefined ? { contentVersion } : {}),
-          },
-        })
-      );
+      let updated: any;
+      try {
+        updated = await withDbRetry(() =>
+          db.blog.update({
+            where: { id },
+            data: {
+              title,
+              slug: candidateSlug,
+              content,
+              status: status as any,
+              wordCount: wc,
+              readingTime: rt,
+              scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
+              publishedAt,
+              seo: seo ?? existing.seo,
+              categoryId: resolvedCategoryId,
+              featuredImageId: resolvedFeaturedImageId,
+              ...(editorDocument !== undefined ? { editorDocument } : {}),
+              ...(renderedHtml !== undefined ? { renderedHtml } : {}),
+              ...(contentVersion !== undefined ? { contentVersion } : {}),
+            },
+          })
+        );
+      } catch (err: any) {
+        if (err?.code === "P2002" || String(err?.message || "").includes("Unique constraint failed")) {
+          return NextResponse.json(
+            { error: { code: "SLUG_EXISTS", message: "Slug already in use. Please choose a different title/slug." } },
+            { status: 409 }
+          );
+        }
+        throw err;
+      }
 
       // Save revision
       await withDbRetry(() =>

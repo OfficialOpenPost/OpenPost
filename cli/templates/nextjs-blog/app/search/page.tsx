@@ -29,7 +29,7 @@ export default async function SearchPage({
   }
 
   return (
-    <div className="mx-auto max-w-5xl px-5 py-12 space-y-8">
+    <div className="w-full max-w-[1600px] 2xl:max-w-[1780px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-8 sm:py-12 space-y-8">
       {/* Search Header */}
       <div className="space-y-4 max-w-xl">
         <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight font-display">Search</h1>

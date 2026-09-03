@@ -317,6 +317,7 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
   // Auto-slug generator
   const handleTitleChange = (val: string) => {
     setTitle(val);
+    setIsDirty(true);
     setSaveStatus("unsaved");
     if (!slugEdited) {
       const generated = val
@@ -820,34 +821,34 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
               editor={editor}
               title={title}
               slug={slug}
-              setSlug={(val: string) => { setSlug(val); setSaveStatus("unsaved"); }}
+              setSlug={(val: string) => { setSlug(val); setIsDirty(true); setSaveStatus("unsaved"); }}
               setSlugEdited={setSlugEdited}
               category={category}
-              setCategory={(val: string) => { setCategory(val); setCategoryId(null); setSaveStatus("unsaved"); }}
+              setCategory={(val: string) => { setCategory(val); setCategoryId(null); setIsDirty(true); setSaveStatus("unsaved"); }}
               setCategoryId={setCategoryId}
               catOptions={catOptions}
               tags={tags}
-              setTags={(val: any) => { setTags(val); setSaveStatus("unsaved"); }}
+              setTags={(val: any) => { setTags(val); setIsDirty(true); setSaveStatus("unsaved"); }}
               tagInput={tagInput}
               setTagInput={setTagInput}
               featuredImage={featuredImage}
-              setFeaturedImage={(val: string | null) => { setFeaturedImage(val); setSaveStatus("unsaved"); }}
+              setFeaturedImage={(val: string | null) => { setFeaturedImage(val); setIsDirty(true); setSaveStatus("unsaved"); }}
               seoTitle={seoTitle}
-              setSeoTitle={(val: string) => { setSeoTitle(val); setSaveStatus("unsaved"); }}
+              setSeoTitle={(val: string) => { setSeoTitle(val); setIsDirty(true); setSaveStatus("unsaved"); }}
               seoDesc={seoDesc}
-              setSeoDesc={(val: string) => { setSeoDesc(val); setSaveStatus("unsaved"); }}
+              setSeoDesc={(val: string) => { setSeoDesc(val); setIsDirty(true); setSaveStatus("unsaved"); }}
               canonical={canonical}
-              setCanonical={(val: string) => { setCanonical(val); setSaveStatus("unsaved"); }}
+              setCanonical={(val: string) => { setCanonical(val); setIsDirty(true); setSaveStatus("unsaved"); }}
               ogTitle={ogTitle}
-              setOgTitle={(val: string) => { setOgTitle(val); setSaveStatus("unsaved"); }}
+              setOgTitle={(val: string) => { setOgTitle(val); setIsDirty(true); setSaveStatus("unsaved"); }}
               ogDesc={ogDesc}
-              setOgDesc={(val: string) => { setOgDesc(val); setSaveStatus("unsaved"); }}
+              setOgDesc={(val: string) => { setOgDesc(val); setIsDirty(true); setSaveStatus("unsaved"); }}
               ogImage={ogImage}
-              setOgImage={(val: string) => { setOgImage(val); setSaveStatus("unsaved"); }}
+              setOgImage={(val: string) => { setOgImage(val); setIsDirty(true); setSaveStatus("unsaved"); }}
               status={status}
-              setStatus={(val: any) => { setStatus(val); setSaveStatus("unsaved"); }}
+              setStatus={(val: any) => { setStatus(val); setIsDirty(true); setSaveStatus("unsaved"); }}
               scheduledAt={scheduledAt}
-              setScheduledAt={(val: string) => { setScheduledAt(val); setSaveStatus("unsaved"); }}
+              setScheduledAt={(val: string) => { setScheduledAt(val); setIsDirty(true); setSaveStatus("unsaved"); }}
               revisions={revisions}
               onRestoreRevision={handleRestoreRevision}
               seoWarnings={seoWarnings}

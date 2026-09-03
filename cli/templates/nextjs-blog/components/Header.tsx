@@ -1,20 +1,25 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { BookOpen, Search, ArrowUpRight, Sparkles, Flame, Menu, X, Bell } from "lucide-react";
 import { SearchModal } from "./SearchModal";
 
-const SITE_NAME = process.env.SITE_NAME || "My Blog";
-const SITE_TAGLINE = process.env.SITE_TAGLINE || "Stories, Ideas & Perspectives";
-const SITE_LOGO_URL = process.env.SITE_LOGO_URL || "";
-const OPENPOST_URL = process.env.OPENPOST_URL || "";
+const SITE_NAME = process.env.NEXT_PUBLIC_SITE_NAME || "My Blog";
+const SITE_TAGLINE = process.env.NEXT_PUBLIC_SITE_TAGLINE || "Stories, Ideas & Perspectives";
+const SITE_LOGO_URL = process.env.NEXT_PUBLIC_SITE_LOGO_URL || "";
+const OPENPOST_URL = process.env.NEXT_PUBLIC_OPENPOST_URL || "";
 
 export function Header() {
   const pathname = usePathname();
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [dateString, setDateString] = useState("");
+
+  useEffect(() => {
+    setDateString(new Date().toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" }));
+  }, []);
 
   const navLinks = [
     { href: "/", label: "Home" },
@@ -38,7 +43,7 @@ export function Header() {
             </div>
             <div className="flex items-center gap-4 text-[11px] font-medium text-slate-400">
               <span className="hidden md:inline">
-                {new Date().toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
+                {dateString}
               </span>
               {OPENPOST_URL && (
                 <a
@@ -57,18 +62,18 @@ export function Header() {
         </div>
 
         {/* Main Navbar — Ultra-wide fluid layout */}
-        <div className="mx-auto flex w-full max-w-[1600px] 2xl:max-w-[1780px] items-center justify-between px-4 sm:px-6 lg:px-8 xl:px-12 h-16 sm:h-20">
+        <div className="mx-auto flex w-full max-w-[1600px] 2xl:max-w-[1780px] items-center justify-between px-4 sm:px-6 lg:px-8 xl:px-12 h-12 sm:h-14">
           {/* Brand Identity */}
           <Link href="/" className="group flex items-center gap-3">
             {SITE_LOGO_URL ? (
-              <img src={SITE_LOGO_URL} alt={SITE_NAME} className="h-9 w-auto rounded-xl object-contain shadow-2xs" />
+              <img src={SITE_LOGO_URL} alt={SITE_NAME} className="h-8 w-auto rounded-lg object-contain shadow-2xs" />
             ) : (
-              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-tr from-[#6C63FF] via-[#5B52E5] to-[#4F46E5] text-white shadow-md shadow-indigo-500/20 group-hover:scale-105 transition-transform">
-                <BookOpen className="h-5 w-5" />
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-tr from-[#6C63FF] via-[#5B52E5] to-[#4F46E5] text-white shadow-md shadow-indigo-500/20 group-hover:scale-105 transition-transform">
+                <BookOpen className="h-4 w-4" />
               </div>
             )}
             <div className="flex flex-col">
-              <span className="text-lg sm:text-xl font-black tracking-tight text-slate-900 font-display group-hover:text-[#6C63FF] transition-colors leading-tight">
+              <span className="text-base sm:text-lg font-black tracking-tight text-slate-900 font-display group-hover:text-[#6C63FF] transition-colors leading-tight">
                 {SITE_NAME}
               </span>
               <span className="hidden sm:block text-[10px] font-bold uppercase tracking-widest text-slate-400">

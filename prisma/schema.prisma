@@ -140,6 +140,7 @@ model Blog {
   redirects      Redirect[]
   polls          Poll[]
 
+  @@unique([projectId, slug])
   @@index([projectId, slug])
   @@index([projectId, status, updatedAt(sort: Desc)])
   @@index([status])
@@ -320,7 +321,7 @@ model Redirect {
   id       String   @id @default(uuid()) @db.Uuid
   oldSlug  String   @map("old_slug")
   newSlug  String   @map("new_slug")
-  blogId   String   @map("blog_id")
+  blogId   String   @map("blog_id") @db.Uuid
   createdAt DateTime @default(now()) @map("created_at")
 
   blog Blog @relation(fields: [blogId], references: [id], onDelete: Cascade)

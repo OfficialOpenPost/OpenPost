@@ -33,6 +33,7 @@
 | `020_editor_document.sql` | Adds `editor_document` (JSONB), `rendered_html` (text), `content_version` (int) to `blogs` and `blog_revisions` |
 | `021_site_config_and_cleanup.sql` | Adds site config columns to `projects` (site name, tagline, logo, social URLs, etc.); removes auto-created demo project |
 | `022_upgrade_user_to_owner.sql` | Utility script to safely approve any user profile and upgrade them to `OWNER` role across workspace projects |
+| `023_fix_blog_slug_constraint.sql` | Drops legacy global UNIQUE(slug) constraint on `blogs` and scopes uniqueness per project `(project_id, slug)` |
 
 ---
 

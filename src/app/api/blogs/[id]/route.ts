@@ -3,6 +3,7 @@ import { db, withDbRetry } from "@/lib/db";
 import { requireApprovedUser, requireProjectMember, requirePermission, requireAdmin, hasPermission, hasMinimumRole, createAuditLog, AuthError } from "@/lib/auth";
 import { countWords, readingTime as calcReadingTime } from "@/lib/publish";
 import { triggerWebhooks } from "@/lib/webhooks";
+import { slugify } from "@/lib/slug";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -129,13 +130,20 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       dataToUpdate.title = title.trim();
     }
 
-      if (typeof slug === "string" && slug.trim()) {
-      let cleanSlug = slug.trim();
+    if (typeof slug === "string" && slug.trim()) {
+      const cleanSlug = slugify(slug.trim()) || "untitled";
       if (cleanSlug !== existing.slug) {
-        // Batch check for slug collision within the same project only
+        // Find any existing collision within the SAME project only
         const existingSlugs = await withDbRetry(() =>
           db.blog.findMany({
-            where: { slug: { startsWith: cleanSlug }, id: { not: id }, projectId: existing.projectId },
+            where: {
+              OR: [
+                { slug: cleanSlug },
+                { slug: { startsWith: `${cleanSlug}-` } },
+              ],
+              id: { not: id },
+              ...(existing.projectId ? { projectId: existing.projectId } : {}),
+            },
             select: { slug: true },
           })
         );
@@ -160,7 +168,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
                 newSlug: candidateSlug,
               },
             })
-          ).catch(() => {});
+          ).catch((err) => {
+            console.warn("Redirect create notice:", err);
+          });
         }
       }
     }
@@ -204,7 +214,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       } else {
         const catName = typeof body.category === "string" ? body.category.trim() : body.category.name?.trim();
         if (catName) {
-          const catSlug = catName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+          const catSlug = slugify(catName) || `category-${Date.now()}`;
           const existingCat = await withDbRetry(() =>
             db.category.findFirst({
               where: {
@@ -220,7 +230,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
               db.category.create({
                 data: {
                   name: catName,
-                  slug: catSlug || `category-${Date.now()}`,
+                  slug: catSlug,
                   projectId: existing.projectId,
                 },
               })
@@ -271,12 +281,18 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       );
     } catch (err: any) {
       if (err?.code === "P2002" || String(err?.message || "").includes("Unique constraint failed")) {
-        return NextResponse.json(
-          { error: { code: "SLUG_EXISTS", message: "Slug already in use. Please change the title/slug." } },
-          { status: 409 }
+        // Auto-recover: generate guaranteed unique fallback slug and complete update
+        const fallbackSlug = `${dataToUpdate.slug || existing.slug}-${Date.now().toString().slice(-4)}`;
+        dataToUpdate.slug = fallbackSlug;
+        updated = await withDbRetry(() =>
+          db.blog.update({
+            where: { id },
+            data: dataToUpdate,
+          })
         );
+      } else {
+        throw err;
       }
-      throw err;
     }
 
     // Save revision snapshot if content changed
@@ -357,7 +373,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     });
 
     return NextResponse.json({ data: updated });
-} catch (error: any) {
+  } catch (error: any) {
     const status = error instanceof AuthError ? error.statusCode : 500;
     const code = error instanceof AuthError ? error.code : "UPDATE_FAILED";
     return NextResponse.json({ error: { code, message: error.message || "Failed to update article." } }, { status });

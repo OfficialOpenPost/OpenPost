@@ -348,7 +348,15 @@ OPENPOST_PROJECT_ID=${projectId}
 OPENPOST_TOKEN=${token}
 SITE_URL=${siteUrl}
 
-# Site config (from CMS Settings → Website)
+# Public env vars (client-side components)
+NEXT_PUBLIC_OPENPOST_URL=${cleanCmsUrl}
+NEXT_PUBLIC_SITE_NAME=${siteName}
+NEXT_PUBLIC_SITE_TAGLINE=${siteTagline}
+NEXT_PUBLIC_SITE_DESCRIPTION=${siteDescription}
+NEXT_PUBLIC_SITE_LOGO_URL=${siteLogoUrl}
+NEXT_PUBLIC_SITE_PRIMARY_COLOR=${sitePrimaryColor}
+
+# Site config (server-side)
 SITE_NAME=${siteName}
 SITE_TAGLINE=${siteTagline}
 SITE_DESCRIPTION=${siteDescription}

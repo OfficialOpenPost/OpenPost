@@ -29,7 +29,7 @@ export function PostCard({ post, variant = "default", ranking }: PostCardProps) 
   if (variant === "lead") {
     return (
       <Link
-        href={`/blog/${post.slug}`}
+        href={`/${post.slug}`}
         className="group relative block overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-sm mag-card transition-all duration-300"
       >
         <div className="grid lg:grid-cols-12 gap-0">
@@ -91,7 +91,7 @@ export function PostCard({ post, variant = "default", ranking }: PostCardProps) 
   if (variant === "bento") {
     return (
       <Link
-        href={`/blog/${post.slug}`}
+        href={`/${post.slug}`}
         className="group relative flex flex-col justify-end overflow-hidden rounded-3xl border border-slate-200/80 bg-slate-900 p-6 sm:p-8 min-h-[340px] mag-card transition-all duration-300"
       >
         {post.coverImage ? (
@@ -130,7 +130,7 @@ export function PostCard({ post, variant = "default", ranking }: PostCardProps) 
   if (variant === "horizontal") {
     return (
       <Link
-        href={`/blog/${post.slug}`}
+        href={`/${post.slug}`}
         className="group flex flex-col sm:flex-row gap-5 p-4 sm:p-5 rounded-3xl bg-white border border-slate-200/80 shadow-xs mag-card transition-all duration-200"
       >
         {post.coverImage && (
@@ -177,7 +177,7 @@ export function PostCard({ post, variant = "default", ranking }: PostCardProps) 
   if (variant === "compact") {
     return (
       <Link
-        href={`/blog/${post.slug}`}
+        href={`/${post.slug}`}
         className="group flex items-start gap-4 p-3.5 rounded-2xl hover:bg-white hover:shadow-xs border border-transparent hover:border-slate-200 transition duration-150"
       >
         {ranking !== undefined && (
@@ -212,7 +212,7 @@ export function PostCard({ post, variant = "default", ranking }: PostCardProps) 
   // Default Grid Card
   return (
     <Link
-      href={`/blog/${post.slug}`}
+      href={`/${post.slug}`}
       className="group flex flex-col overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-xs mag-card transition-all duration-300"
     >
       {post.coverImage && (

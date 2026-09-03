@@ -5,36 +5,8 @@ import { SharedRender } from "@/components/render/SharedRender";
 import { db } from "@/lib/db";
 import { EDITOR_STYLES } from "@/components/editor/editor-styles";
 
-const POSTS: Record<
-  string,
-  {
-    title: string;
-    content: string;
-    category: string;
-    date: string;
-    readingTime: number;
-    author: string;
-  }
-> = {
-  "10-tips-better-seo": {
-    title: "10 Tips for Better SEO in 2026",
-    content:
-      "<p>Search in 2026 is AI-driven. Here are 10 tips that still work: structured content, fast images, and honest SEO warnings.</p><h2>1. Structured JSON</h2><p>Store content as JSON, not raw HTML — it’s safer and more portable.</p><blockquote>OpenPost does this by default.</blockquote><p>More content here...</p>",
-    category: "SEO",
-    date: "2026-08-28",
-    readingTime: 6,
-    author: "Priya Sharma",
-  },
-  "headless-nextjs": {
-    title: "Building a Headless Blog with Next.js",
-    content:
-      "<p>Headless means your CMS and frontend are decoupled. Fetch from <code>/api/v1/posts</code> and render anywhere.</p><pre><code>fetch('/api/v1/posts?limit=10')</code></pre>",
-    category: "Development",
-    date: "2026-08-10",
-    readingTime: 8,
-    author: "Dana Kim",
-  },
-};
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export default async function BlogPostPage({
   params,
@@ -80,46 +52,8 @@ export default async function BlogPostPage({
     console.error("BlogPostPage error:", err);
   }
 
-  // Fallback to mock for dev/no-DB or known slugs — ensures build never breaks without DB
   if (!post) {
-    const mock = POSTS[slug];
-    if (!mock) return notFound();
-    return (
-      <div className="min-h-screen bg-[#F4F5F7] py-8 sm:py-12">
-        <style dangerouslySetInnerHTML={{ __html: EDITOR_STYLES }} />
-        <div className="mx-auto w-full max-w-[940px] 2xl:max-w-[1040px] px-4 sm:px-8">
-          <div className="bg-white rounded-2xl sm:rounded-3xl border border-slate-200/90 shadow-[0_4px_24px_rgba(0,0,0,0.06)] px-6 sm:px-14 py-8 sm:py-12">
-            <Link
-              href="/blog"
-              className="inline-flex items-center gap-2 text-xs sm:text-sm font-bold text-text-tertiary hover:text-brand transition mb-6"
-            >
-              <ArrowLeft className="h-4 w-4" /> Back to all articles
-            </Link>
-            <div className="flex flex-wrap items-center gap-3 text-xs mb-4">
-              <span className="rounded-full bg-brand/10 px-3 py-1 font-bold text-brand">
-                {mock.category}
-              </span>
-              <span className="flex items-center gap-1 text-text-tertiary">
-                <Calendar className="h-3.5 w-3.5" /> {mock.date}
-              </span>
-              <span className="flex items-center gap-1 text-text-tertiary">
-                <Clock className="h-3.5 w-3.5" /> {mock.readingTime} min read
-              </span>
-            </div>
-            <h1 className="text-3xl sm:text-4xl 2xl:text-5xl font-extrabold tracking-tight text-navy leading-tight mb-4">
-              {mock.title}
-            </h1>
-            <p className="text-xs sm:text-sm text-text-secondary mb-8">
-              Written by <span className="font-semibold text-navy">{mock.author}</span>
-            </p>
-            <article
-              className="tiptap prose prose-lg prose-navy max-w-none"
-              dangerouslySetInnerHTML={{ __html: mock.content }}
-            />
-          </div>
-        </div>
-      </div>
-    );
+    return notFound();
   }
 
   const isDraft = post.status === "draft";

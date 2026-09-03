@@ -108,29 +108,32 @@ export const getCurrentUser = cache(async (): Promise<AuthUser | null> => {
       (user as any).email_confirmed_at || (user as any).confirmed_at || user.email_confirmed_at
     );
 
-    // 1. Fetch Profile + owned projects in parallel (both depend on user.id only)
-    const [profile, ownedProjects] = await Promise.all([
-      withDbRetry(() =>
-        db.profile.findUnique({
-          where: { id: user.id },
-          include: {
-            memberships: {
-              include: {
-                project: {
-                  select: { id: true, name: true, slug: true },
-                },
+    // 1. Fetch Profile (loads memberships + project info in a single efficient query)
+    const profile = await withDbRetry(() =>
+      db.profile.findUnique({
+        where: { id: user.id },
+        include: {
+          memberships: {
+            include: {
+              project: {
+                select: { id: true, name: true, slug: true },
               },
             },
           },
-        })
-      ).catch(() => null),
-      withDbRetry(() =>
+        },
+      })
+    ).catch(() => null);
+
+    // If profile has no explicit memberships yet, check if they own any projects
+    let ownedProjects: Array<{ id: string; name: string; slug: string }> = [];
+    if (!profile || !profile.memberships || profile.memberships.length === 0) {
+      ownedProjects = await withDbRetry(() =>
         db.project.findMany({
           where: { ownerId: user.id },
           select: { id: true, name: true, slug: true },
         })
-      ).catch(() => []),
-    ]);
+      ).catch(() => []);
+    }
 
     // 2. If profile record is missing, safely backfill it with 'pending' status
     let finalProfile = profile;

@@ -7,13 +7,15 @@ const globalForPrisma = globalThis as unknown as {
 function getDatasourceUrl(): string | undefined {
   const raw = process.env.DATABASE_URL;
   if (!raw) return undefined;
-  // If connection_limit is not explicitly set in the URL, enforce connection_limit=3 to safely fit within Supabase's session pool limit (15)
+  // If connection_limit is not explicitly set in the URL, enforce connection_limit=2 to safely fit within Supabase's session pool limit (15)
   if (!raw.includes("connection_limit=")) {
     const separator = raw.includes("?") ? "&" : "?";
-    return `${raw}${separator}connection_limit=3&pool_timeout=20`;
+    return `${raw}${separator}connection_limit=2&pool_timeout=30`;
   }
   return raw;
 }
+
+const datasourceUrl = getDatasourceUrl();
 
 export const db =
   globalForPrisma.prisma ??
@@ -22,7 +24,7 @@ export const db =
       process.env.NODE_ENV === "development"
         ? ["error", "warn"]
         : ["error"],
-    datasourceUrl: getDatasourceUrl(),
+    datasources: datasourceUrl ? { db: { url: datasourceUrl } } : undefined,
   });
 
 // Ensure BigInts (e.g. Media sizeBytes) are natively JSON-serializable in all Next.js API routes

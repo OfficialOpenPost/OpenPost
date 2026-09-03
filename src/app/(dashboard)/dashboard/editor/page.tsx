@@ -402,17 +402,21 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
         payload.revisionLabel = manualLabel;
       }
 
+      const activeProjId = typeof window !== "undefined" ? localStorage.getItem("openpost_active_project_id") : null;
+      const saveHeaders: Record<string, string> = { "Content-Type": "application/json" };
+      if (activeProjId) saveHeaders["X-OpenPost-Project"] = activeProjId;
+
       let res;
       if (currentBlogId) {
         res = await fetch(`/api/blogs/${currentBlogId}`, {
           method: "PUT",
-          headers: { "Content-Type": "application/json" },
+          headers: saveHeaders,
           body: JSON.stringify(payload),
         });
       } else {
         res = await fetch("/api/blogs", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: saveHeaders,
           body: JSON.stringify(payload),
         });
       }

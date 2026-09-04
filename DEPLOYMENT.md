@@ -121,8 +121,9 @@ npm run build        # next build
 
 ```bash
 vercel --prod
-# set env vars in Vercel Dashboard → Settings → Environment Variables
-# add cron: vercel.json or Dashboard → Cron → POST https://yourdomain.com/api/cron/publish with Authorization: Bearer $CRON_SECRET every minute
+# 1. Set environment variables in Vercel Dashboard → Project Settings → Environment Variables
+# 2. Vercel automatically detects Next.js framework and executes `postinstall` (prisma generate)
+# 3. Scheduled publishing cron is pre-configured via `vercel.json` (runs every minute against /api/cron/publish)
 ```
 
 ### Docker

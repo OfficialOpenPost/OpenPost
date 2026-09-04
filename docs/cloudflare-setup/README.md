@@ -16,7 +16,7 @@ Inside the bucket, click **+ Create folder** → `Openpost-images` → **Create*
 2. Enter `media.yourdomain.com` (or `cdn.yourdomain.com`) → **Continue** → Cloudflare adds DNS automatically
 3. Wait until **Status: Active** (1–2 min). Keep **Public Development URL** `https://pub-7091…r2.dev` **Enabled** as fallback — it works even before custom domain.
 
-Set in `.env` and Vercel/Netlify:
+Set in `.env` and Vercel Environment Variables:
 ```env
 R2_BUCKET_NAME=openpost-media
 R2_PUBLIC_URL=https://media.yourdomain.com   # exactly the Custom Domain https:// URL, no trailing slash, no /openpost-media

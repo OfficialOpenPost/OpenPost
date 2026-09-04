@@ -388,7 +388,8 @@ npm run test
 npm i -g vercel
 vercel --prod   # set env from .env.example in Vercel dashboard
 ```
-Cron: Vercel Cron or EventBridge every 60s → `POST https://yourdomain.com/api/cron/publish` `Authorization: Bearer $CRON_SECRET`
+- **Prisma Integration:** Automatically triggers `postinstall: "prisma generate"` during deployment.
+- **Cron Scheduler:** Pre-configured in `vercel.json` to trigger `/api/cron/publish` every 60s with `Authorization: Bearer $CRON_SECRET`.
 
 > **Note:** Publishing precision depends on your cron frequency. Posts scheduled for a specific time will be published on the next cron run after their `scheduledAt` time. With a 60s cron interval, posts may publish up to 60 seconds late.
 

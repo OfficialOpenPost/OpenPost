@@ -26,10 +26,12 @@ git push origin main
 In the Vercel project configuration, add your production environment variables:
 
 ```env
-DATABASE_URL="postgresql://postgres.ref:pass@aws-0-region.pooler.supabase.com:5432/postgres"
+# Use Supabase Transaction/Session pooler URL on port 6543 for serverless environments
+DATABASE_URL="postgresql://postgres.ref:pass@aws-0-region.pooler.supabase.com:6543/postgres?pgbouncer=true"
 NEXT_PUBLIC_SUPABASE_URL="https://yourref.supabase.co"
 NEXT_PUBLIC_SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
 SUPABASE_SERVICE_ROLE_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+NEXT_PUBLIC_APP_URL="https://yourdomain.vercel.app"
 R2_ACCOUNT_ID="your-r2-account-id"
 R2_ACCESS_KEY_ID="your-r2-access-key-id"
 R2_SECRET_ACCESS_KEY="your-r2-secret-access-key"
@@ -38,8 +40,10 @@ R2_PUBLIC_URL="https://media.yourdomain.com"
 CRON_SECRET="your-32-char-random-secret"
 ```
 
+> **Note on Scheduled Publishing:** OpenPost includes a pre-configured `vercel.json` with a 1-minute cron triggering `/api/cron/publish`. When `CRON_SECRET` is set in your Vercel Environment Variables, Vercel automatically passes `Authorization: Bearer <CRON_SECRET>` to securely run scheduled publishing.
+
 ### Step 4: Deploy
-Click **Deploy**. Vercel will build and launch your instance globally with zero downtime.
+Click **Deploy**. Vercel will run `prisma generate` and `next build` to launch your instance globally with zero downtime.
 
 ---
 

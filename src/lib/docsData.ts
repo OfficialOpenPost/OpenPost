@@ -149,8 +149,8 @@ export const DOCS_SEARCH_INDEX: DocSearchItem[] = [
     title: "Deployment & Self-Hosting",
     category: "Deployment",
     slug: "deployment",
-    description: "Deploying to Vercel, Netlify, Docker Compose production stack, and custom domains.",
-    keywords: ["deployment", "vercel", "netlify", "docker", "compose", "self-host", "production"],
+    description: "Deploying to Vercel, Docker Compose production stack, cron scheduler, and custom domains.",
+    keywords: ["deployment", "vercel", "docker", "compose", "self-host", "production", "cron"],
   },
   {
     title: "Troubleshooting Guide",

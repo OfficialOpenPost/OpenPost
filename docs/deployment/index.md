@@ -40,7 +40,7 @@ R2_PUBLIC_URL="https://media.yourdomain.com"
 CRON_SECRET="your-32-char-random-secret"
 ```
 
-> **Note on Scheduled Publishing:** OpenPost includes a pre-configured `vercel.json` with a 1-minute cron triggering `/api/cron/publish`. When `CRON_SECRET` is set in your Vercel Environment Variables, Vercel automatically passes `Authorization: Bearer <CRON_SECRET>` to securely run scheduled publishing.
+> **Note on Scheduled Publishing:** OpenPost includes a pre-configured `vercel.json` cron triggering `/api/cron/publish` (set to `0 0 * * *` for Vercel Hobby tier compatibility; Pro accounts can change to `* * * * *`). You can also use free services like [cron-job.org](https://cron-job.org) or GitHub Actions to ping `/api/cron/publish` every minute with `Authorization: Bearer <CRON_SECRET>`.
 
 ### Step 4: Deploy
 Click **Deploy**. Vercel will run `prisma generate` and `next build` to launch your instance globally with zero downtime.

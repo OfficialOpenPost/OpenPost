@@ -7,7 +7,9 @@
   --font-display: "Plus Jakarta Sans", "Inter", -apple-system, sans-serif;
 }
 
-html {
+html, body {
+  overflow-x: hidden;
+  max-width: 100vw;
   scroll-behavior: smooth;
 }
 
@@ -40,7 +42,7 @@ body {
   background: #94A3B8;
 }
 
-/* ── Modern Dribbble & WordPress Magazine Interactions ── */
+/* Modern Magazine Interactions */
 .mag-card {
   transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease;
   will-change: transform;
@@ -61,7 +63,7 @@ body {
   transition: width 0.1s ease;
 }
 
-/* ── Prose Editorial Typography System ── */
+/* Prose Editorial Typography System */
 .prose-editorial {
   max-width: 100%;
   color: #334155;
@@ -207,7 +209,7 @@ body {
   clear: both;
 }
 
-/* ── Floating Image Layouts ── */
+/* Floating Image Layouts */
 figure.openpost-floating-image {
   box-sizing: border-box !important;
   position: relative !important;
@@ -249,7 +251,7 @@ figure.openpost-floating-image[data-layout="center"] {
   margin-bottom: 2rem !important;
 }
 
-/* ── Tables ── */
+/* Tables */
 .openpost-table, table.openpost-table {
   width: 100%;
   max-width: 100%;
@@ -300,4 +302,29 @@ section::after {
   content: "";
   display: table;
   clear: both;
+}
+
+/* Mobile Responsive overrides for Content, Images & Floating Blocks */
+@media (max-width: 639px) {
+  figure.openpost-floating-image[data-float="left"],
+  figure.openpost-floating-image[data-float="right"],
+  .prose figure.openpost-floating-image[data-float="left"],
+  .prose figure.openpost-floating-image[data-float="right"] {
+    float: none !important;
+    clear: both !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    margin-top: 1rem !important;
+    margin-bottom: 1.25rem !important;
+    display: block !important;
+  }
+
+  .openpost-table, table.openpost-table, .tiptap table {
+    display: block !important;
+    width: 100% !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
 }

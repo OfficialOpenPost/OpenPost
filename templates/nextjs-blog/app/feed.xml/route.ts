@@ -7,7 +7,7 @@ export async function GET() {
 
   const rssItems = posts
     .map((post) => {
-      const link = `${baseUrl}/blog/${post.slug}`;
+      const link = `${baseUrl}/${post.slug}`;
       return `
     <item>
       <title><![CDATA[${post.title}]]></title>

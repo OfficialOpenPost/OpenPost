@@ -90,7 +90,7 @@ export function SearchModal({ isOpen, onClose }: { isOpen: boolean; onClose: () 
             onChange={(e) => setQuery(e.target.value)}
             className="flex-1 text-base text-slate-900 placeholder:text-slate-400 focus:outline-none bg-transparent font-medium"
           />
-          {loading && <Loader2 className="h-4 w-4 animate-spin text-[#6C63FF]" />}
+          {loading && <Loader2 className="h-4 w-4 animate-spin text-blue-600" />}
           <button
             type="button"
             onClick={onClose}
@@ -104,7 +104,7 @@ export function SearchModal({ isOpen, onClose }: { isOpen: boolean; onClose: () 
         <div className="max-h-[60vh] overflow-y-auto p-4 space-y-2">
           {query.trim() === "" ? (
             <div className="py-12 text-center space-y-2">
-              <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-2xl bg-indigo-50 text-[#6C63FF]">
+              <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
                 <BookOpen className="h-5 w-5" />
               </div>
               <p className="text-sm font-semibold text-slate-700">Quick Editorial Search</p>
@@ -120,7 +120,7 @@ export function SearchModal({ isOpen, onClose }: { isOpen: boolean; onClose: () 
             results.map((post) => (
               <Link
                 key={post.id}
-                href={`/blog/${post.slug}`}
+                href={`/${post.slug}`}
                 onClick={onClose}
                 className="group flex items-center gap-4 rounded-2xl p-3 hover:bg-slate-50 transition duration-150 border border-transparent hover:border-slate-200"
               >
@@ -129,17 +129,17 @@ export function SearchModal({ isOpen, onClose }: { isOpen: boolean; onClose: () 
                     <img src={post.coverImage} alt={post.title} className="h-full w-full object-cover" />
                   </div>
                 ) : (
-                  <div className="h-14 w-14 shrink-0 rounded-xl bg-gradient-to-br from-indigo-50 to-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-base">
+                  <div className="h-14 w-14 shrink-0 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center text-blue-600 font-bold text-base">
                     {post.title.charAt(0)}
                   </div>
                 )}
                 <div className="flex-1 min-w-0">
                   {post.category && (
-                    <span className="text-[11px] font-bold text-[#6C63FF] uppercase tracking-wider">
+                    <span className="text-[11px] font-bold text-blue-600 uppercase tracking-wider">
                       {post.category.name}
                     </span>
                   )}
-                  <h4 className="text-sm font-bold text-slate-900 group-hover:text-[#6C63FF] transition truncate">
+                  <h4 className="text-sm font-bold text-slate-900 group-hover:text-blue-600 transition truncate">
                     {post.title}
                   </h4>
                   <div className="flex items-center gap-2 text-xs text-slate-400 mt-0.5">
@@ -148,7 +148,7 @@ export function SearchModal({ isOpen, onClose }: { isOpen: boolean; onClose: () 
                     <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{post.readingTime || 3} min read</span>
                   </div>
                 </div>
-                <ArrowRight className="h-4 w-4 text-slate-300 group-hover:text-[#6C63FF] group-hover:translate-x-0.5 transition shrink-0" />
+                <ArrowRight className="h-4 w-4 text-slate-300 group-hover:text-blue-600 group-hover:translate-x-0.5 transition shrink-0" />
               </Link>
             ))
           )}

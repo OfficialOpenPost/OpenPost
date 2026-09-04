@@ -114,7 +114,8 @@ function SharedPollCard({ node }: { node: any }) {
 
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (pollId && typeof pollId === "string" && uuidRegex.test(pollId)) {
-      fetch(`/api/v1/polls/${pollId}`)
+      const baseUrl = (process.env.NEXT_PUBLIC_OPENPOST_URL || "").replace(/\/$/, "");
+      fetch(baseUrl + "/api/v1/polls/" + pollId)
         .then((r) => r.json())
         .then((res) => {
           if (res.data && Array.isArray(res.data.options)) {
@@ -148,7 +149,8 @@ function SharedPollCard({ node }: { node: any }) {
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (pollId && typeof pollId === "string" && uuidRegex.test(pollId)) {
       try {
-        await fetch(`/api/v1/polls/${pollId}/vote`, {
+        const baseUrl = (process.env.NEXT_PUBLIC_OPENPOST_URL || "").replace(/\/$/, "");
+        await fetch(baseUrl + "/api/v1/polls/" + pollId + "/vote", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ optionId: selectedOption }),
@@ -310,11 +312,26 @@ function SharedPollCard({ node }: { node: any }) {
   );
 }
 
-// Shared between CMS preview and public frontend — guarantees complete visual and layout parity
+// Shared between CMS preview and public frontend - guarantees complete visual and layout parity
 export function SharedRender({ content }: SharedRenderProps) {
-  if (!content || !content.content) return <p className="text-sm text-text-tertiary">No content</p>;
+  if (!content) return <p className="text-sm text-text-tertiary">No content</p>;
 
-  const faqNodes = content.content.filter((n: any) => n.type === "faq");
+  // If content is passed as JSON string, parse it
+  let parsed = content;
+  if (typeof content === "string") {
+    try {
+      parsed = JSON.parse(content);
+    } catch {
+      return <div dangerouslySetInnerHTML={{ __html: content }} />;
+    }
+  }
+
+  if (!parsed || !parsed.content) {
+    if (typeof parsed === "string") return <div dangerouslySetInnerHTML={{ __html: parsed }} />;
+    return <p className="text-sm text-text-tertiary">No content</p>;
+  }
+
+  const faqNodes = parsed.content.filter((n: any) => n.type === "faq");
   const faqJsonLd = faqNodes.length
     ? {
         "@context": "https://schema.org",
@@ -328,7 +345,7 @@ export function SharedRender({ content }: SharedRenderProps) {
 
   return (
     <div className="prose prose-slate max-w-none text-navy leading-relaxed prose-headings:text-navy prose-a:text-brand prose-blockquote:border-brand prose-code:bg-navy prose-code:text-brand">
-      {content.content.map((node: any, i: number) => {
+      {parsed.content.map((node: any, i: number) => {
         switch (node.type) {
           case "paragraph": {
             const align = node.attrs?.textAlign;
@@ -695,103 +712,6 @@ export function SharedRender({ content }: SharedRenderProps) {
                   </li>
                 ))}
               </ul>
-            );
-          }
-          case "youtube":
-          case "videoBlock":
-          case "embedBlock": {
-            const {
-              src = "",
-              url = "",
-              videoId = "",
-              provider = "youtube",
-              caption = "",
-              title = "",
-              align = "center",
-              layout = "center",
-              width = "100%",
-              aspectRatio = "16:9",
-              startTime = 0,
-              autoplay = false,
-              muted = false,
-              loop = false,
-              controls = true,
-              privacyEnhanced = true,
-            } = node.attrs ?? {};
-
-            const rawUrl = src || url || "";
-            let embedSrc = rawUrl;
-            let effVideoId = videoId;
-            let effProvider = provider;
-
-            const ytMatch = rawUrl.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/))([\w-]{11})/);
-            if (ytMatch && ytMatch[1]) {
-              effVideoId = ytMatch[1];
-              effProvider = "youtube";
-            }
-            const vimeoMatch = rawUrl.match(/(?:vimeo\.com\/)(\d+)/);
-            if (vimeoMatch && vimeoMatch[1]) {
-              effVideoId = vimeoMatch[1];
-              effProvider = "vimeo";
-            }
-
-            if (effProvider === "youtube" && effVideoId) {
-              const base = privacyEnhanced !== false
-                ? `https://www.youtube-nocookie.com/embed/${effVideoId}`
-                : `https://www.youtube.com/embed/${effVideoId}`;
-              const params = new URLSearchParams();
-              if (autoplay) params.set("autoplay", "1");
-              if (muted) params.set("mute", "1");
-              if (loop) {
-                params.set("loop", "1");
-                params.set("playlist", effVideoId);
-              }
-              if (controls === false) params.set("controls", "0");
-              if (startTime) params.set("start", String(startTime));
-              params.set("rel", "0");
-              const qs = params.toString();
-              embedSrc = qs ? `${base}?${qs}` : base;
-            } else if (effProvider === "vimeo" && effVideoId) {
-              const base = `https://player.vimeo.com/video/${effVideoId}`;
-              embedSrc = base;
-            }
-
-            const isLeft = align === "left" || layout === "left";
-            const isRight = align === "right" || layout === "right";
-            const isWide = align === "wide" || layout === "wide";
-
-            let floatClass = "block my-8 clear-both mx-auto";
-            if (isLeft) floatClass = "float-none sm:float-left mr-8 mb-6 clear-none max-w-[48%]";
-            if (isRight) floatClass = "float-none sm:float-right ml-8 mb-6 clear-none max-w-[48%]";
-            if (isWide) floatClass = "block w-full my-8 clear-both";
-
-            const aspectClass =
-              aspectRatio === "9:16"
-                ? "aspect-[9/16] max-w-[360px] mx-auto"
-                : aspectRatio === "1:1"
-                ? "aspect-square max-w-[540px] mx-auto"
-                : aspectRatio === "4:3"
-                ? "aspect-[4/3]"
-                : "aspect-video";
-
-            return (
-              <figure key={i} className={`overflow-hidden rounded-3xl border border-border bg-slate-950 shadow-md ${floatClass}`} style={{ width: isWide ? "100%" : width || "100%", maxWidth: "100%" }}>
-                <div className={`relative w-full ${aspectClass}`}>
-                  <iframe
-                    src={embedSrc}
-                    title={title || caption || "Embedded Video"}
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                    allowFullScreen
-                    className="absolute inset-0 h-full w-full border-0"
-                  />
-                </div>
-                {(caption || title) && (
-                  <figcaption className="p-3 bg-white border-t border-slate-100 text-center">
-                    {title && <p className="text-xs font-bold text-navy truncate">{title}</p>}
-                    {caption && <p className="text-[11px] text-slate-500 italic mt-0.5">{caption}</p>}
-                  </figcaption>
-                )}
-              </figure>
             );
           }
           default:

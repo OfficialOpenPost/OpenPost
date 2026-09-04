@@ -36,10 +36,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang={SITE_LANGUAGE} className={`${inter.variable} ${jakarta.variable} h-full`}>
-      <body className="flex min-h-full flex-col bg-[#fafafa] text-gray-900 antialiased font-sans">
+    <html lang={SITE_LANGUAGE} className={`${inter.variable} ${jakarta.variable} h-full overflow-x-hidden`}>
+      <body className="flex min-h-full flex-col bg-[#fafafa] text-gray-900 antialiased font-sans w-full max-w-full overflow-x-hidden">
         <Header />
-        <main className="flex-1">{children}</main>
+        <main className="flex-1 w-full max-w-full overflow-x-hidden">{children}</main>
         <Footer />
       </body>
     </html>

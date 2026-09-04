@@ -26,8 +26,6 @@ export function PollWidget({
   align,
   layout,
   width,
-  themeColor,
-  color,
 }: PollWidgetProps) {
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [hasVoted, setHasVoted] = useState(false);
@@ -51,16 +49,26 @@ export function PollWidget({
     }
   }, [poll?.id]);
 
-  const alignCls =
-    effectiveLayout === "left"
-      ? "float-left mr-8 mb-4 clear-none"
-      : effectiveLayout === "right"
-      ? "float-right ml-8 mb-4 clear-none"
-      : effectiveLayout === "wide"
-      ? "w-full my-8 clear-both"
-      : "mx-auto my-8 clear-both";
+  const isLeft = effectiveLayout === "left";
+  const isRight = effectiveLayout === "right";
+  const isWide = effectiveLayout === "wide";
+  const isCenter = !isLeft && !isRight && !isWide;
 
-  const widthStyle = width ? { width, maxWidth: "100%" } : {};
+  let alignCls = "block my-8 clear-both mx-auto";
+  if (isLeft) alignCls = "float-none sm:float-left mr-0 sm:mr-8 mb-4 clear-none inline-block";
+  if (isRight) alignCls = "float-none sm:float-right ml-0 sm:ml-8 mb-4 clear-none inline-block";
+  if (isWide) alignCls = "block w-full my-8 clear-both";
+  if (isCenter) alignCls = "block my-8 clear-both mx-auto";
+
+  const cardStyle: React.CSSProperties = {
+    width: (isLeft || isRight)
+      ? (width === "100%" || !width ? "48%" : width)
+      : isWide
+      ? "100%"
+      : width || "100%",
+    maxWidth: "100%",
+    border: "2px solid #FEA611",
+  };
 
   const handleVote = async () => {
     if (!selectedOption || loading || hasVoted) return;
@@ -94,10 +102,10 @@ export function PollWidget({
 
   return (
     <div
-      className={`my-8 rounded-none bg-white p-6 sm:p-7 shadow-xs ${alignCls}`}
-      style={{ ...widthStyle, border: "2px solid #FEA611" }}
+      className={`rounded-none bg-white p-6 shadow-xs ${alignCls}`}
+      style={cardStyle}
     >
-      <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-200/60">
+      <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-200/70">
         <div className="flex items-center gap-2">
           <div
             className="flex h-6 w-6 items-center justify-center rounded-none text-navy font-bold shadow-2xs"
@@ -117,7 +125,7 @@ export function PollWidget({
       </h3>
 
       {effectiveDesc && (
-        <p className="text-xs text-slate-600 font-normal leading-relaxed mb-4 bg-slate-50 border border-slate-200/60 rounded-none p-3">
+        <p className="text-xs text-slate-600 font-normal leading-relaxed mb-3.5 bg-slate-50 border border-slate-200/60 rounded-none p-3">
           {effectiveDesc}
         </p>
       )}
@@ -137,7 +145,7 @@ export function PollWidget({
             <div
               key={opt.id}
               onClick={() => !hasVoted && setSelectedOption(opt.id)}
-              className={`relative overflow-hidden rounded-none border px-3.5 py-3 transition cursor-pointer ${
+              className={`relative overflow-hidden rounded-none border px-3.5 py-2.5 transition cursor-pointer ${
                 hasVoted
                   ? "border-slate-200 bg-white"
                   : isSelected
@@ -147,8 +155,8 @@ export function PollWidget({
             >
               {hasVoted && (
                 <div
-                  className="absolute inset-y-0 left-0 transition-all duration-500 opacity-20 bg-brand"
-                  style={{ width: `${percentage}%` }}
+                  className="absolute inset-y-0 left-0 transition-all duration-500 opacity-20"
+                  style={{ width: `${percentage}%`, backgroundColor: activeColor }}
                 />
               )}
 
@@ -181,22 +189,23 @@ export function PollWidget({
         })}
       </div>
 
-      <div className="mt-5 pt-3 border-t border-slate-200/60 flex items-center justify-between">
-        <span className="text-xs text-slate-500 font-medium">{totalVotes} total votes</span>
+      <div className="mt-4 pt-3 border-t border-slate-200/60 flex items-center justify-between text-xs">
+        <span className="text-slate-500 font-medium">{totalVotes} total votes</span>
 
         {!hasVoted ? (
           <button
+            type="button"
             onClick={handleVote}
             disabled={!selectedOption || loading}
-            className="inline-flex items-center gap-1.5 rounded-none px-5 py-2 text-xs font-bold text-navy transition disabled:opacity-50 shadow-xs hover:bg-brand-hover"
+            className="inline-flex items-center gap-1.5 rounded-none px-4 py-1.5 text-xs font-bold text-navy transition disabled:opacity-50 shadow-xs hover:brightness-95"
             style={{ backgroundColor: activeColor }}
           >
-            {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+            {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
             Submit Vote
           </button>
         ) : (
           <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-600">
-            <CheckCircle2 className="h-4 w-4" /> Thank you for voting!
+            <CheckCircle2 className="h-3.5 w-3.5" /> Thank you for voting!
           </span>
         )}
       </div>

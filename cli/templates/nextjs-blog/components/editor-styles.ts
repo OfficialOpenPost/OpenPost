@@ -163,60 +163,6 @@ export const EDITOR_STYLES = `
     color: inherit;
   }
 
-  /* ── Column Resize Handle (Tiptap resizable: true) ── */
-  .tiptap table .column-resize-handle {
-    position: absolute;
-    right: -2px;
-    top: 0;
-    bottom: -2px;
-    width: 4px;
-    background-color: #6C63FF;
-    pointer-events: none;
-    z-index: 25;
-    opacity: 0;
-    transition: opacity 0.15s ease;
-    border-radius: 2px;
-  }
-
-  .tiptap table td:hover .column-resize-handle,
-  .tiptap table th:hover .column-resize-handle {
-    opacity: 1;
-  }
-
-  .tiptap.resize-cursor {
-    cursor: col-resize;
-  }
-  .tiptap.resize-cursor .column-resize-handle {
-    opacity: 1;
-    background-color: #6C63FF;
-  }
-
-  /* Selected cell highlight */
-  .tiptap .selectedCell:after {
-    z-index: 2;
-    position: absolute;
-    content: "";
-    left: 0; right: 0; top: 0; bottom: 0;
-    background: rgba(108, 99, 255, 0.08) !important;
-    border: 1.5px solid #6C63FF !important;
-    pointer-events: none;
-  }
-
-  /* Selected table outline */
-  .tiptap table.ProseMirror-selectednode {
-    outline: 2px solid #6C63FF !important;
-    outline-offset: 2px;
-  }
-
-  /* Row/column grip handles */
-  .tiptap .grip-column,
-  .tiptap .grip-row {
-    position: absolute;
-    cursor: pointer;
-    background: #E2E8F0;
-    z-index: 10;
-  }
-
   .tiptap hr {
     clear: both;
   }

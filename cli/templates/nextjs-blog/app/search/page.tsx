@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getPosts } from "@/lib/openpost";
 import { PostCard } from "@/components/PostCard";
+import { NewsletterCard } from "@/components/NewsletterCard";
 import { Search } from "lucide-react";
 
 export const metadata = {
@@ -29,19 +30,20 @@ export default async function SearchPage({
   }
 
   return (
-    <div className="mx-auto max-w-5xl px-5 py-12 space-y-8">
+    <div className="w-full max-w-[1520px] 2xl:max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-16 space-y-12">
       {/* Search Header */}
-      <div className="space-y-4 max-w-xl">
-        <h1 className="text-3xl font-extrabold text-gray-900 tracking-tight font-display">Search</h1>
-        <form method="GET" action="/search">
+      <div className="space-y-4 max-w-xl mx-auto text-center">
+        <h1 className="text-3xl sm:text-5xl font-black text-slate-900 tracking-tight font-display">Search</h1>
+        <p className="text-sm text-slate-500">Discover articles, tutorials, guides and topics</p>
+        <form method="GET" action="/search" className="pt-2">
           <div className="relative">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <input
               type="text"
               name="q"
               defaultValue={q}
-              placeholder="Search articles..."
-              className="w-full h-11 rounded-xl border border-gray-200 bg-white pl-10 pr-4 text-sm text-gray-900 placeholder:text-gray-400 focus:border-[#6C63FF] focus:outline-none focus:ring-2 focus:ring-[#6C63FF]/10 transition-colors"
+              placeholder="Search articles, keywords..."
+              className="w-full h-12 rounded-full border border-slate-200 bg-white pl-11 pr-4 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-600/10 transition-colors shadow-2xs"
             />
           </div>
         </form>
@@ -49,24 +51,27 @@ export default async function SearchPage({
 
       {/* Results */}
       {!query ? (
-        <div className="py-16 text-center rounded-2xl border border-dashed border-gray-200 bg-gray-50/50">
-          <p className="text-sm text-gray-500">Type a query to search articles.</p>
+        <div className="py-20 text-center rounded-3xl border border-dashed border-slate-200 bg-white max-w-3xl mx-auto p-8">
+          <p className="text-sm text-slate-500">Type a query above to search articles across the publication.</p>
         </div>
       ) : posts.length === 0 ? (
-        <div className="py-16 text-center rounded-2xl border border-dashed border-gray-200 bg-gray-50/50">
-          <p className="text-base font-semibold text-gray-900">No results for &ldquo;{q}&rdquo;</p>
-          <p className="text-sm text-gray-500 mt-1">Try a different search term.</p>
+        <div className="py-20 text-center rounded-3xl border border-dashed border-slate-200 bg-white max-w-3xl mx-auto p-8">
+          <p className="text-base font-bold text-slate-900">No results found for &ldquo;{q}&rdquo;</p>
+          <p className="text-xs text-slate-500 mt-1">Try a different search term or browse our categories.</p>
         </div>
       ) : (
-        <div className="space-y-5">
-          <p className="text-sm text-gray-500">{posts.length} result{posts.length !== 1 ? "s" : ""} for &ldquo;{q}&rdquo;</p>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div className="space-y-6">
+          <p className="text-xs font-bold text-slate-400">{posts.length} result{posts.length !== 1 ? "s" : ""} found for &ldquo;{q}&rdquo;</p>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {posts.map((post) => (
               <PostCard key={post.id} post={post} />
             ))}
           </div>
         </div>
       )}
+
+      {/* Royal Blue Newsletter Card */}
+      <NewsletterCard />
     </div>
   );
 }

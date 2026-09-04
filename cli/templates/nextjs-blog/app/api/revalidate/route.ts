@@ -23,6 +23,7 @@ export async function POST(req: NextRequest) {
 
     // Invalidate specific slug path if provided
     if (payload?.slug) {
+      revalidatePath(`/${payload.slug}`);
       revalidatePath(`/blog/${payload.slug}`);
     }
     revalidatePath("/blog");

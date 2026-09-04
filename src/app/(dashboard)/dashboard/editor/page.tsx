@@ -26,6 +26,9 @@ import {
   Save,
   Image as ImageIcon,
   Trash2,
+  Monitor,
+  Tablet,
+  Smartphone,
 } from "lucide-react";
 
 interface EditorPageProps {
@@ -82,6 +85,7 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
   const [html, setHtml] = useState("");
   const [json, setJson] = useState<any>(null);
   const [preview, setPreview] = useState(false);
+  const [previewViewport, setPreviewViewport] = useState<"desktop" | "tablet" | "mobile" | "wide">("wide");
   const [showSidebar, setShowSidebar] = useState(true);
   const [showFindReplace, setShowFindReplace] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -508,23 +512,70 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
 
   // Reading Preview Modal
   if (preview) {
+    const previewWidthClass =
+      previewViewport === "mobile"
+        ? "max-w-[400px]"
+        : previewViewport === "tablet"
+        ? "max-w-[720px]"
+        : previewViewport === "desktop"
+        ? "max-w-5xl"
+        : "max-w-[1440px] 2xl:max-w-[1680px]";
+
     return (
       <div className="fixed inset-0 z-50 overflow-y-auto bg-[#F4F5F7] p-3 sm:p-6 text-navy select-text flex flex-col items-center">
-        <div className="w-full max-w-[1440px] 2xl:max-w-[1680px] bg-white rounded-2xl border border-slate-200/90 shadow-[0_4px_24px_rgba(0,0,0,0.06)] px-8 sm:px-14 py-8 sm:py-12 my-4">
-          <div className="flex items-center justify-between border-b border-border pb-4 mb-8">
-            <button
-              onClick={() => setPreview(false)}
-              className="inline-flex items-center gap-2 rounded-xl border border-border bg-white px-3 py-1.5 text-xs font-bold text-navy hover:bg-surface-raised transition shadow-xs"
-            >
-              <ArrowLeft className="h-4 w-4" /> Back to Editor
-            </button>
-            <span className="text-xs font-mono text-text-tertiary">
-              {words} words · ~{minutes} min read
+        {/* Sticky Control Bar */}
+        <div className="sticky top-2 z-30 flex items-center justify-between gap-3 w-full max-w-[1440px] 2xl:max-w-[1680px] bg-white/95 backdrop-blur-md rounded-2xl border border-border shadow-sm px-4 py-2.5 mb-4">
+          <button
+            onClick={() => setPreview(false)}
+            className="inline-flex items-center gap-2 rounded-xl border border-border bg-white px-3 py-1.5 text-xs font-bold text-navy hover:bg-surface-raised transition shadow-xs"
+          >
+            <ArrowLeft className="h-4 w-4" /> Back to Editor
+          </button>
+
+          {/* Viewport Switcher */}
+          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
+            {([
+              ["wide", Maximize, "Full Width"],
+              ["desktop", Monitor, "Desktop (1024px)"],
+              ["tablet", Tablet, "Tablet (768px)"],
+              ["mobile", Smartphone, "Mobile (390px)"],
+            ] as const).map(([v, Icon, label]) => (
+              <button
+                key={v}
+                onClick={() => setPreviewViewport(v as any)}
+                className={`flex h-7 px-2.5 items-center gap-1.5 rounded-lg text-xs font-bold transition ${
+                  previewViewport === v
+                    ? "bg-navy text-white shadow-xs"
+                    : "text-slate-600 hover:text-navy hover:bg-white/60"
+                }`}
+                title={label}
+              >
+                <Icon className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline capitalize">{v}</span>
+              </button>
+            ))}
+          </div>
+
+          <span className="text-xs font-mono text-text-tertiary">
+            {words} words · ~{minutes} min read
+          </span>
+        </div>
+
+        <div className={`w-full ${previewWidthClass} bg-white rounded-2xl sm:rounded-3xl border border-slate-200/90 shadow-[0_4px_24px_rgba(0,0,0,0.06)] px-5 sm:px-14 py-8 sm:py-12 my-2 transition-all duration-300`}>
+          {/* Metadata Row */}
+          <div className="flex flex-wrap items-center gap-3 text-xs mb-4">
+            <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 border border-blue-200 px-3 py-1 font-bold text-blue-700">
+              {category || "Article"}
+            </span>
+            <span className="flex items-center gap-1 text-slate-500">
+              <Clock className="h-3.5 w-3.5" /> ~{minutes} min read
             </span>
           </div>
-          <h1 className="text-3xl sm:text-4xl font-extrabold text-navy mb-6 leading-tight tracking-tight">
+
+          <h1 className="text-2xl sm:text-4xl font-extrabold text-navy mb-6 leading-tight tracking-tight font-display">
             {title || "Untitled Article"}
           </h1>
+
           {featuredImage && (
             // eslint-disable-next-line @next/next/no-img-element
             <div className="w-full mb-8 rounded-2xl overflow-hidden border border-border shadow-xs bg-slate-50 flex justify-center">
@@ -544,6 +595,9 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
             )}
           </div>
         </div>
+        <p className="mt-4 text-center text-xs text-slate-400">
+          Preview matches public frontend &amp; mobile responsive layout via SharedRender
+        </p>
       </div>
     );
   }

@@ -36,7 +36,10 @@ export async function POST(req: NextRequest) {
   // Revalidate based on event
   if (event.startsWith("blog.")) {
     revalidatePath("/blog");
-    if (payload.data?.slug) revalidatePath(`/blog/${payload.data.slug}`);
+    if (payload.data?.slug) {
+      revalidatePath(`/${payload.data.slug}`);
+      revalidatePath(`/blog/${payload.data.slug}`);
+    }
   }
 
   return NextResponse.json({ ok: true });

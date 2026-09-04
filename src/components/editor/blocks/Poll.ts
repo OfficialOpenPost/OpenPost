@@ -12,22 +12,29 @@ export const PollBlock = Node.create({
     return {
       pollId: { default: null },
       question: { default: "What do you think?" },
+      description: { default: "" },
       options: { default: [{ id: "1", label: "Option A" }, { id: "2", label: "Option B" }] },
       type: { default: "single" },
       showResults: { default: "always" },
+      allowAnonymous: { default: true },
+      closesAt: { default: null },
+      align: { default: "center" },
+      layout: { default: "center" },
+      width: { default: "100%" },
+      status: { default: "open" },
     };
   },
 
   parseHTML() {
-    return [{ tag: 'div[data-type="pollBlock"]' }];
+    return [{ tag: 'div[data-type="pollBlock"]' }, { tag: 'div[data-type="poll"]' }];
   },
 
   renderHTML({ HTMLAttributes, node }) {
     return [
       "div",
-      mergeAttributes(HTMLAttributes, { "data-type": "pollBlock", class: "my-6 rounded-xl border border-border bg-white p-6" }),
+      mergeAttributes(HTMLAttributes, { "data-type": "pollBlock", class: "my-6 rounded-none border-2 border-[#FEA611] bg-white p-6" }),
       ["div", { class: "text-sm font-bold text-navy" }, node.attrs.question || "Poll"],
-      ["div", { class: "mt-3 text-xs text-text-tertiary" }, `Poll — ${node.attrs.options?.length ?? 2} options · ${node.attrs.type ?? "single"}`],
+      ["div", { class: "mt-3 text-xs text-text-tertiary" }, `Poll — ${node.attrs.options?.length ?? 2} options`],
     ];
   },
 

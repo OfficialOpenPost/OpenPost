@@ -3,6 +3,7 @@ import Link from "next/link";
 import { getPostBySlug, getPosts } from "@/lib/openpost";
 import { ContentRenderer } from "@/components/ContentRenderer";
 import { PostCard } from "@/components/PostCard";
+import { CoverImage } from "@/components/CoverImage";
 import { Clock, Calendar, ArrowLeft, Tag, ArrowRight, Sparkles } from "lucide-react";
 import type { Metadata } from "next";
 
@@ -171,11 +172,7 @@ export default async function BlogPostPage({
       {/* ── Featured Cover Image (Uncropped, Generous) ── */}
       {post.coverImage && (
         <div className="max-w-6xl xl:max-w-7xl mx-auto overflow-hidden rounded-3xl border border-slate-200/80 bg-slate-100 shadow-md">
-          <img
-            src={post.coverImage}
-            alt={post.title}
-            className="w-full h-auto max-h-[680px] object-cover"
-          />
+          <CoverImage src={post.coverImage} alt={post.title} />
         </div>
       )}
 

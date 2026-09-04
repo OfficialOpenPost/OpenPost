@@ -27,7 +27,22 @@ import {
   AlignCenter,
   AlignRight,
   Maximize2,
+  ShieldCheck,
+  CheckCircle2,
+  Clock,
+  Play,
+  Tv,
+  Monitor,
+  Smartphone,
+  Square,
+  Film,
+  Palette,
+  TrendingUp,
+  RefreshCw,
+  Users,
+  Activity,
 } from "lucide-react";
+import { parseVideoUrl } from "./YouTubeBlockView";
 
 export type BlockModalType =
   | "image"
@@ -37,6 +52,7 @@ export type BlockModalType =
   | "faq"
   | "accordion"
   | "video"
+  | "youtube"
   | "button"
   | "download"
   | null;
@@ -70,11 +86,30 @@ export function InsertBlockModal({
   const [loadingMedia, setLoadingMedia] = useState(false);
 
   // Poll State
+  const [pollTab, setPollTab] = useState<"create" | "analytics">("create");
   const [pollQuestion, setPollQuestion] = useState("");
+  const [pollDescription, setPollDescription] = useState("");
   const [pollOptions, setPollOptions] = useState(["Option 1", "Option 2"]);
+  const [pollShowResults, setPollShowResults] = useState<"always" | "after_vote" | "after_close">("always");
+  const [pollAllowAnonymous, setPollAllowAnonymous] = useState(true);
+  const [pollClosesAt, setPollClosesAt] = useState("");
+  const [pollAlign, setPollAlign] = useState<"left" | "center" | "right" | "wide">("center");
+  const [projectPolls, setProjectPolls] = useState<any[]>([]);
+  const [loadingPolls, setLoadingPolls] = useState(false);
 
   // Video State
   const [videoUrl, setVideoUrl] = useState("");
+  const [videoTitle, setVideoTitle] = useState("");
+  const [videoCaption, setVideoCaption] = useState("");
+  const [videoAspectRatio, setVideoAspectRatio] = useState<"16:9" | "4:3" | "1:1" | "9:16">("16:9");
+  const [videoAlign, setVideoAlign] = useState<"left" | "center" | "right" | "wide">("center");
+  const [videoWidth, setVideoWidth] = useState("100%");
+  const [videoStartTime, setVideoStartTime] = useState("");
+  const [videoAutoplay, setVideoAutoplay] = useState(false);
+  const [videoMuted, setVideoMuted] = useState(false);
+  const [videoLoop, setVideoLoop] = useState(false);
+  const [videoControls, setVideoControls] = useState(true);
+  const [videoPrivacy, setVideoPrivacy] = useState(true);
 
   // Button State
   const [buttonText, setButtonText] = useState("Explore More");
@@ -111,6 +146,19 @@ export function InsertBlockModal({
         })
         .catch(() => {})
         .finally(() => setLoadingMedia(false));
+    }
+    if (isOpen && type === "poll") {
+      setLoadingPolls(true);
+      const activeProjId = typeof window !== "undefined" ? localStorage.getItem("openpost_active_project_id") : null;
+      const headers: Record<string, string> = {};
+      if (activeProjId) headers["X-OpenPost-Project"] = activeProjId;
+      fetch("/api/polls", { headers })
+        .then((r) => r.json())
+        .then((res) => {
+          if (Array.isArray(res.data)) setProjectPolls(res.data);
+        })
+        .catch(() => {})
+        .finally(() => setLoadingPolls(false));
     }
   }, [isOpen, type]);
 
@@ -151,54 +199,56 @@ export function InsertBlockModal({
   };
 
   const handleInsertPoll = () => {
-    if (!pollQuestion.trim()) return;
+    if (!pollQuestion.trim()) {
+      alert("Please provide a poll question");
+      return;
+    }
     const cleanOpts = pollOptions.filter((o) => o.trim().length > 0);
     if (cleanOpts.length < 2) {
       alert("Please provide at least 2 poll options");
       return;
     }
 
-    const optionsHtml = cleanOpts
-      .map(
-        (opt) =>
-          `<li style="margin: 4px 0; padding: 6px 12px; background: #F4F5F7; border-radius: 8px; font-size: 13px;">${opt}</li>`
-      )
-      .join("");
-
-    const pollHtml = `
-      <div data-type="poll-block" style="border: 1.5px solid #E2E8F0; border-radius: 16px; padding: 20px; background: #FFFFFF; margin: 24px 0; box-shadow: 0 2px 6px rgba(0,0,0,0.04);">
-        <p style="font-weight: 800; font-size: 16px; color: #2D3440; margin-bottom: 12px;">📊 ${pollQuestion}</p>
-        <ul style="list-style: none; padding: 0; margin: 0;">${optionsHtml}</ul>
-        <p style="font-size: 11px; color: #94A3B8; margin-top: 10px;">Reader Poll · Interactive on live article</p>
-      </div>
-    `;
-
-    editor.chain().focus().insertContent(pollHtml).run();
+    editor
+      .chain()
+      .focus()
+      .insertContent({
+        type: "pollBlock",
+        attrs: {
+          pollId: `poll_${Date.now()}`,
+          question: pollQuestion.trim(),
+          description: pollDescription.trim().slice(0, 500),
+          options: cleanOpts.map((label, idx) => ({ id: `opt_${idx + 1}`, label })),
+          type: "single",
+          showResults: pollShowResults,
+          allowAnonymous: pollAllowAnonymous,
+          closesAt: pollClosesAt ? new Date(pollClosesAt).toISOString() : null,
+          align: pollAlign,
+          layout: pollAlign,
+          width: "100%",
+          status: "open",
+        },
+      })
+      .run();
     onClose();
   };
 
   const handleInsertCallout = () => {
-    const emojis = {
-      tip: "💡",
-      info: "ℹ️",
-      warning: "⚠️",
-      success: "✅",
-    };
-    const titles = {
-      tip: "Pro Tip",
-      info: "Note",
-      warning: "Warning",
-      success: "Success",
-    };
-
-    const calloutHtml = `
-      <blockquote data-type="callout" data-tone="${calloutTone}" style="border-left: 4px solid #FEA611; background: #FEF9EE; padding: 16px 20px; border-radius: 12px; margin: 20px 0;">
-        <p style="margin: 0; font-weight: 700; color: #2D3440; font-size: 14px;">${emojis[calloutTone]} ${titles[calloutTone]}</p>
-        <p style="margin: 6px 0 0 0; color: #475569; font-size: 13px;">${calloutText}</p>
-      </blockquote>
-    `;
-
-    editor.chain().focus().insertContent(calloutHtml).run();
+    const text = calloutText.trim() || "Key takeaway or essential tip for readers.";
+    editor
+      .chain()
+      .focus()
+      .insertContent({
+        type: "callout",
+        attrs: { tone: calloutTone },
+        content: [
+          {
+            type: "paragraph",
+            content: [{ type: "text", text }],
+          },
+        ],
+      })
+      .run();
     onClose();
   };
 
@@ -216,23 +266,38 @@ export function InsertBlockModal({
   };
 
   const handleInsertVideo = () => {
-    if (!videoUrl) return;
-    let embedUrl = videoUrl;
-
-    const ytMatch = videoUrl.match(
-      /(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/
-    );
-    if (ytMatch && ytMatch[1]) {
-      embedUrl = `https://www.youtube-nocookie.com/embed/${ytMatch[1]}`;
+    if (!videoUrl.trim() || !editor) return;
+    const parsed = parseVideoUrl(videoUrl.trim());
+    if (!parsed) {
+      alert("Please enter a valid YouTube, Vimeo, or video URL.");
+      return;
     }
 
-    const videoHtml = `
-      <div style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 16px; margin: 24px 0; background: #000;">
-        <iframe src="${embedUrl}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0;" allowfullscreen></iframe>
-      </div>
-    `;
-
-    editor.chain().focus().insertContent(videoHtml).run();
+    editor
+      .chain()
+      .focus()
+      .insertContent({
+        type: "videoBlock",
+        attrs: {
+          src: videoUrl.trim(),
+          url: videoUrl.trim(),
+          videoId: parsed.videoId,
+          provider: parsed.provider,
+          title: videoTitle.trim(),
+          caption: videoCaption.trim(),
+          aspectRatio: videoAspectRatio,
+          align: videoAlign,
+          layout: videoAlign,
+          width: videoWidth,
+          startTime: videoStartTime,
+          autoplay: videoAutoplay,
+          muted: videoMuted,
+          loop: videoLoop,
+          controls: videoControls,
+          privacyEnhanced: videoPrivacy,
+        },
+      })
+      .run();
     onClose();
   };
 
@@ -293,7 +358,7 @@ export function InsertBlockModal({
       }}
     >
       <div
-        className="w-full max-w-lg rounded-2xl border border-border bg-white p-6 shadow-2xl animate-in zoom-in-95 text-navy relative"
+        className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl border border-border bg-white p-6 sm:p-7 shadow-2xl animate-in zoom-in-95 text-navy relative"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -304,7 +369,7 @@ export function InsertBlockModal({
               {type === "poll" && <BarChart3 className="h-4 w-4" />}
               {type === "callout" && <Sparkles className="h-4 w-4" />}
               {type === "table" && <TableIcon className="h-4 w-4" />}
-              {type === "video" && <Video className="h-4 w-4" />}
+              {(type === "video" || type === "youtube") && <Video className="h-4 w-4" />}
               {type === "button" && <ArrowUpRight className="h-4 w-4" />}
               {type === "faq" && <HelpCircle className="h-4 w-4" />}
               {type === "download" && <Download className="h-4 w-4" />}
@@ -314,7 +379,7 @@ export function InsertBlockModal({
               {type === "poll" && "Create Interactive Reader Poll"}
               {type === "callout" && "Insert Editorial Callout Box"}
               {type === "table" && "Insert Data Table"}
-              {type === "video" && "Embed Video (YouTube / Vimeo)"}
+              {(type === "video" || type === "youtube") && "Embed Video (YouTube / Vimeo / Shorts)"}
               {type === "button" && "Insert Call-to-Action Button"}
               {type === "faq" && "Insert FAQ Structured Accordion"}
               {type === "download" && "Insert Downloadable Attachment"}
@@ -535,83 +600,344 @@ export function InsertBlockModal({
 
           {/* 2. POLL MODAL */}
           {type === "poll" && (
-            <div className="space-y-3">
-              <div>
-                <label className="block font-bold text-navy mb-1">Poll Question *</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Which web framework do you prefer?"
-                  value={pollQuestion}
-                  onChange={(e) => setPollQuestion(e.target.value)}
-                  className="w-full rounded-xl border border-border bg-white px-3.5 py-2.5 text-xs text-navy focus:border-brand focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block font-bold text-navy mb-1">Poll Options</label>
-                <div className="space-y-2">
-                  {pollOptions.map((opt, idx) => (
-                    <div key={idx} className="flex items-center gap-2">
-                      <span className="text-[11px] font-bold text-text-tertiary w-4">
-                        {idx + 1}.
-                      </span>
-                      <input
-                        type="text"
-                        value={opt}
-                        onChange={(e) => {
-                          const updated = [...pollOptions];
-                          updated[idx] = e.target.value;
-                          setPollOptions(updated);
-                        }}
-                        className="flex-1 rounded-lg border border-border bg-white px-3 py-1.5 text-xs text-navy focus:border-brand focus:outline-none"
-                      />
-                      {pollOptions.length > 2 && (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setPollOptions(pollOptions.filter((_, i) => i !== idx))
-                          }
-                          className="text-text-tertiary hover:text-red-500 p-1"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
+            <div className="space-y-4">
+              {/* Poll Modal Top Sub-Tabs: Create Poll vs Analytics */}
+              <div className="grid grid-cols-2 p-1 rounded-xl bg-surface-dim border border-border text-center font-bold">
                 <button
                   type="button"
-                  onClick={() =>
-                    setPollOptions([...pollOptions, `Option ${pollOptions.length + 1}`])
-                  }
-                  className="mt-2 text-xs font-bold text-brand flex items-center gap-1 hover:underline"
+                  onClick={() => setPollTab("create")}
+                  className={`flex items-center justify-center gap-1.5 py-1.5 rounded-lg transition ${
+                    pollTab === "create"
+                      ? "bg-white text-navy shadow-xs font-black"
+                      : "text-text-tertiary hover:text-navy"
+                  }`}
                 >
-                  <Plus className="h-3.5 w-3.5" /> Add Option
+                  <Plus className="h-3.5 w-3.5" />
+                  <span>Create Poll</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPollTab("analytics");
+                    const activeProjId = typeof window !== "undefined" ? localStorage.getItem("openpost_active_project_id") : null;
+                    const headers: Record<string, string> = {};
+                    if (activeProjId) headers["X-OpenPost-Project"] = activeProjId;
+                    setLoadingPolls(true);
+                    fetch("/api/polls", { headers })
+                      .then((r) => r.json())
+                      .then((res) => {
+                        if (Array.isArray(res.data)) setProjectPolls(res.data);
+                      })
+                      .catch(() => {})
+                      .finally(() => setLoadingPolls(false));
+                  }}
+                  className={`flex items-center justify-center gap-1.5 py-1.5 rounded-lg transition ${
+                    pollTab === "analytics"
+                      ? "bg-white text-navy shadow-xs font-black"
+                      : "text-text-tertiary hover:text-navy"
+                  }`}
+                >
+                  <TrendingUp className="h-3.5 w-3.5 text-emerald-600" />
+                  <span>Poll Analytics</span>
                 </button>
               </div>
+
+              {pollTab === "create" && (
+                <div className="space-y-4 animate-in fade-in">
+                  <div>
+                    <label className="block text-xs font-bold text-navy mb-1.5">
+                      Poll Question <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Which web framework do you prefer for production?"
+                      value={pollQuestion}
+                      onChange={(e) => setPollQuestion(e.target.value)}
+                      className="w-full rounded-xl border border-border bg-white px-3.5 py-2.5 text-xs text-navy font-semibold focus:border-brand focus:ring-2 focus:ring-brand/20 focus:outline-none shadow-2xs"
+                    />
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="block text-xs font-bold text-navy">
+                        Context / Description (Optional)
+                      </label>
+                      <span
+                        className={`text-[11px] font-mono font-bold ${
+                          pollDescription.length > 450 ? "text-amber-600 font-extrabold" : "text-text-tertiary"
+                        }`}
+                      >
+                        {pollDescription.length} / 500 characters
+                      </span>
+                    </div>
+                    <textarea
+                      rows={2}
+                      maxLength={500}
+                      placeholder="Add optional background context, instructions, or caveats for voters (max 500 characters)..."
+                      value={pollDescription}
+                      onChange={(e) => setPollDescription(e.target.value)}
+                      className="w-full rounded-xl border border-border bg-white px-3.5 py-2 text-xs text-navy font-normal leading-relaxed focus:border-brand focus:ring-2 focus:ring-brand/20 focus:outline-none shadow-2xs resize-none"
+                    />
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="block text-xs font-bold text-navy">
+                        Poll Options <span className="text-rose-500">*</span> (min 2)
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setPollOptions([...pollOptions, `Option ${pollOptions.length + 1}`])
+                        }
+                        className="inline-flex items-center gap-1 rounded-xl bg-brand/10 border border-brand/20 px-2.5 py-1 text-xs font-bold text-brand hover:bg-brand hover:text-navy transition shadow-2xs"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        <span>Add Option</span>
+                      </button>
+                    </div>
+
+                    <div className="space-y-2">
+                      {pollOptions.map((opt, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-center gap-2 rounded-xl border border-border bg-[#F9FAFB] p-2"
+                        >
+                          <span className="text-xs font-bold text-text-tertiary w-5 text-center">
+                            {idx + 1}.
+                          </span>
+                          <input
+                            type="text"
+                            value={opt}
+                            placeholder={`Option ${idx + 1}`}
+                            onChange={(e) => {
+                              const updated = [...pollOptions];
+                              updated[idx] = e.target.value;
+                              setPollOptions(updated);
+                            }}
+                            className="flex-1 rounded-lg border border-border bg-white px-3 py-1.5 text-xs text-navy font-medium focus:border-brand focus:outline-none"
+                          />
+                          {pollOptions.length > 2 && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setPollOptions(pollOptions.filter((_, i) => i !== idx))
+                              }
+                              className="p-1.5 text-text-tertiary hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                              title="Remove option"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-border">
+                    <div>
+                      <label className="block text-xs font-bold text-navy mb-1.5">Results Visibility</label>
+                      <select
+                        value={pollShowResults}
+                        onChange={(e) => setPollShowResults(e.target.value as any)}
+                        className="w-full h-9 rounded-xl border border-border bg-white px-3 text-xs text-navy font-semibold focus:border-brand focus:outline-none cursor-pointer shadow-2xs"
+                      >
+                        <option value="always">Always Visible</option>
+                        <option value="after_vote">Show After User Votes</option>
+                        <option value="after_close">Show When Poll Closes</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-navy mb-1.5">
+                        Poll Close Date (Optional)
+                      </label>
+                      <input
+                        type="datetime-local"
+                        value={pollClosesAt}
+                        onChange={(e) => setPollClosesAt(e.target.value)}
+                        className="w-full h-9 rounded-xl border border-border bg-white px-3 text-xs text-navy font-semibold focus:border-brand focus:outline-none cursor-pointer shadow-2xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-border">
+                    <label className="block text-xs font-bold text-navy mb-1.5">
+                      Anti-Fraud Protection
+                    </label>
+                    <div
+                      onClick={() => setPollAllowAnonymous(!pollAllowAnonymous)}
+                      className={`cursor-pointer p-2.5 rounded-xl border transition flex items-start gap-2.5 ${
+                        pollAllowAnonymous
+                          ? "border-emerald-200 bg-emerald-50/70"
+                          : "border-border bg-white"
+                      }`}
+                    >
+                      <ShieldCheck
+                        className={`h-4 w-4 mt-0.5 ${
+                          pollAllowAnonymous ? "text-emerald-600" : "text-slate-400"
+                        }`}
+                      />
+                      <div>
+                        <p className="text-xs font-bold text-navy">IP &amp; Cookie Fingerprinting</p>
+                        <p className="text-[10px] text-slate-500">
+                          {pollAllowAnonymous
+                            ? "Enabled — 1 vote per IP/browser"
+                            : "Disabled — unlimited"}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+
+
+                  <div className="pt-2 border-t border-border">
+                    <label className="block text-xs font-bold text-navy mb-1.5">
+                      Card Alignment &amp; Text Wrapping
+                    </label>
+                    <div className="grid grid-cols-4 gap-1.5">
+                      {[
+                        { id: "left", label: "Left (Wrap)", icon: AlignLeft },
+                        { id: "center", label: "Center", icon: AlignCenter },
+                        { id: "right", label: "Right (Wrap)", icon: AlignRight },
+                        { id: "wide", label: "Full Width", icon: Maximize2 },
+                      ].map((l) => (
+                        <button
+                          key={l.id}
+                          type="button"
+                          onClick={() => setPollAlign(l.id as any)}
+                          className={`py-2 px-2 rounded-xl border text-xs font-bold transition flex items-center justify-center gap-1.5 ${
+                            pollAlign === l.id
+                              ? "border-brand bg-brand/15 text-navy shadow-2xs"
+                              : "border-border bg-white text-slate-600 hover:bg-slate-50"
+                          }`}
+                        >
+                          <l.icon className="h-3.5 w-3.5" />
+                          <span>{l.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Poll Analytics Sub-Tab */}
+              {pollTab === "analytics" && (
+                <div className="space-y-4 animate-in fade-in">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-xs font-bold text-navy flex items-center gap-1.5">
+                        <Activity className="h-4 w-4 text-emerald-600" />
+                        Created Polls &amp; Analytics
+                      </h4>
+                      <p className="text-[10px] text-text-tertiary">
+                        Browse votes and engagement for all polls in this website project
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const activeProjId = typeof window !== "undefined" ? localStorage.getItem("openpost_active_project_id") : null;
+                        const headers: Record<string, string> = {};
+                        if (activeProjId) headers["X-OpenPost-Project"] = activeProjId;
+                        setLoadingPolls(true);
+                        fetch("/api/polls", { headers })
+                          .then((r) => r.json())
+                          .then((res) => {
+                            if (Array.isArray(res.data)) setProjectPolls(res.data);
+                          })
+                          .catch(() => {})
+                          .finally(() => setLoadingPolls(false));
+                      }}
+                      disabled={loadingPolls}
+                      className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1 text-[11px] font-bold text-navy hover:bg-slate-100 transition shadow-2xs"
+                    >
+                      <RefreshCw className={`h-3 w-3 ${loadingPolls ? "animate-spin text-brand" : ""}`} />
+                      <span>Refresh</span>
+                    </button>
+                  </div>
+
+                  {loadingPolls ? (
+                    <div className="py-8 flex flex-col items-center justify-center gap-2 text-slate-400">
+                      <RefreshCw className="h-5 w-5 animate-spin text-brand" />
+                      <span className="text-xs">Loading polls...</span>
+                    </div>
+                  ) : projectPolls.length === 0 ? (
+                    <div className="p-6 text-center rounded-2xl border border-dashed border-border bg-slate-50">
+                      <BarChart3 className="h-6 w-6 text-slate-300 mx-auto mb-1.5" />
+                      <p className="text-xs font-bold text-navy">No Polls Created Yet</p>
+                      <p className="text-[10px] text-text-tertiary mt-0.5">
+                        Create a poll in the tab above to start collecting reader votes.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3 max-h-60 overflow-y-auto [scrollbar-width:thin]">
+                      {projectPolls.map((p) => (
+                        <div
+                          key={p.id}
+                          className="rounded-xl border border-border bg-slate-50/70 p-3.5 space-y-2"
+                        >
+                          <div className="flex items-center justify-between">
+                            <h5 className="text-xs font-bold text-navy line-clamp-1">
+                              {p.question}
+                            </h5>
+                            <span className="text-[10px] font-mono font-bold text-slate-500 shrink-0 ml-2">
+                              {p.totalVotes || 0} votes
+                            </span>
+                          </div>
+
+                          <div className="space-y-1.5">
+                            {(p.options || []).map((opt: any, idx: number) => {
+                              const pct = opt.percentage ?? (p.totalVotes > 0 ? Math.round((opt.votes / p.totalVotes) * 100) : 0);
+                              return (
+                                <div key={opt.id || idx} className="space-y-0.5">
+                                  <div className="flex items-center justify-between text-[11px] text-slate-700">
+                                    <span className="truncate">{opt.label}</span>
+                                    <span className="font-mono text-slate-400 text-[10px]">
+                                      {pct}% ({opt.votes ?? 0})
+                                    </span>
+                                  </div>
+                                  <div className="h-1.5 w-full bg-slate-200 rounded-full overflow-hidden">
+                                    <div
+                                      className="h-full bg-brand rounded-full transition-all duration-300"
+                                      style={{ width: `${pct}%` }}
+                                    />
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
           {/* 3. CALLOUT MODAL */}
           {type === "callout" && (
-            <div className="space-y-3">
+            <div className="space-y-4">
               <div>
-                <label className="block font-bold text-navy mb-1">Callout Tone</label>
+                <label className="block text-xs font-bold text-navy mb-1.5">Callout Tone &amp; Style</label>
                 <div className="grid grid-cols-4 gap-2">
                   {[
-                    { id: "tip", label: "💡 Tip" },
-                    { id: "info", label: "ℹ️ Info" },
-                    { id: "warning", label: "⚠️ Warning" },
-                    { id: "success", label: "✅ Success" },
+                    { id: "tip", label: "💡 Pro Tip", border: "border-amber-400 bg-amber-50 text-amber-900" },
+                    { id: "info", label: "ℹ️ Information", border: "border-blue-400 bg-blue-50 text-blue-900" },
+                    { id: "warning", label: "⚠️ Important", border: "border-amber-500 bg-amber-50 text-amber-950" },
+                    { id: "success", label: "✅ Key Takeaway", border: "border-emerald-400 bg-emerald-50 text-emerald-950" },
                   ].map((t) => (
                     <button
                       key={t.id}
                       type="button"
                       onClick={() => setCalloutTone(t.id as any)}
-                      className={`py-2 rounded-xl border text-xs font-bold transition ${
+                      className={`py-2.5 px-2 rounded-xl border text-xs font-bold transition flex items-center justify-center gap-1 ${
                         calloutTone === t.id
-                          ? "border-brand bg-brand/10 text-navy"
-                          : "border-border hover:bg-surface-dim"
+                          ? `${t.border} ring-2 ring-brand/40 shadow-xs`
+                          : "border-border bg-white text-slate-600 hover:bg-slate-50"
                       }`}
                     >
                       {t.label}
@@ -621,13 +947,40 @@ export function InsertBlockModal({
               </div>
 
               <div>
-                <label className="block font-bold text-navy mb-1">Callout Content</label>
+                <label className="block text-xs font-bold text-navy mb-1.5">Callout Content</label>
                 <textarea
                   rows={3}
                   value={calloutText}
+                  placeholder="Enter the highlighted takeaway or callout note..."
                   onChange={(e) => setCalloutText(e.target.value)}
-                  className="w-full rounded-xl border border-border bg-white px-3.5 py-2 text-xs text-navy focus:border-brand focus:outline-none"
+                  className="w-full rounded-xl border border-border bg-white px-3.5 py-2.5 text-xs text-navy leading-relaxed focus:border-brand focus:ring-2 focus:ring-brand/20 focus:outline-none resize-none shadow-2xs"
                 />
+              </div>
+
+              {/* Live Preview Box */}
+              <div className="pt-2 border-t border-border">
+                <span className="block text-[10px] font-bold text-text-tertiary uppercase tracking-wider mb-1.5">
+                  Live Preview:
+                </span>
+                <div
+                  className={`p-4 rounded-xl border-l-4 text-xs font-medium leading-relaxed ${
+                    calloutTone === "tip"
+                      ? "border-amber-500 bg-amber-50 text-slate-800 border-t border-r border-b border-amber-200"
+                      : calloutTone === "info"
+                      ? "border-blue-500 bg-blue-50 text-slate-800 border-t border-r border-b border-blue-200"
+                      : calloutTone === "warning"
+                      ? "border-amber-600 bg-amber-50 text-slate-900 border-t border-r border-b border-amber-200"
+                      : "border-emerald-500 bg-emerald-50 text-slate-800 border-t border-r border-b border-emerald-200"
+                  }`}
+                >
+                  <p className="font-bold text-navy mb-1 flex items-center gap-1.5">
+                    {calloutTone === "tip" && "💡 Pro Tip"}
+                    {calloutTone === "info" && "ℹ️ Information"}
+                    {calloutTone === "warning" && "⚠️ Important Notice"}
+                    {calloutTone === "success" && "✅ Key Takeaway"}
+                  </p>
+                  <p className="text-slate-700">{calloutText || "Key takeaway or essential note for readers."}</p>
+                </div>
               </div>
             </div>
           )}
@@ -666,19 +1019,192 @@ export function InsertBlockModal({
           )}
 
           {/* 5. VIDEO MODAL */}
-          {type === "video" && (
-            <div className="space-y-3">
+          {(type === "video" || type === "youtube") && (
+            <div className="space-y-4">
               <div>
-                <label className="block font-bold text-navy mb-1">
-                  YouTube or Vimeo Video Link
-                </label>
-                <input
-                  type="url"
-                  placeholder="https://www.youtube.com/watch?v=..."
-                  value={videoUrl}
-                  onChange={(e) => setVideoUrl(e.target.value)}
-                  className="w-full rounded-xl border border-border bg-white px-3.5 py-2.5 text-xs text-navy focus:border-brand focus:outline-none font-mono"
-                />
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block font-bold text-navy text-xs">
+                    YouTube / Shorts / Vimeo URL *
+                  </label>
+                  {videoUrl && parseVideoUrl(videoUrl) && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[10px] font-black uppercase text-emerald-700">
+                      <Check className="h-3 w-3" /> {parseVideoUrl(videoUrl)?.provider} Detected
+                    </span>
+                  )}
+                </div>
+                <div className="relative">
+                  <Video className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-text-tertiary" />
+                  <input
+                    type="url"
+                    placeholder="https://www.youtube.com/watch?v=... or https://youtu.be/..."
+                    value={videoUrl}
+                    onChange={(e) => setVideoUrl(e.target.value)}
+                    className="w-full rounded-xl border border-border bg-white pl-9 pr-3 py-2.5 text-xs text-navy font-mono focus:border-brand focus:outline-none"
+                  />
+                </div>
+                <p className="text-[10px] text-text-tertiary mt-1">
+                  Paste any standard YouTube link, Shorts, Vimeo, or direct video URL.
+                </p>
+              </div>
+
+              {/* Title & Caption */}
+              <div className="grid sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-navy mb-1">Video Title (Optional)</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Next.js 16 Overview"
+                    value={videoTitle}
+                    onChange={(e) => setVideoTitle(e.target.value)}
+                    className="w-full rounded-xl border border-border bg-white px-3 py-2 text-xs text-navy focus:border-brand focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-navy mb-1">Caption / Credit</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Video by Creator"
+                    value={videoCaption}
+                    onChange={(e) => setVideoCaption(e.target.value)}
+                    className="w-full rounded-xl border border-border bg-white px-3 py-2 text-xs text-navy focus:border-brand focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* Aspect Ratio Format */}
+              <div>
+                <label className="block text-xs font-bold text-navy mb-1">Aspect Ratio Format</label>
+                <div className="grid grid-cols-4 gap-2">
+                  {[
+                    { id: "16:9", label: "16:9 Wide", icon: Monitor },
+                    { id: "4:3", label: "4:3 Classic", icon: Tv },
+                    { id: "1:1", label: "1:1 Square", icon: Square },
+                    { id: "9:16", label: "9:16 Shorts", icon: Smartphone },
+                  ].map((ar) => {
+                    const Icon = ar.icon;
+                    const isSelected = videoAspectRatio === ar.id;
+                    return (
+                      <button
+                        key={ar.id}
+                        type="button"
+                        onClick={() => setVideoAspectRatio(ar.id as any)}
+                        className={`flex flex-col items-center justify-center p-2 rounded-xl border text-center transition ${
+                          isSelected
+                            ? "border-brand bg-brand/10 text-navy font-bold shadow-2xs"
+                            : "border-border bg-white text-slate-600 hover:border-slate-300"
+                        }`}
+                      >
+                        <Icon className="h-3.5 w-3.5 mb-0.5" />
+                        <span className="text-[10px]">{ar.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Alignment & Width */}
+              <div className="grid sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-navy mb-1">Alignment</label>
+                  <div className="grid grid-cols-4 gap-1">
+                    {[
+                      { id: "left", label: "Left", icon: AlignLeft },
+                      { id: "center", label: "Center", icon: AlignCenter },
+                      { id: "right", label: "Right", icon: AlignRight },
+                      { id: "wide", label: "Full", icon: Maximize2 },
+                    ].map((a) => {
+                      const Icon = a.icon;
+                      const isSelected = videoAlign === a.id;
+                      return (
+                        <button
+                          key={a.id}
+                          type="button"
+                          onClick={() => setVideoAlign(a.id as any)}
+                          className={`flex items-center justify-center p-2 rounded-xl border text-xs transition ${
+                            isSelected
+                              ? "border-brand bg-brand/10 text-navy font-bold"
+                              : "border-border bg-white text-slate-600 hover:border-slate-300"
+                          }`}
+                        >
+                          <Icon className="h-3.5 w-3.5" />
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-navy mb-1">Size Preset</label>
+                  <div className="grid grid-cols-3 gap-1">
+                    {["50%", "75%", "100%"].map((w) => (
+                      <button
+                        key={w}
+                        type="button"
+                        onClick={() => setVideoWidth(w)}
+                        className={`py-2 rounded-xl border text-xs font-bold transition ${
+                          videoWidth === w
+                            ? "border-brand bg-brand/10 text-navy font-bold"
+                            : "border-border bg-white text-slate-600 hover:border-slate-300"
+                        }`}
+                      >
+                        {w}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Start Time & Advanced Options */}
+              <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3.5 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-navy">Start Time (Optional)</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 01:30 or 90s"
+                    value={videoStartTime}
+                    onChange={(e) => setVideoStartTime(e.target.value)}
+                    className="w-32 rounded-lg border border-border bg-white px-2.5 py-1 text-xs text-navy font-mono focus:border-brand focus:outline-none"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-200/80">
+                  <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={videoControls}
+                      onChange={(e) => setVideoControls(e.target.checked)}
+                      className="rounded border-border text-brand focus:ring-brand"
+                    />
+                    Player Controls
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={videoMuted}
+                      onChange={(e) => setVideoMuted(e.target.checked)}
+                      className="rounded border-border text-brand focus:ring-brand"
+                    />
+                    Start Muted
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={videoAutoplay}
+                      onChange={(e) => setVideoAutoplay(e.target.checked)}
+                      className="rounded border-border text-brand focus:ring-brand"
+                    />
+                    Autoplay
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={videoPrivacy}
+                      onChange={(e) => setVideoPrivacy(e.target.checked)}
+                      className="rounded border-border text-brand focus:ring-brand"
+                    />
+                    Privacy Mode
+                  </label>
+                </div>
               </div>
             </div>
           )}
@@ -823,23 +1349,34 @@ export function InsertBlockModal({
           >
             Cancel
           </button>
-          <button
-            type="button"
-            onClick={() => {
-              if (type === "image") handleInsertImage();
-              else if (type === "poll") handleInsertPoll();
-              else if (type === "callout") handleInsertCallout();
-              else if (type === "table") handleInsertTable();
-              else if (type === "video") handleInsertVideo();
-              else if (type === "button") handleInsertButton();
-              else if (type === "faq") handleInsertFaq();
-              else if (type === "download") handleInsertDownload();
-            }}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-brand px-5 py-2 text-xs font-bold text-navy hover:bg-brand-hover hover:text-white transition shadow-xs"
-          >
-            <Check className="h-3.5 w-3.5" />
-            Insert Block
-          </button>
+          {type === "poll" && pollTab === "analytics" ? (
+            <button
+              type="button"
+              onClick={() => setPollTab("create")}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-navy px-5 py-2 text-xs font-bold text-white hover:bg-navy-light transition shadow-xs"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Create New Poll
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                if (type === "image") handleInsertImage();
+                else if (type === "poll") handleInsertPoll();
+                else if (type === "callout") handleInsertCallout();
+                else if (type === "table") handleInsertTable();
+                else if (type === "video" || type === "youtube") handleInsertVideo();
+                else if (type === "button") handleInsertButton();
+                else if (type === "faq") handleInsertFaq();
+                else if (type === "download") handleInsertDownload();
+              }}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-brand px-5 py-2 text-xs font-bold text-navy hover:bg-brand-hover hover:text-white transition shadow-xs"
+            >
+              <Check className="h-3.5 w-3.5" />
+              Insert Block
+            </button>
+          )}
         </div>
       </div>
     </div>,

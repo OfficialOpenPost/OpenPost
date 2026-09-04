@@ -5,6 +5,147 @@ import { countWords, readingTime as calcReadingTime } from "@/lib/publish";
 import { triggerWebhooks } from "@/lib/webhooks";
 import { slugify } from "@/lib/slug";
 
+function extractPollBlocks(content: any): any[] {
+  const polls: any[] = [];
+  const walk = (node: any) => {
+    if (!node) return;
+    if (Array.isArray(node)) {
+      node.forEach(walk);
+      return;
+    }
+    if ((node.type === "poll" || node.type === "pollBlock") && node.attrs) {
+      polls.push(node.attrs);
+    }
+    if (node.content) walk(node.content);
+    if (node.attrs?.items) walk(node.attrs.items);
+  };
+  walk(content?.content ?? content);
+  return polls;
+}
+
+async function syncPolls(blogId: string, content: any, projectId: string | null, blogStatus: string) {
+  try {
+    const pollAttrsList = extractPollBlocks(content);
+    const targetStatus = (blogStatus === "published" || blogStatus === "scheduled") ? "open" : "draft";
+
+    if (!pollAttrsList.length) {
+      // Clean up any existing polls for this blog if all were deleted
+      await withDbRetry(() => db.poll.deleteMany({ where: { blogId } })).catch(() => {});
+      return;
+    }
+
+    const activePollIds: string[] = [];
+
+    for (const p of pollAttrsList) {
+      const question = (p.question || "What do you think?").trim();
+      const rawOptions = Array.isArray(p.options) ? p.options : ["Option A", "Option B"];
+      const cleanOptions = rawOptions
+        .map((opt: any, idx: number) => {
+          const label = typeof opt === "string" ? opt.trim() : (opt?.label || `Option ${idx + 1}`).trim();
+          return { label, sortOrder: idx };
+        })
+        .filter((opt: { label: string; sortOrder: number }) => opt.label.length > 0);
+
+      const pollType = p.type === "multiple" ? "multiple" : "single";
+      const showResults = ["always", "after_vote", "after_close"].includes(p.showResults) ? p.showResults : "always";
+      const allowAnonymous = p.allowAnonymous !== false;
+      const closesAt = p.closesAt ? new Date(p.closesAt) : null;
+
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      const hasUuid = typeof p.pollId === "string" && uuidRegex.test(p.pollId);
+
+      let existingPoll: any = null;
+      if (hasUuid) {
+        existingPoll = await withDbRetry(() =>
+          db.poll.findUnique({
+            where: { id: p.pollId },
+            include: { options: true },
+          })
+        ).catch(() => null);
+      }
+
+      if (existingPoll) {
+        activePollIds.push(existingPoll.id);
+        await withDbRetry(() =>
+          db.poll.update({
+            where: { id: existingPoll.id },
+            data: {
+              blogId,
+              projectId: projectId || existingPoll.projectId,
+              question,
+              type: pollType as any,
+              showResults: showResults as any,
+              allowAnonymous,
+              closesAt,
+              status: targetStatus as any,
+            },
+          })
+        ).catch(() => {});
+
+        if (cleanOptions.length >= 2) {
+          const existingLabels = new Set(existingPoll.options.map((o: any) => o.label));
+          const optionsChanged =
+            existingPoll.options.length !== cleanOptions.length ||
+            cleanOptions.some((o: { label: string; sortOrder: number }) => !existingLabels.has(o.label));
+
+          if (optionsChanged) {
+            await withDbRetry(async () => {
+              await db.pollOption.deleteMany({ where: { pollId: existingPoll.id } });
+              await db.pollOption.createMany({
+                data: cleanOptions.map((o: { label: string; sortOrder: number }) => ({
+                  pollId: existingPoll.id,
+                  label: o.label,
+                  sortOrder: o.sortOrder,
+                })),
+              });
+            }).catch(() => {});
+          }
+        }
+      } else {
+        const createdPoll = await withDbRetry(() =>
+          db.poll.create({
+            data: {
+              ...(hasUuid ? { id: p.pollId } : {}),
+              blogId,
+              projectId,
+              question,
+              type: pollType as any,
+              showResults: showResults as any,
+              allowAnonymous,
+              closesAt,
+              status: targetStatus as any,
+              options: {
+                create: cleanOptions.map((o: { label: string; sortOrder: number }) => ({
+                  label: o.label,
+                  sortOrder: o.sortOrder,
+                })),
+              },
+            },
+          })
+        ).catch(() => null);
+
+        if (createdPoll) {
+          p.pollId = createdPoll.id;
+          activePollIds.push(createdPoll.id);
+        }
+      }
+    }
+
+    if (activePollIds.length > 0) {
+      await withDbRetry(() =>
+        db.poll.deleteMany({
+          where: {
+            blogId,
+            id: { notIn: activePollIds },
+          },
+        })
+      ).catch(() => {});
+    }
+  } catch (e) {
+    // Non-blocking
+  }
+}
+
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
@@ -335,6 +476,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
           })
         ).catch(() => {});
       }
+    }
+
+    if (content !== undefined) {
+      await syncPolls(id, content, existing.projectId, status || existing.status);
     }
 
     // Webhooks on publish

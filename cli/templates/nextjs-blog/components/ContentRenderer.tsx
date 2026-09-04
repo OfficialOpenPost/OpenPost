@@ -190,7 +190,7 @@ function RenderNode({ node, polls }: { node: any; polls?: any[] }) {
           : align === "justify"
           ? "text-justify"
           : "text-left";
-      const Tag = `h${level}` as keyof JSX.IntrinsicElements;
+      const lvl = Math.min(Math.max(Number(level) || 2, 1), 6);
       const headingClasses: Record<number, string> = {
         1: "text-3xl sm:text-4xl font-extrabold text-navy mt-10 mb-4 tracking-tight leading-tight",
         2: "text-2xl sm:text-3xl font-bold text-navy mt-8 mb-3 tracking-tight",
@@ -199,12 +199,14 @@ function RenderNode({ node, polls }: { node: any; polls?: any[] }) {
         5: "text-base font-semibold text-navy mt-4 mb-2",
         6: "text-sm font-semibold uppercase tracking-wider text-slate-500 mt-4 mb-2",
       };
-
-      return (
-        <Tag className={`${headingClasses[level] || headingClasses[2]} ${alignCls}`}>
-          <RenderInline content={node.content} />
-        </Tag>
-      );
+      const cls = `${headingClasses[lvl] || headingClasses[2]} ${alignCls}`;
+      const kids = <RenderInline content={node.content} />;
+      if (lvl === 1) return <h1 className={cls}>{kids}</h1>;
+      if (lvl === 3) return <h3 className={cls}>{kids}</h3>;
+      if (lvl === 4) return <h4 className={cls}>{kids}</h4>;
+      if (lvl === 5) return <h5 className={cls}>{kids}</h5>;
+      if (lvl === 6) return <h6 className={cls}>{kids}</h6>;
+      return <h2 className={cls}>{kids}</h2>;
     }
 
     case "blockquote":
@@ -428,22 +430,27 @@ function RenderNode({ node, polls }: { node: any; polls?: any[] }) {
 
     case "callout": {
       const tone = node.attrs?.tone ?? "info";
-      const configMap: Record<string, { bg: string; border: string; text: string; icon: any }> = {
-        info: { bg: "bg-blue-50/70", border: "border-blue-500", text: "text-blue-900", icon: Info },
-        warning: { bg: "bg-amber-50/80", border: "border-amber-500", text: "text-amber-950", icon: AlertTriangle },
-        success: { bg: "bg-emerald-50/70", border: "border-emerald-500", text: "text-emerald-950", icon: CheckCircle2 },
-        note: { bg: "bg-slate-100", border: "border-slate-600", text: "text-slate-900", icon: HelpCircle },
-        tip: { bg: "bg-brand/10", border: "border-brand", text: "text-navy", icon: Lightbulb },
+      const configMap: Record<string, { bg: string; border: string; icon: any; title: string }> = {
+        info: { bg: "bg-blue-50/80 border-blue-200/80", border: "border-l-blue-500", icon: Info, title: "Information" },
+        warning: { bg: "bg-amber-50/90 border-amber-200/80", border: "border-l-amber-600", icon: AlertTriangle, title: "Important Notice" },
+        success: { bg: "bg-emerald-50/80 border-emerald-200/80", border: "border-l-emerald-500", icon: CheckCircle2, title: "Key Takeaway" },
+        note: { bg: "bg-slate-100 border-slate-200/80", border: "border-l-slate-700", icon: HelpCircle, title: "Note" },
+        tip: { bg: "bg-amber-50/80 border-amber-200/80", border: "border-l-amber-500", icon: Lightbulb, title: "Pro Tip" },
       };
       const cur = configMap[tone] || configMap.info;
       const IconComp = cur.icon;
 
       return (
         <div
-          className={`my-6 flex gap-3.5 rounded-2xl border-l-4 p-5 shadow-2xs ${cur.bg} ${cur.border} ${cur.text}`}
+          className={`my-6 rounded-2xl border border-l-4 p-5 sm:p-6 shadow-2xs ${cur.bg} ${cur.border}`}
         >
-          <IconComp className="h-5 w-5 shrink-0 mt-0.5 opacity-90" />
-          <div className="flex-1 text-sm sm:text-base leading-relaxed">
+          <div className="flex items-center gap-2 mb-2">
+            <IconComp className="h-4 w-4 shrink-0 text-navy" />
+            <span className="text-xs font-bold uppercase tracking-wider text-navy">
+              {cur.title}
+            </span>
+          </div>
+          <div className="text-sm sm:text-base leading-relaxed text-slate-800 font-medium">
             <RenderInline content={node.content} />
           </div>
         </div>
@@ -503,9 +510,27 @@ function RenderNode({ node, polls }: { node: any; polls?: any[] }) {
     case "poll":
     case "pollBlock": {
       const pollId = node.attrs?.pollId || node.attrs?.id;
-      const matchedPoll = polls?.find((p) => p.id === pollId);
-      if (!matchedPoll) return null;
-      return <PollWidget poll={matchedPoll} />;
+      const matchedPoll = polls?.find((p) => p.id === pollId || p.question === node.attrs?.question) || {
+        id: pollId || `poll_${Math.random().toString(36).slice(2)}`,
+        question: node.attrs?.question || "Reader Poll",
+        description: node.attrs?.description,
+        totalVotes: 0,
+        options: (node.attrs?.options ?? []).map((o: any, idx: number) => ({
+          id: typeof o === "string" ? `opt_${idx + 1}` : o.id || `opt_${idx + 1}`,
+          label: typeof o === "string" ? o : o.label || `Option ${idx + 1}`,
+          votes: 0,
+        })),
+      };
+
+      return (
+        <PollWidget
+          poll={matchedPoll}
+          description={node.attrs?.description}
+          align={node.attrs?.align || node.attrs?.layout}
+          layout={node.attrs?.layout || node.attrs?.align}
+          width={node.attrs?.width}
+        />
+      );
     }
 
     case "buttonBlock": {
@@ -555,66 +580,115 @@ function RenderNode({ node, polls }: { node: any; polls?: any[] }) {
     }
 
     case "youtube":
-    case "videoBlock": {
-      return node.attrs?.src ? (
-        <div className="my-8 overflow-hidden rounded-3xl border border-slate-200 shadow-md aspect-video bg-black">
-          {node.attrs.src.includes("youtube.com") || node.attrs.src.includes("youtu.be") ? (
-            <iframe
-              src={node.attrs.src}
-              className="h-full w-full"
-              allowFullScreen
-              title="YouTube Video player"
-            />
-          ) : (
-            <video
-              src={node.attrs.src}
-              poster={node.attrs.poster}
-              controls
-              className="w-full h-full object-cover"
-            />
-          )}
-        </div>
-      ) : null;
-    }
-
+    case "videoBlock":
     case "embedBlock": {
-      const { provider, videoId, url } = node.attrs ?? {};
-      if (provider === "youtube" && videoId) {
-        return (
-          <div className="my-8 overflow-hidden rounded-3xl border border-slate-200 aspect-video shadow-md bg-black">
-            <iframe
-              src={`https://www.youtube.com/embed/${videoId}`}
-              className="h-full w-full"
-              allowFullScreen
-              title="YouTube"
-            />
-          </div>
-        );
+      const {
+        src = "",
+        url = "",
+        videoId = "",
+        provider = "youtube",
+        caption = "",
+        title = "",
+        align = "center",
+        layout = "center",
+        width = "100%",
+        aspectRatio = "16:9",
+        startTime = 0,
+        autoplay = false,
+        muted = false,
+        loop = false,
+        controls = true,
+        privacyEnhanced = true,
+        poster = "",
+      } = node.attrs ?? {};
+
+      const rawUrl = src || url || "";
+      let embedSrc = rawUrl;
+      let effVideoId = videoId;
+      let effProvider = provider;
+
+      const ytMatch = rawUrl.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/))([\w-]{11})/);
+      if (ytMatch && ytMatch[1]) {
+        effVideoId = ytMatch[1];
+        effProvider = "youtube";
       }
-      if (provider === "vimeo" && videoId) {
-        return (
-          <div className="my-8 overflow-hidden rounded-3xl border border-slate-200 aspect-video shadow-md bg-black">
-            <iframe
-              src={`https://player.vimeo.com/video/${videoId}`}
-              className="h-full w-full"
-              allowFullScreen
-              title="Vimeo"
-            />
-          </div>
-        );
+      const vimeoMatch = rawUrl.match(/(?:vimeo\.com\/)(\d+)/);
+      if (vimeoMatch && vimeoMatch[1]) {
+        effVideoId = vimeoMatch[1];
+        effProvider = "vimeo";
       }
+
+      if (effProvider === "youtube" && effVideoId) {
+        const base = privacyEnhanced !== false
+          ? `https://www.youtube-nocookie.com/embed/${effVideoId}`
+          : `https://www.youtube.com/embed/${effVideoId}`;
+        const params = new URLSearchParams();
+        if (autoplay) params.set("autoplay", "1");
+        if (muted) params.set("mute", "1");
+        if (loop) {
+          params.set("loop", "1");
+          params.set("playlist", effVideoId);
+        }
+        if (controls === false) params.set("controls", "0");
+        if (startTime) params.set("start", String(startTime));
+        params.set("rel", "0");
+        const qs = params.toString();
+        embedSrc = qs ? `${base}?${qs}` : base;
+      } else if (effProvider === "vimeo" && effVideoId) {
+        const base = `https://player.vimeo.com/video/${effVideoId}`;
+        embedSrc = base;
+      }
+
+      const isLeft = align === "left" || layout === "left";
+      const isRight = align === "right" || layout === "right";
+      const isWide = align === "wide" || layout === "wide";
+
+      let floatClass = "block my-8 clear-both mx-auto";
+      if (isLeft) floatClass = "float-none sm:float-left mr-8 mb-6 clear-none max-w-[48%]";
+      if (isRight) floatClass = "float-none sm:float-right ml-8 mb-6 clear-none max-w-[48%]";
+      if (isWide) floatClass = "block w-full my-8 clear-both";
+
+      const aspectClass =
+        aspectRatio === "9:16"
+          ? "aspect-[9/16] max-w-[360px] mx-auto"
+          : aspectRatio === "1:1"
+          ? "aspect-square max-w-[540px] mx-auto"
+          : aspectRatio === "4:3"
+          ? "aspect-[4/3]"
+          : "aspect-video";
+
+      if (!rawUrl && !effVideoId) return null;
+
       return (
-        <div className="my-6 rounded-2xl border border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-500">
-          Embed:{" "}
-          <a
-            href={url ?? "#"}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-flame underline"
-          >
-            {url ?? "View external content"}
-          </a>
-        </div>
+        <figure
+          className={`overflow-hidden rounded-3xl border border-slate-200 bg-slate-950 shadow-md ${floatClass}`}
+          style={{ width: isWide ? "100%" : width || "100%", maxWidth: "100%" }}
+        >
+          <div className={`relative w-full ${aspectClass}`}>
+            {effProvider === "youtube" || effProvider === "vimeo" || rawUrl.includes("http") ? (
+              <iframe
+                src={embedSrc}
+                title={title || caption || "Embedded Video"}
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowFullScreen
+                className="absolute inset-0 h-full w-full border-0"
+              />
+            ) : (
+              <video
+                src={rawUrl}
+                poster={poster}
+                controls={controls}
+                className="absolute inset-0 h-full w-full object-cover"
+              />
+            )}
+          </div>
+          {(caption || title) && (
+            <figcaption className="p-3 bg-white border-t border-slate-100 text-center">
+              {title && <p className="text-xs font-bold text-navy truncate">{title}</p>}
+              {caption && <p className="text-[11px] text-slate-500 italic mt-0.5">{caption}</p>}
+            </figcaption>
+          )}
+        </figure>
       );
     }
 

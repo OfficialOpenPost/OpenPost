@@ -2,24 +2,65 @@
 
 import { useState } from "react";
 import { submitPollVote } from "@/lib/openpost";
-import { CheckCircle2, BarChart2, Loader2 } from "lucide-react";
+import { CheckCircle2, BarChart2, Loader2, ShieldCheck } from "lucide-react";
 
 interface PollWidgetProps {
   poll: {
     id: string;
     question: string;
+    description?: string;
     totalVotes: number;
     options: Array<{ id: string; label: string; votes: number }>;
   };
+  description?: string;
+  align?: string;
+  layout?: string;
+  width?: string;
+  themeColor?: string;
+  color?: string;
 }
 
-export function PollWidget({ poll }: PollWidgetProps) {
+export function PollWidget({
+  poll,
+  description,
+  align,
+  layout,
+  width,
+  themeColor,
+  color,
+}: PollWidgetProps) {
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [hasVoted, setHasVoted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [options, setOptions] = useState(poll.options);
   const [totalVotes, setTotalVotes] = useState(poll.totalVotes);
+
+  const effectiveDesc = description || poll.description;
+  const effectiveLayout = layout || align || "center";
+  const activeColor = "#FEA611";
+
+  // Check if voter previously voted
+  useEffect(() => {
+    if (typeof window !== "undefined" && poll?.id) {
+      const saved = localStorage.getItem(`op_voted_${poll.id}`);
+      if (saved) {
+        setHasVoted(true);
+        setSelectedOption(saved);
+      }
+    }
+  }, [poll?.id]);
+
+  const alignCls =
+    effectiveLayout === "left"
+      ? "float-left mr-8 mb-4 clear-none"
+      : effectiveLayout === "right"
+      ? "float-right ml-8 mb-4 clear-none"
+      : effectiveLayout === "wide"
+      ? "w-full my-8 clear-both"
+      : "mx-auto my-8 clear-both";
+
+  const widthStyle = width ? { width, maxWidth: "100%" } : {};
 
   const handleVote = async () => {
     if (!selectedOption || loading || hasVoted) return;
@@ -31,6 +72,10 @@ export function PollWidget({ poll }: PollWidgetProps) {
 
       if (!res.success) {
         throw new Error(res.error || "Failed to submit vote");
+      }
+
+      if (typeof window !== "undefined") {
+        localStorage.setItem(`op_voted_${poll.id}`, selectedOption);
       }
 
       setOptions((prev) =>
@@ -48,21 +93,42 @@ export function PollWidget({ poll }: PollWidgetProps) {
   };
 
   return (
-    <div className="my-8 rounded-3xl border border-slate-200 bg-slate-50/80 p-6 sm:p-8 shadow-xs">
-      <div className="flex items-center gap-2 text-brand mb-2">
-        <BarChart2 className="h-5 w-5 text-brand" />
-        <span className="text-xs font-black uppercase tracking-widest text-navy">Interactive Poll</span>
+    <div
+      className={`my-8 rounded-none bg-white p-6 sm:p-7 shadow-xs ${alignCls}`}
+      style={{ ...widthStyle, border: "2px solid #FEA611" }}
+    >
+      <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-200/60">
+        <div className="flex items-center gap-2">
+          <div
+            className="flex h-6 w-6 items-center justify-center rounded-none text-navy font-bold shadow-2xs"
+            style={{ backgroundColor: activeColor }}
+          >
+            <BarChart2 className="h-3.5 w-3.5 text-navy" />
+          </div>
+          <span className="text-xs font-black uppercase tracking-wider text-navy">Interactive Poll</span>
+        </div>
+        <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200/60 rounded-none px-2 py-0.5">
+          <ShieldCheck className="h-3 w-3 text-emerald-600" /> Fraud Protected
+        </span>
       </div>
 
-      <h3 className="text-lg font-black text-navy mb-6">{poll.question}</h3>
+      <h3 className="text-sm sm:text-base font-bold text-navy leading-snug tracking-tight mb-2">
+        {poll.question}
+      </h3>
+
+      {effectiveDesc && (
+        <p className="text-xs text-slate-600 font-normal leading-relaxed mb-4 bg-slate-50 border border-slate-200/60 rounded-none p-3">
+          {effectiveDesc}
+        </p>
+      )}
 
       {error && (
-        <p className="mb-4 rounded-xl bg-rose-50 border border-rose-200 p-3 text-xs text-rose-700 font-semibold">
+        <p className="mb-4 rounded-none bg-rose-50 border border-rose-200 p-3 text-xs text-rose-700 font-semibold">
           {error}
         </p>
       )}
 
-      <div className="space-y-3">
+      <div className="space-y-2.5 my-3">
         {options.map((opt) => {
           const percentage = totalVotes > 0 ? Math.round((opt.votes / totalVotes) * 100) : 0;
           const isSelected = selectedOption === opt.id;
@@ -71,17 +137,17 @@ export function PollWidget({ poll }: PollWidgetProps) {
             <div
               key={opt.id}
               onClick={() => !hasVoted && setSelectedOption(opt.id)}
-              className={`relative overflow-hidden rounded-2xl border p-4 transition cursor-pointer ${
+              className={`relative overflow-hidden rounded-none border px-3.5 py-3 transition cursor-pointer ${
                 hasVoted
                   ? "border-slate-200 bg-white"
                   : isSelected
-                  ? "border-brand bg-brand/5 shadow-xs"
+                  ? "border-slate-400 bg-white shadow-xs"
                   : "border-slate-200 bg-white hover:border-slate-300"
               }`}
             >
               {hasVoted && (
                 <div
-                  className="absolute inset-y-0 left-0 bg-brand/15 transition-all duration-500"
+                  className="absolute inset-y-0 left-0 transition-all duration-500 opacity-20 bg-brand"
                   style={{ width: `${percentage}%` }}
                 />
               )}
@@ -90,20 +156,23 @@ export function PollWidget({ poll }: PollWidgetProps) {
                 <div className="flex items-center gap-3">
                   {!hasVoted && (
                     <div
-                      className={`h-4 w-4 rounded-full border flex items-center justify-center ${
-                        isSelected ? "border-brand bg-brand" : "border-slate-300 bg-white"
-                      }`}
+                      className="h-3.5 w-3.5 border flex items-center justify-center border-slate-300 bg-white rounded-none"
                     >
-                      {isSelected && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
+                      {isSelected && (
+                        <div
+                          className="h-1.5 w-1.5 rounded-none"
+                          style={{ backgroundColor: activeColor }}
+                        />
+                      )}
                     </div>
                   )}
-                  <span className="text-sm font-bold text-navy">{opt.label}</span>
+                  <span className="text-xs sm:text-sm font-semibold text-navy">{opt.label}</span>
                 </div>
 
                 {hasVoted && (
                   <div className="flex items-center gap-2 text-xs font-bold text-navy">
                     <span>{percentage}%</span>
-                    <span className="text-slate-400 font-normal">({opt.votes})</span>
+                    <span className="text-slate-400 font-mono text-[11px]">({opt.votes})</span>
                   </div>
                 )}
               </div>
@@ -112,14 +181,15 @@ export function PollWidget({ poll }: PollWidgetProps) {
         })}
       </div>
 
-      <div className="mt-6 flex items-center justify-between">
+      <div className="mt-5 pt-3 border-t border-slate-200/60 flex items-center justify-between">
         <span className="text-xs text-slate-500 font-medium">{totalVotes} total votes</span>
 
         {!hasVoted ? (
           <button
             onClick={handleVote}
             disabled={!selectedOption || loading}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-navy px-5 py-2.5 text-xs font-bold text-white hover:bg-navy-light transition disabled:opacity-50 shadow-xs"
+            className="inline-flex items-center gap-1.5 rounded-none px-5 py-2 text-xs font-bold text-navy transition disabled:opacity-50 shadow-xs hover:bg-brand-hover"
+            style={{ backgroundColor: activeColor }}
           >
             {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
             Submit Vote

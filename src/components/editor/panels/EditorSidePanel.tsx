@@ -103,6 +103,49 @@ export function EditorSidePanel({
   minutes,
 }: EditorSidePanelProps) {
   const [activeTab, setActiveTab] = useState<"post" | "seo" | "cover" | "publish" | "history" | "outline">("post");
+  const [isAddingCat, setIsAddingCat] = useState(false);
+  const [newCatInput, setNewCatInput] = useState("");
+  const [isCatSubmitting, setIsCatSubmitting] = useState(false);
+
+  const handleAddCategory = async (catNameToAdd?: string) => {
+    const name = (catNameToAdd || newCatInput).trim();
+    if (!name) return;
+    setIsCatSubmitting(true);
+    try {
+      const activeProjId = typeof window !== "undefined" ? localStorage.getItem("openpost_active_project_id") : null;
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (activeProjId) headers["X-OpenPost-Project"] = activeProjId;
+
+      const res = await fetch("/api/v1/categories", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ name, projectId: activeProjId || undefined }),
+      });
+
+      const json = await res.json();
+      if (res.ok && json.data) {
+        setCategory(json.data.name);
+        setCategoryId(json.data.id);
+        setNewCatInput("");
+        setIsAddingCat(false);
+        window.dispatchEvent(new Event("projectChanged"));
+      } else {
+        const match = catOptions.find((c) => c.name.toLowerCase() === name.toLowerCase());
+        if (match) {
+          setCategory(match.name);
+          setCategoryId(match.id);
+          setNewCatInput("");
+          setIsAddingCat(false);
+        } else {
+          alert(json.error?.message || "Failed to create category");
+        }
+      }
+    } catch (err: any) {
+      alert("Error creating category: " + err.message);
+    } finally {
+      setIsCatSubmitting(false);
+    }
+  };
 
   const isImageActive = editor?.isActive("image");
   const isTableActive = editor?.isActive("table");
@@ -225,7 +268,18 @@ export function EditorSidePanel({
                 </div>
 
                 <div>
-                  <label className="block font-bold text-navy mb-1">Category</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block font-bold text-navy">Category</label>
+                    <button
+                      type="button"
+                      onClick={() => setIsAddingCat(!isAddingCat)}
+                      className="inline-flex items-center gap-1 text-[11px] font-bold text-brand hover:underline"
+                    >
+                      <Plus className="h-3 w-3" />
+                      <span>{isAddingCat ? "Cancel" : "Add Category"}</span>
+                    </button>
+                  </div>
+
                   <select
                     value={category}
                     onChange={(e) => {
@@ -243,26 +297,32 @@ export function EditorSidePanel({
                       </option>
                     ))}
                   </select>
-                  <div className="mt-2 flex gap-1.5">
-                    <input
-                      id="new-category-inline"
-                      placeholder="New category + Enter"
-                      className="flex-1 rounded-lg border border-dashed border-border bg-[#FCFCF9] px-2.5 py-1.5 text-xs focus:border-brand focus:outline-none"
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          const val = (e.target as HTMLInputElement).value.trim();
-                          if (val && !catOptions.some((c) => c.name.toLowerCase() === val.toLowerCase())) {
-                            // Optimistically add to local options and select it
-                            const newCat = { id: `temp-${Date.now()}`, name: val, slug: val.toLowerCase().replace(/[^a-z0-9]+/g, "-") };
-                            // @ts-ignore - allow temp id
-                            setCategory(val);
-                            (e.target as HTMLInputElement).value = "";
+
+                  {isAddingCat ? (
+                    <div className="mt-2 flex items-center gap-1.5 animate-in fade-in">
+                      <input
+                        type="text"
+                        placeholder="Category name..."
+                        value={newCatInput}
+                        onChange={(e) => setNewCatInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            handleAddCategory();
                           }
-                        }
-                      }}
-                    />
-                    <span className="text-[10px] text-text-tertiary self-center hidden sm:inline">Press Enter to use new</span>
-                  </div>
+                        }}
+                        className="flex-1 rounded-lg border border-border bg-white px-2.5 py-1.5 text-xs text-navy focus:border-brand focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleAddCategory()}
+                        disabled={isCatSubmitting || !newCatInput.trim()}
+                        className="inline-flex items-center gap-1 rounded-lg bg-brand px-3 py-1.5 text-xs font-bold text-navy hover:bg-brand-hover hover:text-white transition disabled:opacity-50 shadow-2xs"
+                      >
+                        {isCatSubmitting ? "Adding..." : "Add"}
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
 
                 <div>

@@ -396,18 +396,37 @@ export async function DELETE(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
+    const inviteId = searchParams.get("inviteId");
     const projectId = searchParams.get("projectId");
-
-    if (!id) {
-      return NextResponse.json(
-        { error: { code: "VALIDATION_ERROR", message: "User ID is required." } },
-        { status: 400 }
-      );
-    }
 
     if (!projectId) {
       return NextResponse.json(
         { error: { code: "VALIDATION_ERROR", message: "projectId is required." } },
+        { status: 400 }
+      );
+    }
+
+    if (inviteId) {
+      const adminUser = await requireAdmin(projectId);
+      await withDbRetry(() =>
+        db.invite.deleteMany({
+          where: { id: inviteId, projectId },
+        })
+      );
+
+      await createAuditLog({
+        actorId: adminUser.id,
+        projectId,
+        action: "project.invite_revoked",
+        targetId: inviteId,
+      });
+
+      return NextResponse.json({ data: { success: true, revoked: true } });
+    }
+
+    if (!id) {
+      return NextResponse.json(
+        { error: { code: "VALIDATION_ERROR", message: "User ID or Invite ID is required." } },
         { status: 400 }
       );
     }

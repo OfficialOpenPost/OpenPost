@@ -154,7 +154,27 @@ export const slashItems: SlashItem[] = [
     category: "Interactive",
     icon: BarChart3,
     command: ({ editor, range }) =>
-      editor.chain().focus().deleteRange(range).setPoll({ question: "Reader Question?", options: ["Option 1", "Option 2"] }).run(),
+      editor
+        .chain()
+        .focus()
+        .deleteRange(range)
+        .setPoll({
+          pollId: `poll_${Date.now()}`,
+          question: "What do you think?",
+          description: "",
+          options: [
+            { id: "1", label: "Option A" },
+            { id: "2", label: "Option B" },
+          ],
+          type: "single",
+          showResults: "always",
+          allowAnonymous: true,
+          align: "center",
+          layout: "center",
+          width: "100%",
+          status: "open",
+        })
+        .run(),
   },
   {
     title: "FAQ Section",
@@ -165,15 +185,28 @@ export const slashItems: SlashItem[] = [
       editor.chain().focus().deleteRange(range).setFaq({ items: [{ question: "What is this topic?", answer: "Clear explanation." }] }).run(),
   },
   {
-    title: "Video / Embed",
-    keywords: "video youtube vimeo embed stream",
+    title: "YouTube / Video",
+    keywords: "video youtube vimeo embed stream shorts",
     category: "Media",
     icon: Globe,
     command: ({ editor, range }) => {
-      const url = window.prompt("Enter YouTube or Vimeo URL:");
-      if (url) {
-        editor.chain().focus().deleteRange(range).setEmbed({ url }).run();
-      }
+      const url = window.prompt("Enter YouTube, Shorts, or Vimeo URL (or leave blank to configure):");
+      if (url === null) return;
+      editor
+        .chain()
+        .focus()
+        .deleteRange(range)
+        .insertContent({
+          type: "videoBlock",
+          attrs: {
+            src: (url || "").trim(),
+            url: (url || "").trim(),
+            align: "center",
+            width: "100%",
+            aspectRatio: "16:9",
+          },
+        })
+        .run();
     },
   },
 ];

@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useState } from "react";
-import { Copy, Check, Download as DownloadIcon } from "lucide-react";
+import { Copy, Check, Download as DownloadIcon, BarChart2, ShieldCheck, Loader2, CheckCircle2 } from "lucide-react";
 
 interface SharedRenderProps {
   content: any;
@@ -44,6 +44,215 @@ function renderInline(content: any[]): React.ReactNode[] {
 function renderInlineText(content: any[]): string {
   if (!Array.isArray(content)) return "";
   return content.map((c: any) => c.text ?? (c.content ? renderInlineText(c.content) : "")).join("");
+}
+
+function SharedPollCard({ node }: { node: any }) {
+  const layout = node.attrs?.layout || node.attrs?.align || "center";
+  const widthVal = node.attrs?.width || "100%";
+  const desc = node.attrs?.description || "";
+  const pollId = node.attrs?.pollId || node.attrs?.id;
+  const rawList = Array.isArray(node.attrs?.options)
+    ? node.attrs.options
+    : Array.isArray(node.attrs?.items)
+    ? node.attrs.items
+    : ["Option 1", "Option 2"];
+
+  const rawOptions = rawList.map((opt: any, idx: number) => ({
+    id: typeof opt === "string" ? `opt_${idx + 1}` : opt?.id || `opt_${idx + 1}`,
+    label: typeof opt === "string" ? opt : opt?.label || opt?.text || `Option ${idx + 1}`,
+    votes: typeof opt === "object" ? opt?.votes ?? 0 : 0,
+  }));
+
+  const [selectedOption, setSelectedOption] = useState<string | null>(null);
+  const [hasVoted, setHasVoted] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [options, setOptions] = useState(rawOptions);
+  const [totalVotes, setTotalVotes] = useState(
+    rawOptions.reduce((acc: number, o: any) => acc + (o.votes || 0), 0)
+  );
+
+  // Sync when node attrs change dynamically
+  React.useEffect(() => {
+    const currentList = Array.isArray(node.attrs?.options)
+      ? node.attrs.options
+      : Array.isArray(node.attrs?.items)
+      ? node.attrs.items
+      : ["Option 1", "Option 2"];
+    const mapped = currentList.map((opt: any, idx: number) => ({
+      id: typeof opt === "string" ? `opt_${idx + 1}` : opt?.id || `opt_${idx + 1}`,
+      label: typeof opt === "string" ? opt : opt?.label || opt?.text || `Option ${idx + 1}`,
+      votes: typeof opt === "object" ? opt?.votes ?? 0 : 0,
+    }));
+    setOptions(mapped);
+    setTotalVotes(mapped.reduce((acc: number, o: any) => acc + (o.votes || 0), 0));
+  }, [JSON.stringify(node.attrs?.options), JSON.stringify(node.attrs?.items)]);
+
+  // Sync with local storage or fetch live poll data if available
+  React.useEffect(() => {
+    if (typeof window !== "undefined") {
+      const storageKey = `op_voted_${pollId || "temp"}`;
+      const savedChoice = localStorage.getItem(storageKey);
+      if (savedChoice) {
+        setHasVoted(true);
+        setSelectedOption(savedChoice);
+      }
+    }
+
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (pollId && typeof pollId === "string" && uuidRegex.test(pollId)) {
+      fetch(`/api/v1/polls/${pollId}`)
+        .then((r) => r.json())
+        .then((res) => {
+          if (res.data && Array.isArray(res.data.options)) {
+            setOptions(res.data.options);
+            setTotalVotes(res.data.totalVotes ?? res.data.options.reduce((a: number, b: any) => a + (b.votes || 0), 0));
+          }
+        })
+        .catch(() => {});
+    }
+  }, [pollId]);
+
+  const alignCls =
+    layout === "left"
+      ? "float-left mr-6 mb-4 clear-none"
+      : layout === "right"
+      ? "float-right ml-6 mb-4 clear-none"
+      : layout === "wide"
+      ? "w-full my-6 clear-both"
+      : "mx-auto my-6 clear-both";
+
+  const handleVote = async () => {
+    if (!selectedOption || loading || hasVoted) return;
+    setLoading(true);
+
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (pollId && typeof pollId === "string" && uuidRegex.test(pollId)) {
+      try {
+        await fetch(`/api/v1/polls/${pollId}/vote`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ optionId: selectedOption }),
+        });
+      } catch {}
+    }
+
+    if (typeof window !== "undefined") {
+      localStorage.setItem(`op_voted_${pollId || "temp"}`, selectedOption);
+    }
+
+    setOptions((prev: any[]) =>
+      prev.map((o) => (o.id === selectedOption ? { ...o, votes: (o.votes || 0) + 1 } : o))
+    );
+    setTotalVotes((prev: number) => prev + 1);
+    setHasVoted(true);
+    setLoading(false);
+  };
+
+  return (
+    <div
+      className={`rounded-none bg-white p-6 shadow-xs ${alignCls}`}
+      style={{ width: widthVal, maxWidth: "100%", border: "2px solid #FEA611" }}
+    >
+      <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-200/70">
+        <div className="flex items-center gap-2">
+          <div
+            className="flex h-6 w-6 items-center justify-center rounded-none text-navy font-bold shadow-2xs"
+            style={{ backgroundColor: "#FEA611" }}
+          >
+            <BarChart2 className="h-3.5 w-3.5 text-navy" />
+          </div>
+          <span className="text-xs font-black uppercase tracking-wider text-navy">
+            Interactive Poll
+          </span>
+        </div>
+        <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200/60 rounded-none px-2 py-0.5">
+          <ShieldCheck className="h-3 w-3 text-emerald-600" /> Fraud Protected
+        </span>
+      </div>
+
+      <h3 className="text-sm sm:text-base font-bold text-navy leading-snug tracking-tight mb-2">
+        {node.attrs?.question ?? "Reader Poll"}
+      </h3>
+
+      {desc && (
+        <p className="text-xs text-slate-600 font-normal leading-relaxed mb-3.5 bg-slate-50 border border-slate-200/60 rounded-none p-3">
+          {desc}
+        </p>
+      )}
+
+      <div className="space-y-2.5 my-3">
+        {options.map((opt: any) => {
+          const percentage = totalVotes > 0 ? Math.round(((opt.votes || 0) / totalVotes) * 100) : 0;
+          const isSelected = selectedOption === opt.id;
+
+          return (
+            <div
+              key={opt.id}
+              onClick={() => !hasVoted && setSelectedOption(opt.id)}
+              className={`relative overflow-hidden rounded-none border px-3.5 py-2.5 transition cursor-pointer ${
+                hasVoted
+                  ? "border-slate-200 bg-white"
+                  : isSelected
+                  ? "border-slate-400 bg-white shadow-xs"
+                  : "border-slate-200 bg-white hover:border-slate-300"
+              }`}
+            >
+              {hasVoted && (
+                <div
+                  className="absolute inset-y-0 left-0 transition-all duration-500 opacity-20"
+                  style={{ width: `${percentage}%`, backgroundColor: "#FEA611" }}
+                />
+              )}
+
+              <div className="relative flex items-center justify-between z-10">
+                <div className="flex items-center gap-3">
+                  {!hasVoted && (
+                    <div className="h-3.5 w-3.5 border flex items-center justify-center border-slate-300 bg-white rounded-none">
+                      {isSelected && (
+                        <div
+                          className="h-1.5 w-1.5 rounded-none"
+                          style={{ backgroundColor: "#FEA611" }}
+                        />
+                      )}
+                    </div>
+                  )}
+                  <span className="text-xs sm:text-sm font-semibold text-navy">{opt.label}</span>
+                </div>
+
+                {hasVoted && (
+                  <div className="flex items-center gap-2 text-xs font-bold text-navy">
+                    <span>{percentage}%</span>
+                    <span className="text-slate-400 font-mono text-[11px]">({opt.votes || 0})</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="mt-4 pt-3 border-t border-slate-200/60 flex items-center justify-between text-xs">
+        <span className="text-slate-500 font-medium">{totalVotes} total votes</span>
+
+        {!hasVoted ? (
+          <button
+            type="button"
+            onClick={handleVote}
+            disabled={!selectedOption || loading}
+            className="inline-flex items-center gap-1.5 rounded-none px-4 py-1.5 text-xs font-bold text-navy transition disabled:opacity-50 shadow-xs hover:brightness-95"
+            style={{ backgroundColor: "#FEA611" }}
+          >
+            {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+            Submit Vote
+          </button>
+        ) : (
+          <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-600">
+            <CheckCircle2 className="h-3.5 w-3.5" /> Thank you for voting!
+          </span>
+        )}
+      </div>
+    </div>
+  );
 }
 
 // Shared between CMS preview and public frontend — guarantees complete visual and layout parity
@@ -207,37 +416,54 @@ export function SharedRender({ content }: SharedRenderProps) {
           }
           case "callout": {
             const tone = node.attrs?.tone ?? "info";
-            const toneCls: Record<string, string> = {
-              info: "border-brand bg-brand/5",
-              warning: "border-orange bg-orange/5",
-              success: "border-green-500 bg-green-50",
-              note: "border-navy bg-navy/5 text-navy",
-              tip: "border-brand bg-brand/5",
+            const toneConfig: Record<string, { cls: string; label: string; icon: string }> = {
+              tip: {
+                cls: "border-l-4 border-amber-500 bg-amber-50/80 text-slate-800 border-slate-200/70",
+                label: "Pro Tip",
+                icon: "💡",
+              },
+              info: {
+                cls: "border-l-4 border-blue-500 bg-blue-50/80 text-slate-800 border-slate-200/70",
+                label: "Information",
+                icon: "ℹ️",
+              },
+              warning: {
+                cls: "border-l-4 border-amber-600 bg-amber-50/90 text-amber-950 border-amber-200/70",
+                label: "Important Notice",
+                icon: "⚠️",
+              },
+              success: {
+                cls: "border-l-4 border-emerald-500 bg-emerald-50/80 text-slate-800 border-emerald-200/70",
+                label: "Key Takeaway",
+                icon: "✅",
+              },
+              note: {
+                cls: "border-l-4 border-slate-700 bg-slate-100 text-slate-800 border-slate-200/70",
+                label: "Note",
+                icon: "📌",
+              },
             };
+            const cur = toneConfig[tone] || toneConfig.info;
             return (
               <div
                 key={i}
-                className={`my-6 rounded-2xl border-l-4 p-5 shadow-2xs ${toneCls[tone] ?? toneCls.info}`}
+                className={`my-6 rounded-2xl border p-5 sm:p-6 shadow-2xs ${cur.cls}`}
               >
-                {renderInline(node.content ?? [])}
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-base">{cur.icon}</span>
+                  <span className="text-xs font-bold uppercase tracking-wider text-navy">
+                    {cur.label}
+                  </span>
+                </div>
+                <div className="text-sm sm:text-base leading-relaxed text-slate-800 font-medium">
+                  {renderInline(node.content ?? [])}
+                </div>
               </div>
             );
           }
           case "poll":
           case "pollBlock": {
-            return (
-              <div key={i} className="my-6 rounded-2xl border border-border bg-white p-5 shadow-xs border-l-4 border-l-brand">
-                <p className="font-bold text-navy text-sm mb-2">{node.attrs?.question ?? "Reader Poll"}</p>
-                <div className="space-y-1.5">
-                  {(node.attrs?.options ?? ["Option 1", "Option 2"]).map((opt: string, idx: number) => (
-                    <div key={idx} className="rounded-xl border border-border bg-surface-raised px-3.5 py-2 text-xs font-semibold text-text-secondary flex justify-between">
-                      <span>{opt}</span>
-                      <span className="text-[10px] text-text-tertiary">Vote</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            );
+            return <SharedPollCard key={i} node={node} />;
           }
           case "gallery": {
             const images = node.attrs?.images ?? node.attrs?.items ?? [];
@@ -442,6 +668,103 @@ export function SharedRender({ content }: SharedRenderProps) {
                   </li>
                 ))}
               </ul>
+            );
+          }
+          case "youtube":
+          case "videoBlock":
+          case "embedBlock": {
+            const {
+              src = "",
+              url = "",
+              videoId = "",
+              provider = "youtube",
+              caption = "",
+              title = "",
+              align = "center",
+              layout = "center",
+              width = "100%",
+              aspectRatio = "16:9",
+              startTime = 0,
+              autoplay = false,
+              muted = false,
+              loop = false,
+              controls = true,
+              privacyEnhanced = true,
+            } = node.attrs ?? {};
+
+            const rawUrl = src || url || "";
+            let embedSrc = rawUrl;
+            let effVideoId = videoId;
+            let effProvider = provider;
+
+            const ytMatch = rawUrl.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/))([\w-]{11})/);
+            if (ytMatch && ytMatch[1]) {
+              effVideoId = ytMatch[1];
+              effProvider = "youtube";
+            }
+            const vimeoMatch = rawUrl.match(/(?:vimeo\.com\/)(\d+)/);
+            if (vimeoMatch && vimeoMatch[1]) {
+              effVideoId = vimeoMatch[1];
+              effProvider = "vimeo";
+            }
+
+            if (effProvider === "youtube" && effVideoId) {
+              const base = privacyEnhanced !== false
+                ? `https://www.youtube-nocookie.com/embed/${effVideoId}`
+                : `https://www.youtube.com/embed/${effVideoId}`;
+              const params = new URLSearchParams();
+              if (autoplay) params.set("autoplay", "1");
+              if (muted) params.set("mute", "1");
+              if (loop) {
+                params.set("loop", "1");
+                params.set("playlist", effVideoId);
+              }
+              if (controls === false) params.set("controls", "0");
+              if (startTime) params.set("start", String(startTime));
+              params.set("rel", "0");
+              const qs = params.toString();
+              embedSrc = qs ? `${base}?${qs}` : base;
+            } else if (effProvider === "vimeo" && effVideoId) {
+              const base = `https://player.vimeo.com/video/${effVideoId}`;
+              embedSrc = base;
+            }
+
+            const isLeft = align === "left" || layout === "left";
+            const isRight = align === "right" || layout === "right";
+            const isWide = align === "wide" || layout === "wide";
+
+            let floatClass = "block my-8 clear-both mx-auto";
+            if (isLeft) floatClass = "float-none sm:float-left mr-8 mb-6 clear-none max-w-[48%]";
+            if (isRight) floatClass = "float-none sm:float-right ml-8 mb-6 clear-none max-w-[48%]";
+            if (isWide) floatClass = "block w-full my-8 clear-both";
+
+            const aspectClass =
+              aspectRatio === "9:16"
+                ? "aspect-[9/16] max-w-[360px] mx-auto"
+                : aspectRatio === "1:1"
+                ? "aspect-square max-w-[540px] mx-auto"
+                : aspectRatio === "4:3"
+                ? "aspect-[4/3]"
+                : "aspect-video";
+
+            return (
+              <figure key={i} className={`overflow-hidden rounded-3xl border border-border bg-slate-950 shadow-md ${floatClass}`} style={{ width: isWide ? "100%" : width || "100%", maxWidth: "100%" }}>
+                <div className={`relative w-full ${aspectClass}`}>
+                  <iframe
+                    src={embedSrc}
+                    title={title || caption || "Embedded Video"}
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                    allowFullScreen
+                    className="absolute inset-0 h-full w-full border-0"
+                  />
+                </div>
+                {(caption || title) && (
+                  <figcaption className="p-3 bg-white border-t border-slate-100 text-center">
+                    {title && <p className="text-xs font-bold text-navy truncate">{title}</p>}
+                    {caption && <p className="text-[11px] text-slate-500 italic mt-0.5">{caption}</p>}
+                  </figcaption>
+                )}
+              </figure>
             );
           }
           default:

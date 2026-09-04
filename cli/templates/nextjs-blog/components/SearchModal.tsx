@@ -120,7 +120,7 @@ export function SearchModal({ isOpen, onClose }: { isOpen: boolean; onClose: () 
             results.map((post) => (
               <Link
                 key={post.id}
-                href={`/${post.slug}`}
+                href={`/blog/${post.slug}`}
                 onClick={onClose}
                 className="group flex items-center gap-4 rounded-2xl p-3 hover:bg-slate-50 transition duration-150 border border-transparent hover:border-slate-200"
               >

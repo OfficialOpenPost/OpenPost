@@ -124,16 +124,13 @@ export const getCurrentUser = cache(async (): Promise<AuthUser | null> => {
       })
     ).catch(() => null);
 
-    // If profile has no explicit memberships yet, check if they own any projects
-    let ownedProjects: Array<{ id: string; name: string; slug: string }> = [];
-    if (!profile || !profile.memberships || profile.memberships.length === 0) {
-      ownedProjects = await withDbRetry(() =>
-        db.project.findMany({
-          where: { ownerId: user.id },
-          select: { id: true, name: true, slug: true },
-        })
-      ).catch(() => []);
-    }
+    // Always query projects owned by the user to ensure OWNER access across all owned projects
+    const ownedProjects: Array<{ id: string; name: string; slug: string }> = await withDbRetry(() =>
+      db.project.findMany({
+        where: { ownerId: user.id },
+        select: { id: true, name: true, slug: true },
+      })
+    ).catch(() => []);
 
     // 2. If profile record is missing, safely backfill it with 'pending' status
     let finalProfile = profile;
@@ -289,7 +286,34 @@ export async function requireProjectMember(
 
   const user = await requireApprovedUser();
 
-  const membership = user.memberships.find((m) => m.projectId === projectId);
+  let membership = user.memberships.find((m) => m.projectId === projectId);
+
+  // If not found in cached memberships, perform a direct DB check
+  if (!membership) {
+    const directCheck = await withDbRetry(async () => {
+      const proj = await db.project.findUnique({
+        where: { id: projectId },
+        select: { id: true, name: true, slug: true, ownerId: true },
+      });
+      if (!proj) return null;
+      if (proj.ownerId === user.id) {
+        return { projectId: proj.id, role: "OWNER" as Role, project: proj };
+      }
+      const member = await db.projectMember.findFirst({
+        where: { projectId, userId: user.id },
+      });
+      if (member) {
+        return { projectId: proj.id, role: normalizeRoleStrict(member.role), project: proj };
+      }
+      return null;
+    }).catch(() => null);
+
+    if (directCheck) {
+      user.memberships.push(directCheck);
+      membership = directCheck;
+    }
+  }
+
   if (!membership) {
     throw new AuthError("Project not found or access denied.", 404, "NOT_FOUND");
   }

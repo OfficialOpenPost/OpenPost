@@ -14,8 +14,12 @@ export async function POST(req: NextRequest) {
     const { event, payload } = body;
 
     // Invalidate global post tag
-    revalidateTag("openpost-posts");
-    revalidateTag("openpost-content");
+    try {
+      (revalidateTag as any)("openpost-posts");
+      (revalidateTag as any)("openpost-content");
+    } catch {
+      // Fallback for cache environments
+    }
 
     // Invalidate specific slug path if provided
     if (payload?.slug) {

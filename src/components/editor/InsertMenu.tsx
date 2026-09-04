@@ -3,16 +3,83 @@
 import { useState } from "react";
 import type { Editor } from "@tiptap/core";
 import { Plus, Image as ImageIcon, LayoutGrid, Quote, Table, BarChart3, Code2, Globe, Minus, X } from "lucide-react";
+import { parseVideoUrl } from "./YouTubeBlockView";
 
 const OPTIONS = [
-  { label: "Image", icon: ImageIcon, action: (e: Editor) => { const url = window.prompt("Image URL"); if (url) e.chain().focus().setImage({ src: url }).run(); } },
-  { label: "Gallery", icon: LayoutGrid, action: (e: Editor) => e.chain().focus().insertContent("<p>Gallery — add images via media library</p>").run() },
-  { label: "Quote", icon: Quote, action: (e: Editor) => e.chain().focus().toggleBlockquote().run() },
-  { label: "Table", icon: Table, action: (e: Editor) => e.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run() },
-  { label: "Poll", icon: BarChart3, action: (e: Editor) => e.chain().focus().insertContent("<p>Poll — configure in sidebar</p>").run() },
-  { label: "Code", icon: Code2, action: (e: Editor) => e.chain().focus().toggleCodeBlock().run() },
-  { label: "Embed", icon: Globe, action: (e: Editor) => { const url = window.prompt("YouTube/Vimeo URL"); if (url) e.chain().focus().insertContent(`<p>Embed: ${url}</p>`).run(); } },
-  { label: "Divider", icon: Minus, action: (e: Editor) => e.chain().focus().setHorizontalRule().run() },
+  {
+    label: "Image",
+    icon: ImageIcon,
+    action: (e: Editor) => {
+      const url = window.prompt("Enter Image URL:");
+      if (url) (e.chain().focus() as any).setImage({ src: url, layout: "center", width: "100%" }).run();
+    },
+  },
+  {
+    label: "Poll",
+    icon: BarChart3,
+    action: (e: Editor) =>
+      e.chain().focus().insertContent({
+        type: "pollBlock",
+        attrs: {
+          pollId: `poll_${Date.now()}`,
+          question: "What do you think?",
+          description: "",
+          options: [
+            { id: "1", label: "Option A" },
+            { id: "2", label: "Option B" },
+          ],
+          type: "single",
+          showResults: "always",
+          allowAnonymous: true,
+          align: "center",
+          layout: "center",
+          width: "100%",
+          status: "open",
+        },
+      }).run(),
+  },
+  {
+    label: "Table",
+    icon: Table,
+    action: (e: Editor) => e.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run(),
+  },
+  {
+    label: "Quote",
+    icon: Quote,
+    action: (e: Editor) => e.chain().focus().toggleBlockquote().run(),
+  },
+  {
+    label: "Code",
+    icon: Code2,
+    action: (e: Editor) => e.chain().focus().toggleCodeBlock().run(),
+  },
+  {
+    label: "Video",
+    icon: Globe,
+    action: (e: Editor) => {
+      const url = window.prompt("Enter YouTube, Shorts, or Vimeo URL (or leave blank to configure):");
+      if (url === null) return;
+      if (!url.trim()) {
+        e.chain().focus().insertContent({ type: "videoBlock", attrs: { src: "", url: "" } }).run();
+        return;
+      }
+      const parsed = parseVideoUrl(url);
+      e.chain().focus().insertContent({
+        type: "videoBlock",
+        attrs: {
+          src: url.trim(),
+          url: url.trim(),
+          videoId: parsed?.videoId || "",
+          provider: parsed?.provider || "youtube",
+        },
+      }).run();
+    },
+  },
+  {
+    label: "Divider",
+    icon: Minus,
+    action: (e: Editor) => e.chain().focus().setHorizontalRule().run(),
+  },
 ];
 
 export function InsertMenu({ editor }: { editor: Editor | null }) {

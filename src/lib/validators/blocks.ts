@@ -11,7 +11,22 @@ export const galleryBlockSchema = z.object({
 });
 export const pollBlockSchema = z.object({
   type: z.union([z.literal("poll"), z.literal("pollBlock")]),
-  attrs: z.object({ pollId: z.string().min(1).nullable().optional(), poll_id: z.string().min(1).optional(), question: z.string().optional(), options: z.array(z.any()).optional(), type: z.string().optional(), showResults: z.string().optional() }).passthrough().optional(),
+  attrs: z
+    .object({
+      pollId: z.string().min(1).nullable().optional(),
+      poll_id: z.string().min(1).optional(),
+      question: z.string().optional(),
+      description: z.string().max(500).optional(),
+      options: z.array(z.any()).optional(),
+      type: z.string().optional(),
+      showResults: z.string().optional(),
+      allowAnonymous: z.boolean().optional(),
+      align: z.enum(["left", "center", "right", "wide"]).optional(),
+      layout: z.string().optional(),
+      width: z.union([z.string(), z.number()]).optional(),
+    })
+    .passthrough()
+    .optional(),
 });
 export const faqBlockSchema = z.object({
   type: z.literal("faq"),
@@ -34,12 +49,45 @@ export const socialEmbedSchema = z.object({
   attrs: z.object({ provider: z.enum(["twitter", "x", "linkedin", "instagram", "facebook"]).optional(), postId: z.string().optional(), url: z.string().url().or(z.string().min(1)).optional() }).passthrough().optional(),
 });
 export const videoBlockSchema = z.object({
-  type: z.literal("videoBlock"),
-  attrs: z.object({ src: z.string().url().nullable().optional(), poster: z.string().url().nullable().optional() }).passthrough().optional(),
+  type: z.union([z.literal("videoBlock"), z.literal("youtube")]),
+  attrs: z
+    .object({
+      src: z.string().nullable().optional(),
+      url: z.string().nullable().optional(),
+      videoId: z.string().nullable().optional(),
+      provider: z.string().nullable().optional(),
+      title: z.string().nullable().optional(),
+      caption: z.string().nullable().optional(),
+      align: z.enum(["left", "center", "right", "wide"]).optional(),
+      layout: z.string().optional(),
+      width: z.union([z.string(), z.number()]).optional(),
+      aspectRatio: z.string().optional(),
+      startTime: z.union([z.string(), z.number()]).optional(),
+      autoplay: z.boolean().optional(),
+      muted: z.boolean().optional(),
+      loop: z.boolean().optional(),
+      controls: z.boolean().optional(),
+      privacyEnhanced: z.boolean().optional(),
+      poster: z.string().nullable().optional(),
+    })
+    .passthrough()
+    .optional(),
 });
 export const embedBlockSchema = z.object({
   type: z.literal("embedBlock"),
-  attrs: z.object({ provider: z.enum(["youtube", "vimeo"]).nullable().optional(), videoId: z.string().nullable().optional(), url: z.string().url().nullable().optional() }).passthrough().optional(),
+  attrs: z
+    .object({
+      provider: z.string().nullable().optional(),
+      videoId: z.string().nullable().optional(),
+      url: z.string().nullable().optional(),
+      caption: z.string().nullable().optional(),
+      title: z.string().nullable().optional(),
+      align: z.string().optional(),
+      width: z.union([z.string(), z.number()]).optional(),
+      aspectRatio: z.string().optional(),
+    })
+    .passthrough()
+    .optional(),
 });
 export const codeBlockSchema = z.object({ type: z.literal("codeBlock"), attrs: z.object({ language: z.string().optional() }).passthrough().optional(), content: z.array(z.any()).optional() });
 export const blockquoteSchema = z.object({ type: z.literal("blockquote"), content: z.array(z.any()).optional(), attrs: z.any().optional() });

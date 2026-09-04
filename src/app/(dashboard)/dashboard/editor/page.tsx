@@ -11,6 +11,7 @@ import { SelectionBubbleMenu } from "@/components/editor/BubbleMenus";
 import { FindReplaceBar } from "@/components/editor/toolbar/FindReplaceBar";
 import { EDITOR_STYLES } from "@/components/editor/extensions";
 import { tiptapToEditorDocument, editorDocumentToHtml } from "@/lib/editorDocument";
+import { SharedRender } from "@/components/render/SharedRender";
 import {
   ArrowLeft,
   Sparkles,
@@ -273,15 +274,21 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
 
   // Load categories
   useEffect(() => {
-    const activeProjId = typeof window !== "undefined" ? localStorage.getItem("openpost_active_project_id") : null;
-    const headers: Record<string, string> = {};
-    if (activeProjId) headers["X-OpenPost-Project"] = activeProjId;
-    fetch("/api/v1/categories", { headers })
-      .then((r) => r.json())
-      .then((j) => {
-        if (Array.isArray(j.data)) setCatOptions(j.data);
-      })
-      .catch(() => {});
+    const fetchCategories = () => {
+      const activeProjId = typeof window !== "undefined" ? localStorage.getItem("openpost_active_project_id") : null;
+      const headers: Record<string, string> = {};
+      if (activeProjId) headers["X-OpenPost-Project"] = activeProjId;
+      fetch("/api/v1/categories", { headers })
+        .then((r) => r.json())
+        .then((j) => {
+          if (Array.isArray(j.data)) setCatOptions(j.data);
+        })
+        .catch(() => {});
+    };
+
+    fetchCategories();
+    window.addEventListener("projectChanged", fetchCategories);
+    return () => window.removeEventListener("projectChanged", fetchCategories);
   }, []);
 
   // Load revisions
@@ -478,13 +485,13 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
     }
   };
 
-  // Auto-save: 30 seconds after last edit, only if dirty
+  // Auto-save: 15 seconds after last edit, only if dirty
   useEffect(() => {
     if (isInitialLoadRef.current || !isDirty) return;
     if (!title && !editor?.getText()?.trim()) return;
     const timer = setTimeout(() => {
       if (isDirty) save();
-    }, 30000);
+    }, 15000);
     return () => clearTimeout(timer);
   }, [title, html, category, tags, seoTitle, seoDesc, featuredImage, status, scheduledAt, isDirty]);
 
@@ -529,10 +536,13 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
             </div>
           )}
           <style dangerouslySetInnerHTML={{ __html: EDITOR_STYLES }} />
-          <div
-            className="tiptap prose prose-lg prose-navy max-w-none"
-            dangerouslySetInnerHTML={{ __html: html }}
-          />
+          <div className="tiptap prose prose-lg prose-navy max-w-none">
+            {editor ? (
+              <SharedRender content={editor.getJSON()} />
+            ) : (
+              <div dangerouslySetInnerHTML={{ __html: html }} />
+            )}
+          </div>
         </div>
       </div>
     );

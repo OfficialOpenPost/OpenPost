@@ -62,7 +62,11 @@ export interface OpenPostAuthor {
   postCount?: number;
 }
 
-const OPENPOST_URL = (process.env.OPENPOST_URL || "http://localhost:3000").replace(/\/$/, "");
+const OPENPOST_URL = (
+  process.env.NEXT_PUBLIC_OPENPOST_URL ||
+  process.env.OPENPOST_URL ||
+  "http://localhost:3000"
+).replace(/\/$/, "");
 const OPENPOST_TOKEN = process.env.OPENPOST_TOKEN || "";
 const OPENPOST_PROJECT_ID = process.env.OPENPOST_PROJECT_ID || "";
 
@@ -166,17 +170,59 @@ export async function getAuthors(): Promise<OpenPostAuthor[]> {
   }
 }
 
-export async function submitPollVote(pollId: string, optionId: string): Promise<{ success: boolean; error?: string }> {
+export interface OpenPostPollOption {
+  id: string;
+  label: string;
+  votes: number;
+  percentage?: number;
+}
+
+export interface OpenPostPoll {
+  id: string;
+  question: string;
+  description?: string;
+  type: string;
+  status: string;
+  totalVotes: number;
+  options: OpenPostPollOption[];
+  closesAt?: string | null;
+  allowAnonymous?: boolean;
+}
+
+export async function getPoll(pollId: string): Promise<OpenPostPoll | null> {
+  try {
+    return await fetchFromOpenPost<OpenPostPoll>(`/polls/${pollId}`);
+  } catch {
+    return null;
+  }
+}
+
+export function hasVotedInPoll(pollId: string): boolean {
+  if (typeof window === "undefined" || !pollId) return false;
+  return !!localStorage.getItem(`op_voted_${pollId}`);
+}
+
+export function recordLocalPollVote(pollId: string, optionId: string): void {
+  if (typeof window === "undefined" || !pollId) return;
+  localStorage.setItem(`op_voted_${pollId}`, optionId);
+}
+
+export async function submitPollVote(pollId: string, optionId: string): Promise<{ success: boolean; error?: string; alreadyVoted?: boolean }> {
   try {
     const res = await fetch(`${OPENPOST_URL}/api/v1/polls/${pollId}/vote`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ optionId }),
     });
-    const json = await res.json();
+    const json = await res.json().catch(() => ({}));
     if (!res.ok) {
-      return { success: false, error: json.error?.message || "Failed to submit vote." };
+      return {
+        success: false,
+        error: json.error?.message || "Failed to submit vote.",
+        alreadyVoted: json.error?.code === "ALREADY_VOTED",
+      };
     }
+    recordLocalPollVote(pollId, optionId);
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message || "Network error" };

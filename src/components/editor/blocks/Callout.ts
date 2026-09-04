@@ -34,23 +34,27 @@ export const Callout = Node.create<CalloutOptions>({
   },
 
   parseHTML() {
-    return [{ tag: 'div[data-type="callout"]' }];
+    return [
+      { tag: 'div[data-type="callout"]' },
+      { tag: 'blockquote[data-type="callout"]' },
+    ];
   },
 
   renderHTML({ HTMLAttributes, node }) {
     const tone = node.attrs.tone ?? "info";
     const toneClasses: Record<string, string> = {
-      info: "border-brand bg-brand/5",
-      warning: "border-orange bg-orange/5",
-      success: "border-success bg-success/5",
-      note: "border-navy bg-navy/5 text-white",
+      tip: "border-l-4 border-amber-500 bg-amber-50/80 text-slate-800 shadow-2xs",
+      info: "border-l-4 border-blue-500 bg-blue-50/80 text-slate-800 shadow-2xs",
+      warning: "border-l-4 border-amber-600 bg-amber-50/90 text-slate-900 shadow-2xs",
+      success: "border-l-4 border-emerald-500 bg-emerald-50/80 text-slate-800 shadow-2xs",
+      note: "border-l-4 border-slate-700 bg-slate-100 text-slate-800 shadow-2xs",
     };
     return [
       "div",
       mergeAttributes(HTMLAttributes, {
         "data-type": "callout",
         "data-tone": tone,
-        class: `my-6 rounded-xl border-l-4 p-4 ${toneClasses[tone] ?? toneClasses.info}`,
+        class: `my-6 rounded-2xl p-5 border border-slate-200/60 leading-relaxed text-sm sm:text-base font-medium ${toneClasses[tone] ?? toneClasses.info}`,
       }),
       0,
     ];

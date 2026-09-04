@@ -1,20 +1,32 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { BookOpen, Search, ArrowUpRight, Sparkles, Flame, Menu, X, Bell } from "lucide-react";
 import { SearchModal } from "./SearchModal";
 
-const SITE_NAME = process.env.SITE_NAME || "My Blog";
-const SITE_TAGLINE = process.env.SITE_TAGLINE || "Stories, Ideas & Perspectives";
-const SITE_LOGO_URL = process.env.SITE_LOGO_URL || "";
-const OPENPOST_URL = process.env.OPENPOST_URL || "";
+const SITE_NAME = process.env.NEXT_PUBLIC_SITE_NAME || process.env.SITE_NAME || "My Blog";
+const SITE_TAGLINE = process.env.NEXT_PUBLIC_SITE_TAGLINE || process.env.SITE_TAGLINE || "Stories, Ideas & Perspectives";
+const SITE_LOGO_URL = process.env.NEXT_PUBLIC_SITE_LOGO_URL || process.env.SITE_LOGO_URL || "";
+const OPENPOST_URL = process.env.NEXT_PUBLIC_OPENPOST_URL || process.env.OPENPOST_URL || "";
 
 export function Header() {
   const pathname = usePathname();
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [dateString, setDateString] = useState("");
+
+  useEffect(() => {
+    setDateString(
+      new Date().toLocaleDateString("en-US", {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      })
+    );
+  }, []);
 
   const navLinks = [
     { href: "/", label: "Home" },
@@ -38,7 +50,7 @@ export function Header() {
             </div>
             <div className="flex items-center gap-4 text-[11px] font-medium text-slate-400">
               <span className="hidden md:inline">
-                {new Date().toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
+                {dateString}
               </span>
               {OPENPOST_URL && (
                 <a

@@ -17,6 +17,7 @@ import {
   Link2,
   Table as TableIcon,
   Image as ImageIcon,
+  BarChart3,
   Sparkles,
   Undo2,
   Redo2,
@@ -435,6 +436,16 @@ export function EditorRibbon({
                 className="flex w-full items-center gap-2 px-3 py-2 rounded-lg text-left hover:bg-surface-raised transition"
               >
                 <HelpCircle className="h-3.5 w-3.5 text-brand" /> FAQ Accordion
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveModal("poll");
+                  setActiveMenu(null);
+                }}
+                className="flex w-full items-center gap-2 px-3 py-2 rounded-lg text-left hover:bg-surface-raised transition"
+              >
+                <BarChart3 className="h-3.5 w-3.5 text-brand" /> Interactive Poll...
               </button>
               <div className="my-1 border-t border-border" />
               <button
@@ -998,6 +1009,15 @@ export function EditorRibbon({
             </div>,
             document.body
           )}
+          <button
+            type="button"
+            onClick={() => setActiveModal("poll")}
+            className="flex h-7 items-center gap-1 rounded-lg px-2 text-xs font-bold text-navy hover:bg-white hover:shadow-xs transition"
+            title="Create Interactive Reader Poll"
+          >
+            <BarChart3 className="h-3.5 w-3.5 text-brand" />
+            <span className="hidden sm:inline">Poll</span>
+          </button>
           <button
             type="button"
             onClick={() => setActiveModal("callout")}

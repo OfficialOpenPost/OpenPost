@@ -2,11 +2,19 @@ import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { revalidatePath } from "next/cache";
 
-const WEBHOOK_SECRET = process.env.OPENPOST_WEBHOOK_SECRET!;
+const WEBHOOK_SECRET = process.env.OPENPOST_WEBHOOK_SECRET || "";
 
 function verify(timestamp: string, body: string, signature: string) {
-  const expected = crypto.createHmac("sha256", WEBHOOK_SECRET).update(`${timestamp}.${body}`).digest("hex");
-  return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
+  if (!WEBHOOK_SECRET || !signature) return false;
+  try {
+    const expected = crypto.createHmac("sha256", WEBHOOK_SECRET).update(`${timestamp}.${body}`).digest("hex");
+    const sigBuf = Buffer.from(signature);
+    const expBuf = Buffer.from(expected);
+    if (sigBuf.length !== expBuf.length) return false;
+    return crypto.timingSafeEqual(sigBuf, expBuf);
+  } catch {
+    return false;
+  }
 }
 
 const seen = new Set<string>();

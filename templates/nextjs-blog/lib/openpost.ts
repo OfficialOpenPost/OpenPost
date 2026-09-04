@@ -88,7 +88,7 @@ function setCached(key: string, data: any, ttlMs: number = CACHE_TTL_MS) {
   memoryCache.set(key, { data, expiry: Date.now() + ttlMs });
 }
 
-async function fetchFromOpenPost<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+async function fetchFromOpenPost<T>(endpoint: string, options: RequestInit = {}, retries = 1): Promise<T> {
   const cacheKey = `ep:${endpoint}`;
   const cached = getCached<T>(cacheKey);
   if (cached !== null) return cached;
@@ -102,7 +102,7 @@ async function fetchFromOpenPost<T>(endpoint: string, options: RequestInit = {})
   };
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 6000); // 6s fast abort timeout
+  const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s resilient timeout for serverless wake-up
 
   try {
     const res = await fetch(url, {
@@ -130,6 +130,14 @@ async function fetchFromOpenPost<T>(endpoint: string, options: RequestInit = {})
     return json.data;
   } catch (err: any) {
     clearTimeout(timeoutId);
+    if (err.message === "NOT_FOUND") {
+      throw err;
+    }
+    if (retries > 0) {
+      console.warn(`[OpenPost] Retrying request to ${endpoint} after error:`, err.message || err);
+      return fetchFromOpenPost<T>(endpoint, options, retries - 1);
+    }
+    console.error(`[OpenPost] Error fetching from ${endpoint}:`, err.message || err);
     throw err;
   }
 }
@@ -154,7 +162,7 @@ export async function getPosts(params: {
   if (cached !== null) return cached;
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 6000);
+  const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s resilient timeout
 
   try {
     const res = await fetch(`${OPENPOST_URL}/api/v1/posts${query}`, {
@@ -176,8 +184,9 @@ export async function getPosts(params: {
     };
     setCached(cacheKey, result);
     return result;
-  } catch {
+  } catch (err: any) {
     clearTimeout(timeoutId);
+    console.error("[OpenPost] Error fetching posts:", err.message || err);
     return { posts: [], nextCursor: null, hasMore: false };
   }
 }
@@ -193,6 +202,7 @@ export async function getPostBySlug(slug: string): Promise<OpenPostArticle | nul
     return post;
   } catch (err: any) {
     if (err.message === "NOT_FOUND") return null;
+    console.error(`[OpenPost] Failed to fetch post by slug "${slug}":`, err.message || err);
     return null;
   }
 }

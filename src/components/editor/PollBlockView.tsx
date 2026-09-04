@@ -43,7 +43,10 @@ export function PollBlockView({
     layout = "center",
     width = "100%",
     pollId,
+    themeColor: rawThemeColor,
   } = node.attrs;
+
+  const themeColor = rawThemeColor || node.attrs.color || "#FEA611";
 
   const [options, setOptions] = useState<Array<{ id: string; label: string }>>(
     rawOptions ?? [
@@ -64,6 +67,7 @@ export function PollBlockView({
   const [modalClosesAt, setModalClosesAt] = useState<string>(closesAt || "");
   const [modalAlign, setModalAlign] = useState<"left" | "center" | "right" | "wide">(layout || align || "center");
   const [modalWidth, setModalWidth] = useState<string>(width || "100%");
+  const [modalThemeColor, setModalThemeColor] = useState<string>(themeColor);
 
   // Analytics Tab State
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
@@ -117,14 +121,16 @@ export function PollBlockView({
   };
 
   const openEditModal = (initialTab: "edit" | "analytics" = "edit") => {
+    const curL = layout || align || "center";
     setModalQuestion(question);
     setModalDescription(description || "");
     setModalOptions([...options]);
     setModalShowResults(showResults);
     setModalAllowAnonymous(allowAnonymous);
     setModalClosesAt(closesAt || "");
-    setModalAlign(layout || align || "center");
-    setModalWidth(width || "100%");
+    setModalAlign(curL);
+    setModalWidth(width || (curL === "left" || curL === "right" ? "45%" : "100%"));
+    setModalThemeColor(themeColor || "#FEA611");
     setModalActiveTab(initialTab);
     setSelectedAnalyticsPollId(pollId || null);
     setIsEditModalOpen(true);
@@ -153,6 +159,7 @@ export function PollBlockView({
       layout: modalAlign,
       width: modalWidth,
       pollId: pollId ?? `poll_${Date.now()}`,
+      themeColor: modalThemeColor || "#FEA611",
     });
 
     setOptions(finalOpts);
@@ -183,16 +190,15 @@ export function PollBlockView({
     e.preventDefault();
     e.stopPropagation();
     const startX = e.clientX;
-    const container = (e.currentTarget as HTMLElement).closest(".relative.group") as HTMLElement | null;
-    const parentW = container?.parentElement?.clientWidth || 700;
-    const startWidthPx = container ? container.offsetWidth : parentW;
+    const editorEl = (e.currentTarget as HTMLElement).closest(".ProseMirror") || (e.currentTarget as HTMLElement).closest(".tiptap") || (document.querySelector(".ProseMirror") as HTMLElement | null);
+    const parentW = editorEl ? editorEl.clientWidth : 750;
+    const currentNum = parseInt(String(width || (currentLayout === "left" || currentLayout === "right" ? "45" : "100")).replace("%", "")) || 45;
 
     const onMove = (ev: MouseEvent) => {
       ev.preventDefault();
-      const deltaX = ev.clientX - startX;
-      const newPx = Math.min(parentW, Math.max(200, startWidthPx + deltaX));
-      const nextPct = Math.min(100, Math.max(25, Math.round((newPx / parentW) * 100)));
-      updateAttributes({ width: `${nextPct}%` });
+      const deltaPercent = ((ev.clientX - startX) / parentW) * 100;
+      const next = Math.min(100, Math.max(25, currentNum + deltaPercent));
+      updateAttributes({ width: `${Math.round(next)}%` });
     };
 
     const onUp = () => {
@@ -209,16 +215,15 @@ export function PollBlockView({
     e.preventDefault();
     e.stopPropagation();
     const startX = e.clientX;
-    const container = (e.currentTarget as HTMLElement).closest(".relative.group") as HTMLElement | null;
-    const parentW = container?.parentElement?.clientWidth || 700;
-    const startWidthPx = container ? container.offsetWidth : parentW;
+    const editorEl = (e.currentTarget as HTMLElement).closest(".ProseMirror") || (e.currentTarget as HTMLElement).closest(".tiptap") || (document.querySelector(".ProseMirror") as HTMLElement | null);
+    const parentW = editorEl ? editorEl.clientWidth : 750;
+    const currentNum = parseInt(String(width || (currentLayout === "left" || currentLayout === "right" ? "45" : "100")).replace("%", "")) || 45;
 
     const onMove = (ev: MouseEvent) => {
       ev.preventDefault();
-      const deltaX = startX - ev.clientX;
-      const newPx = Math.min(parentW, Math.max(200, startWidthPx + deltaX));
-      const nextPct = Math.min(100, Math.max(25, Math.round((newPx / parentW) * 100)));
-      updateAttributes({ width: `${nextPct}%` });
+      const deltaPercent = ((startX - ev.clientX) / parentW) * 100;
+      const next = Math.min(100, Math.max(25, currentNum + deltaPercent));
+      updateAttributes({ width: `${Math.round(next)}%` });
     };
 
     const onUp = () => {
@@ -232,11 +237,21 @@ export function PollBlockView({
 
   const currentLayout = layout || align || "center";
 
+  const handleLayoutSelect = (newLayout: "left" | "center" | "right" | "wide") => {
+    let newWidth = width;
+    if ((newLayout === "left" || newLayout === "right") && (!width || width === "100%")) {
+      newWidth = "45%";
+    } else if (newLayout === "wide") {
+      newWidth = "100%";
+    }
+    updateAttributes({ layout: newLayout, align: newLayout, width: newWidth });
+  };
+
   const wrapperClass =
     currentLayout === "left"
-      ? "image-align-left float-left mr-8 mb-4 clear-none inline-block"
+      ? "image-align-left float-left mr-6 md:mr-7 lg:mr-8 ml-0 mb-4 clear-none inline-block"
       : currentLayout === "right"
-      ? "image-align-right float-right ml-8 mb-4 clear-none inline-block"
+      ? "image-align-right float-right ml-6 md:ml-7 lg:ml-8 mr-0 mb-4 clear-none inline-block"
       : currentLayout === "wide"
       ? "image-align-wide block w-full my-8 clear-both"
       : "image-align-center block w-full my-8 clear-both";
@@ -250,7 +265,8 @@ export function PollBlockView({
       ? "w-full mx-0"
       : "mx-auto";
 
-  const currentWidthVal = width || "100%";
+  const defaultWidthVal = currentLayout === "wide" ? "100%" : (currentLayout === "left" || currentLayout === "right" ? "45%" : "100%");
+  const currentWidthVal = width || defaultWidthVal;
   const widthStyle = { width: currentWidthVal, maxWidth: "100%" };
 
   const layouts = [
@@ -260,20 +276,25 @@ export function PollBlockView({
     { key: "wide", label: "Full Width", icon: Maximize2 },
   ] as const;
 
-  const sizePresets = ["50%", "75%", "100%"];
-  const activeColor = "#FEA611";
+  const sizePresets = ["35%", "45%", "50%", "65%", "75%", "100%"];
+  const activeColor = themeColor || "#FEA611";
 
   return (
-    <NodeViewWrapper className={`my-6 ${wrapperClass} transition-all select-none`}>
-      <div className={`relative group ${innerMarginCls}`} style={widthStyle as any}>
-        {/* Main Poll Card Box — Sharp Non-Rounded Corners with full 4-sided yellow border */}
+    <NodeViewWrapper
+      className={`openpost-poll-block openpost-poll-node my-6 ${wrapperClass} transition-all select-none`}
+      style={widthStyle as any}
+      data-poll-block="true"
+      data-poll-align={currentLayout}
+    >
+      <div className={`relative group ${innerMarginCls} w-full`} style={{ width: "100%", maxWidth: "100%" }}>
+        {/* Main Poll Card Box — Sharp Non-Rounded Corners with full 4-sided dynamic color border */}
         <div
           className={`relative rounded-none bg-white p-5 sm:p-6 shadow-xs transition overflow-visible ${
             selected
               ? "ring-2 ring-brand/50 shadow-md"
               : "hover:shadow-sm"
           }`}
-          style={{ border: "2px solid #FEA611" }}
+          style={{ border: `2px solid ${activeColor}` }}
         >
           {/* Top Left Drag Move Handle */}
           <div
@@ -436,7 +457,7 @@ export function PollBlockView({
                 <button
                   key={l.key}
                   type="button"
-                  onClick={() => updateAttributes({ layout: l.key, align: l.key })}
+                  onClick={() => handleLayoutSelect(l.key)}
                   className={`flex h-7 items-center gap-1 rounded-full px-2 text-[11px] font-bold transition ${
                     currentLayout === l.key
                       ? "bg-navy text-white shadow-2xs"
@@ -458,7 +479,11 @@ export function PollBlockView({
                 <button
                   key={sz}
                   type="button"
-                  onClick={() => updateAttributes({ width: sz })}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    updateAttributes({ width: sz });
+                  }}
                   className={`h-7 px-2 rounded-full text-[10px] font-mono font-bold transition ${
                     currentWidthVal === sz
                       ? "bg-navy text-white shadow-2xs font-extrabold"
@@ -731,6 +756,61 @@ export function PollBlockView({
 
 
 
+                    {/* Poll Theme & Border Color Palette */}
+                    <div className="pt-2 border-t border-border">
+                      <label className="block text-xs font-bold text-navy mb-1.5">
+                        Poll Theme &amp; Border Color
+                      </label>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {[
+                          { name: "Amber Orange", hex: "#FEA611" },
+                          { name: "Royal Blue", hex: "#2563EB" },
+                          { name: "Emerald Green", hex: "#10B981" },
+                          { name: "Purple / Violet", hex: "#8B5CF6" },
+                          { name: "Rose Crimson", hex: "#F43F5E" },
+                          { name: "Slate / Navy", hex: "#1E293B" },
+                          { name: "Teal Cyan", hex: "#0D9488" },
+                          { name: "Sunset Coral", hex: "#EA580C" },
+                        ].map((c) => (
+                          <button
+                            key={c.hex}
+                            type="button"
+                            onClick={() => setModalThemeColor(c.hex)}
+                            className={`h-7 w-7 rounded-lg transition-transform flex items-center justify-center shadow-xs ${
+                              modalThemeColor.toLowerCase() === c.hex.toLowerCase()
+                                ? "ring-2 ring-offset-2 ring-slate-900 scale-110"
+                                : "hover:scale-105"
+                            }`}
+                            style={{ backgroundColor: c.hex }}
+                            title={c.name}
+                          >
+                            {modalThemeColor.toLowerCase() === c.hex.toLowerCase() && (
+                              <Check className="h-3.5 w-3.5 text-white drop-shadow-md" />
+                            )}
+                          </button>
+                        ))}
+
+                        {/* Custom Color Input */}
+                        <div className="flex items-center gap-1.5 ml-1 pl-2 border-l border-slate-200">
+                          <input
+                            type="color"
+                            value={modalThemeColor}
+                            onChange={(e) => setModalThemeColor(e.target.value)}
+                            className="h-7 w-7 cursor-pointer rounded-lg border border-slate-200 p-0 bg-transparent"
+                            title="Choose custom color"
+                          />
+                          <input
+                            type="text"
+                            value={modalThemeColor}
+                            onChange={(e) => setModalThemeColor(e.target.value)}
+                            placeholder="#FEA611"
+                            maxLength={7}
+                            className="w-20 h-7 rounded-lg border border-border px-2 text-[11px] font-mono text-navy font-bold uppercase focus:border-brand focus:outline-none"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
                     {/* Alignment & Layout Presets */}
                     <div className="pt-2 border-t border-border">
                       <label className="block text-xs font-bold text-navy mb-1.5">
@@ -741,7 +821,14 @@ export function PollBlockView({
                           <button
                             key={l.key}
                             type="button"
-                            onClick={() => setModalAlign(l.key)}
+                            onClick={() => {
+                              setModalAlign(l.key);
+                              if ((l.key === "left" || l.key === "right") && (!modalWidth || modalWidth === "100%")) {
+                                setModalWidth("45%");
+                              } else if (l.key === "wide") {
+                                setModalWidth("100%");
+                              }
+                            }}
                             className={`py-2 px-2.5 rounded-xl border text-xs font-bold transition flex items-center justify-center gap-1.5 ${
                               modalAlign === l.key
                                 ? "border-brand bg-brand/15 text-navy shadow-2xs"
@@ -750,6 +837,34 @@ export function PollBlockView({
                           >
                             <l.icon className="h-3.5 w-3.5" />
                             <span>{l.label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Width / Size Presets */}
+                    <div className="pt-2 border-t border-border">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="block text-xs font-bold text-navy">
+                          Poll Width / Scale
+                        </label>
+                        <span className="text-[11px] font-mono text-slate-500 font-bold">
+                          {modalWidth}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-6 gap-2">
+                        {sizePresets.map((pct) => (
+                          <button
+                            key={pct}
+                            type="button"
+                            onClick={() => setModalWidth(pct)}
+                            className={`py-1.5 rounded-lg border text-xs font-bold font-mono transition ${
+                              modalWidth === pct
+                                ? "border-brand bg-brand text-navy shadow-2xs"
+                                : "border-border bg-white text-slate-600 hover:bg-slate-50"
+                            }`}
+                          >
+                            {pct}
                           </button>
                         ))}
                       </div>

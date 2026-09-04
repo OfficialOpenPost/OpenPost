@@ -11,6 +11,7 @@ interface PollWidgetProps {
     description?: string;
     totalVotes: number;
     options: Array<{ id: string; label: string; votes: number }>;
+    width?: string;
   };
   description?: string;
   align?: string;
@@ -20,12 +21,27 @@ interface PollWidgetProps {
   color?: string;
 }
 
+function getContrastTextColor(hexColor: string): string {
+  if (!hexColor) return "#0F172A";
+  const cleanHex = hexColor.replace("#", "");
+  const fullHex = cleanHex.length === 3 ? cleanHex.split("").map((c) => c + c).join("") : cleanHex;
+  const num = parseInt(fullHex, 16);
+  if (isNaN(num)) return "#0F172A";
+  const r = (num >> 16) & 255;
+  const g = (num >> 8) & 255;
+  const b = num & 255;
+  const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+  return brightness > 155 ? "#0F172A" : "#FFFFFF";
+}
+
 export function PollWidget({
   poll,
   description,
   align,
   layout,
   width,
+  themeColor,
+  color,
 }: PollWidgetProps) {
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [hasVoted, setHasVoted] = useState(false);
@@ -36,7 +52,8 @@ export function PollWidget({
 
   const effectiveDesc = description || poll.description;
   const effectiveLayout = layout || align || "center";
-  const activeColor = "#FEA611";
+  const activeColor = themeColor || color || (poll as any).themeColor || (poll as any).color || "#FEA611";
+  const textColor = getContrastTextColor(activeColor);
 
   // Check if voter previously voted
   useEffect(() => {
@@ -54,20 +71,23 @@ export function PollWidget({
   const isWide = effectiveLayout === "wide";
   const isCenter = !isLeft && !isRight && !isWide;
 
-  let alignCls = "block my-8 clear-both mx-auto";
-  if (isLeft) alignCls = "float-none sm:float-left mr-0 sm:mr-8 mb-4 clear-none inline-block";
-  if (isRight) alignCls = "float-none sm:float-right ml-0 sm:ml-8 mb-4 clear-none inline-block";
-  if (isWide) alignCls = "block w-full my-8 clear-both";
-  if (isCenter) alignCls = "block my-8 clear-both mx-auto";
+  let alignCls = "openpost-poll-card w-full my-6 sm:my-8 clear-both mx-auto block max-w-full sm:max-w-2xl";
+  if (isLeft) alignCls = "openpost-poll-card w-full float-none sm:float-left mr-0 sm:mr-6 md:mr-7 lg:mr-8 ml-0 mb-4 sm:mb-6 clear-both sm:clear-none inline-block";
+  if (isRight) alignCls = "openpost-poll-card w-full float-none sm:float-right ml-0 sm:ml-6 md:ml-7 lg:ml-8 mr-0 mb-4 sm:mb-6 clear-both sm:clear-none inline-block";
+  if (isWide) alignCls = "openpost-poll-card w-full my-6 sm:my-8 clear-both block";
+  if (isCenter) alignCls = "openpost-poll-card w-full my-6 sm:my-8 clear-both mx-auto block max-w-full sm:max-w-2xl";
+
+  const defaultWidth = isLeft || isRight ? "45%" : "100%";
+  const effectiveWidth = width || (poll as any).width || defaultWidth;
 
   const cardStyle: React.CSSProperties = {
-    width: (isLeft || isRight)
-      ? (width === "100%" || !width ? "48%" : width)
-      : isWide
-      ? "100%"
-      : width || "100%",
+    width: effectiveWidth,
     maxWidth: "100%",
-    border: "2px solid #FEA611",
+    boxSizing: "border-box",
+    border: `2px solid ${activeColor}`,
+    borderWidth: "2px",
+    borderStyle: "solid",
+    borderColor: activeColor,
   };
 
   const handleVote = async () => {
@@ -102,16 +122,18 @@ export function PollWidget({
 
   return (
     <div
+      data-poll-block="true"
+      data-poll-align={effectiveLayout}
       className={`rounded-none bg-white p-6 shadow-xs ${alignCls}`}
       style={cardStyle}
     >
       <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-200/70">
         <div className="flex items-center gap-2">
           <div
-            className="flex h-6 w-6 items-center justify-center rounded-none text-navy font-bold shadow-2xs"
-            style={{ backgroundColor: activeColor }}
+            className="flex h-6 w-6 items-center justify-center rounded-none font-bold shadow-2xs"
+            style={{ backgroundColor: activeColor, color: textColor }}
           >
-            <BarChart2 className="h-3.5 w-3.5 text-navy" />
+            <BarChart2 className="h-3.5 w-3.5" style={{ color: textColor }} />
           </div>
           <span className="text-xs font-black uppercase tracking-wider text-navy">Interactive Poll</span>
         </div>
@@ -197,10 +219,10 @@ export function PollWidget({
             type="button"
             onClick={handleVote}
             disabled={!selectedOption || loading}
-            className="inline-flex items-center gap-1.5 rounded-none px-4 py-1.5 text-xs font-bold text-navy transition disabled:opacity-50 shadow-xs hover:brightness-95"
-            style={{ backgroundColor: activeColor }}
+            className="inline-flex items-center gap-1.5 rounded-none px-4 py-1.5 text-xs font-bold transition disabled:opacity-50 shadow-xs hover:brightness-95"
+            style={{ backgroundColor: activeColor, color: textColor }}
           >
-            {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+            {loading ? <Loader2 className="h-3 w-3 animate-spin" style={{ color: textColor }} /> : null}
             Submit Vote
           </button>
         ) : (

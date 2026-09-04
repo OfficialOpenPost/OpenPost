@@ -71,14 +71,98 @@
 
 /* Mobile responsive fallback */
 @media (max-width: 640px) {
+  .openpost-floating-image-node,
   .openpost-floating-image-node[data-float="left"],
-  .openpost-floating-image-node[data-float="right"] {
+  .openpost-floating-image-node[data-float="right"],
+  .openpost-poll-node,
+  .openpost-poll-block,
+  .image-align-left,
+  .image-align-right {
     float: none !important;
     width: 100% !important;
     max-width: 100% !important;
-    margin: 1rem 0 !important;
+    margin: 1.25rem auto !important;
     clear: both !important;
+    display: block !important;
+    text-align: center !important;
   }
+}
+
+/* Tablet responsive fallback & sizing */
+@media (min-width: 641px) and (max-width: 1024px) {
+  .openpost-floating-image-node[data-float="left"] {
+    max-width: 38% !important;
+    margin-right: 1.25rem !important;
+    margin-bottom: 0.75rem !important;
+  }
+  .openpost-floating-image-node[data-float="right"] {
+    max-width: 38% !important;
+    margin-left: 1.25rem !important;
+    margin-bottom: 0.75rem !important;
+  }
+  .openpost-poll-node,
+  .openpost-poll-block,
+  .openpost-poll-card {
+    max-width: 100% !important;
+  }
+}
+
+/* Mobile Preview mode container overrides */
+.preview-mobile .openpost-floating-image-node,
+.preview-mobile .openpost-floating-image-node[data-float="left"],
+.preview-mobile .openpost-floating-image-node[data-float="right"],
+.preview-mobile .openpost-poll-node,
+.preview-mobile .openpost-poll-block,
+.preview-mobile .image-align-left,
+.preview-mobile .image-align-right,
+[data-preview-viewport="mobile"] .openpost-floating-image-node,
+[data-preview-viewport="mobile"] .openpost-floating-image-node[data-float="left"],
+[data-preview-viewport="mobile"] .openpost-floating-image-node[data-float="right"],
+[data-preview-viewport="mobile"] .openpost-poll-node,
+[data-preview-viewport="mobile"] .openpost-poll-block,
+[data-preview-viewport="mobile"] .image-align-left,
+[data-preview-viewport="mobile"] .image-align-right {
+  float: none !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  margin: 1.25rem auto !important;
+  clear: both !important;
+  display: block !important;
+  text-align: center !important;
+}
+
+/* Tablet Preview mode container overrides */
+.preview-tablet .openpost-floating-image-node[data-float="left"],
+[data-preview-viewport="tablet"] .openpost-floating-image-node[data-float="left"] {
+  float: left !important;
+  clear: none !important;
+  width: 38% !important;
+  max-width: 290px !important;
+  margin-right: 1.25rem !important;
+  margin-bottom: 0.75rem !important;
+  margin-left: 0 !important;
+  display: block !important;
+}
+
+.preview-tablet .openpost-floating-image-node[data-float="right"],
+[data-preview-viewport="tablet"] .openpost-floating-image-node[data-float="right"] {
+  float: right !important;
+  clear: none !important;
+  width: 38% !important;
+  max-width: 290px !important;
+  margin-left: 1.25rem !important;
+  margin-bottom: 0.75rem !important;
+  margin-right: 0 !important;
+  display: block !important;
+}
+
+.preview-tablet .openpost-poll-node,
+.preview-tablet .openpost-poll-block,
+.preview-tablet .openpost-poll-card,
+[data-preview-viewport="tablet"] .openpost-poll-node,
+[data-preview-viewport="tablet"] .openpost-poll-block,
+[data-preview-viewport="tablet"] .openpost-poll-card {
+  max-width: 40% !important;
 }
 
 /* Move line drop indicator matching dragged image width */

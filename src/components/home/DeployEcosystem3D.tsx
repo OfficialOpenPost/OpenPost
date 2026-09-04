@@ -25,7 +25,7 @@ const cliCommands = [
     desc: "Scaffold a Next.js 15 blog connected directly to your OpenPost CMS",
     cmd: "npx openpost-cli init my-blog",
     output: [
-      { type: "info", text: "⚡ openpost-cli v0.2.3" },
+      { type: "info", text: "⚡ openpost-cli v0.2.4" },
       { type: "step", text: "✔ Connecting to CMS studio..." },
       { type: "step", text: "✔ Exchanging session token (op_live_...)" },
       { type: "step", text: "✔ Downloading Next.js 15 blog template" },
@@ -149,7 +149,7 @@ export function DeployEcosystem3D() {
                   <div className="h-3 w-3 rounded-full bg-[#FEA611]" />
                   <div className="h-3 w-3 rounded-full bg-emerald-500" />
                   <span className="ml-2 font-mono text-[11px] text-slate-400">
-                    terminal — openpost-cli v0.2.3
+                    terminal — openpost-cli v0.2.4
                   </span>
                 </div>
 

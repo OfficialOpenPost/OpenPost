@@ -6,6 +6,8 @@ import { Copy, Check, Download as DownloadIcon, BarChart2, ShieldCheck, Loader2,
 
 interface SharedRenderProps {
   content: any;
+  viewport?: "desktop" | "tablet" | "mobile" | "wide";
+  isMobile?: boolean;
 }
 
 function renderInline(content: any[]): React.ReactNode[] {
@@ -46,7 +48,20 @@ function renderInlineText(content: any[]): string {
   return content.map((c: any) => c.text ?? (c.content ? renderInlineText(c.content) : "")).join("");
 }
 
-function SharedPollCard({ node }: { node: any }) {
+function getContrastTextColor(hexColor: string): string {
+  if (!hexColor) return "#0F172A";
+  const cleanHex = hexColor.replace("#", "");
+  const fullHex = cleanHex.length === 3 ? cleanHex.split("").map((c) => c + c).join("") : cleanHex;
+  const num = parseInt(fullHex, 16);
+  if (isNaN(num)) return "#0F172A";
+  const r = (num >> 16) & 255;
+  const g = (num >> 8) & 255;
+  const b = num & 255;
+  const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+  return brightness > 155 ? "#0F172A" : "#FFFFFF";
+}
+
+function SharedPollCard({ node, isMobileView }: { node: any; isMobileView?: boolean }) {
   const layout = node.attrs?.layout || node.attrs?.align || "center";
   const desc = node.attrs?.description || "";
   const pollId = node.attrs?.pollId || node.attrs?.id;
@@ -135,11 +150,17 @@ function SharedPollCard({ node }: { node: any }) {
   const isRight = layout === "right";
   const isWide = layout === "wide";
 
-  // Responsive alignment: on mobile always 100% full width; on desktop (sm:) float left/right at 48% or center
-  let alignCls = "w-full my-6 sm:my-8 clear-both mx-auto";
-  if (isLeft) alignCls = "w-full sm:w-[48%] sm:float-left sm:mr-8 mb-6 clear-both sm:clear-none";
-  if (isRight) alignCls = "w-full sm:w-[48%] sm:float-right sm:ml-8 mb-6 clear-both sm:clear-none";
-  if (isWide) alignCls = "w-full my-6 sm:my-8 clear-both";
+  // Responsive alignment: in mobile view always 100% full width & centered; on tablet/desktop float left/right with scaled widths
+  let alignCls = "openpost-poll-card w-full my-6 sm:my-8 clear-both mx-auto max-w-full sm:max-w-2xl";
+  if (isMobileView) {
+    alignCls = "openpost-poll-card w-full my-6 clear-both mx-auto block";
+  } else if (isLeft) {
+    alignCls = "openpost-poll-card block sm:inline-block sm:float-left clear-both sm:clear-none mx-auto sm:mx-0 ml-0 mr-0 sm:mr-6 md:mr-7 lg:mr-8 mb-4 sm:mb-6";
+  } else if (isRight) {
+    alignCls = "openpost-poll-card block sm:inline-block sm:float-right clear-both sm:clear-none mx-auto sm:mx-0 mr-0 ml-0 sm:ml-6 md:ml-7 lg:ml-8 mb-4 sm:mb-6";
+  } else if (isWide) {
+    alignCls = "openpost-poll-card w-full my-6 sm:my-8 clear-both";
+  }
 
   const handleVote = async () => {
     if (!selectedOption || loading || hasVoted) return;
@@ -173,17 +194,34 @@ function SharedPollCard({ node }: { node: any }) {
     setLoading(false);
   };
 
+  const themeColor = node.attrs?.themeColor || node.attrs?.color || "#FEA611";
+  const textColor = getContrastTextColor(themeColor);
+  const customWidth = node.attrs?.width;
+  const defaultWidth = isLeft || isRight ? "45%" : "100%";
+  const effectiveWidth = isMobileView ? "100%" : (customWidth || defaultWidth);
+
   return (
     <div
-      className={"rounded-none bg-white p-4 sm:p-6 shadow-xs border-2 border-[#FEA611] max-w-full " + alignCls}
+      data-poll-block="true"
+      data-poll-align={layout}
+      className={"rounded-none bg-white p-4 sm:p-6 shadow-xs max-w-full " + alignCls}
+      style={{
+        width: effectiveWidth,
+        maxWidth: "100%",
+        boxSizing: "border-box",
+        border: `2px solid ${themeColor}`,
+        borderWidth: "2px",
+        borderStyle: "solid",
+        borderColor: themeColor,
+      }}
     >
       <div className="flex flex-wrap items-center justify-between gap-2 mb-3 pb-2.5 border-b border-slate-200/70">
         <div className="flex items-center gap-2">
           <div
-            className="flex h-6 w-6 items-center justify-center rounded-none text-navy font-bold shadow-2xs shrink-0"
-            style={{ backgroundColor: "#FEA611" }}
+            className="flex h-6 w-6 items-center justify-center rounded-none font-bold shadow-2xs shrink-0"
+            style={{ backgroundColor: themeColor, color: textColor }}
           >
-            <BarChart2 className="h-3.5 w-3.5 text-navy" />
+            <BarChart2 className="h-3.5 w-3.5" style={{ color: textColor }} />
           </div>
           <span className="text-xs font-black uppercase tracking-wider text-navy">
             Interactive Poll
@@ -216,12 +254,13 @@ function SharedPollCard({ node }: { node: any }) {
               className={"relative overflow-hidden rounded-none border px-3.5 py-3 transition cursor-pointer select-none " + (
                 hasVoted
                   ? isSelected
-                    ? "border-[#FEA611] bg-amber-50/25 ring-1 ring-[#FEA611]/50"
+                    ? "bg-slate-50/50 ring-1"
                     : "border-slate-200 bg-white"
                   : isSelected
-                  ? "border-[#FEA611] bg-amber-50/15 shadow-xs"
+                  ? "bg-slate-50/50 shadow-xs"
                   : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/50"
               )}
+              style={isSelected ? { borderColor: themeColor } : undefined}
             >
               {/* Animated Progress Bar */}
               {hasVoted && (
@@ -229,7 +268,7 @@ function SharedPollCard({ node }: { node: any }) {
                   className="absolute inset-y-0 left-0 transition-all duration-700 ease-out pointer-events-none"
                   style={{
                     width: percentage + "%",
-                    backgroundColor: isSelected ? "#FEA611" : "#CBD5E1",
+                    backgroundColor: isSelected ? themeColor : "#CBD5E1",
                     opacity: isSelected ? 0.35 : 0.25,
                   }}
                 />
@@ -238,19 +277,22 @@ function SharedPollCard({ node }: { node: any }) {
               <div className="relative flex items-center justify-between z-10 gap-2 sm:gap-3">
                 <div className="flex items-center gap-2 sm:gap-2.5 min-w-0 flex-1">
                   {!hasVoted ? (
-                    <div className={"h-4 w-4 shrink-0 border flex items-center justify-center rounded-none transition " + (
-                      isSelected ? "border-[#FEA611] bg-[#FEA611]" : "border-slate-300 bg-white"
-                    )}>
+                    <div
+                      className={"h-4 w-4 shrink-0 border flex items-center justify-center rounded-none transition " + (
+                        isSelected ? "" : "border-slate-300 bg-white"
+                      )}
+                      style={isSelected ? { borderColor: themeColor, backgroundColor: themeColor } : undefined}
+                    >
                       {isSelected && (
-                        <div className="h-1.5 w-1.5 bg-white" />
+                        <div className="h-1.5 w-1.5" style={{ backgroundColor: textColor }} />
                       )}
                     </div>
                   ) : isSelected ? (
                     <div
-                      className="h-4 w-4 shrink-0 flex items-center justify-center text-navy font-black text-[10px]"
-                      style={{ backgroundColor: "#FEA611" }}
+                      className="h-4 w-4 shrink-0 flex items-center justify-center font-black text-[10px]"
+                      style={{ backgroundColor: themeColor, color: textColor }}
                     >
-                      <Check className="h-3 w-3 text-navy stroke-[3]" />
+                      <Check className="h-3 w-3 stroke-[3]" style={{ color: textColor }} />
                     </div>
                   ) : (
                     <div className="h-4 w-4 shrink-0 border border-slate-300 bg-slate-100" />
@@ -264,8 +306,8 @@ function SharedPollCard({ node }: { node: any }) {
 
                   {hasVoted && isSelected && (
                     <span
-                      className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[9px] sm:text-[10px] font-black uppercase tracking-wider text-navy shrink-0 shadow-2xs"
-                      style={{ backgroundColor: "#FEA611" }}
+                      className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[9px] sm:text-[10px] font-black uppercase tracking-wider shrink-0 shadow-2xs"
+                      style={{ backgroundColor: themeColor, color: textColor }}
                     >
                       Your Vote
                     </span>
@@ -294,10 +336,10 @@ function SharedPollCard({ node }: { node: any }) {
             type="button"
             onClick={handleVote}
             disabled={!selectedOption || loading}
-            className="inline-flex items-center justify-center gap-1.5 rounded-none px-4 py-2 text-xs font-bold text-navy transition disabled:opacity-50 shadow-xs hover:brightness-95 active:scale-98 w-full sm:w-auto"
-            style={{ backgroundColor: "#FEA611" }}
+            className="inline-flex items-center justify-center gap-1.5 rounded-none px-4 py-2 text-xs font-bold transition disabled:opacity-50 shadow-xs hover:brightness-95 active:scale-98 w-full sm:w-auto"
+            style={{ backgroundColor: themeColor, color: textColor }}
           >
-            {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+            {loading ? <Loader2 className="h-3 w-3 animate-spin" style={{ color: textColor }} /> : null}
             Submit Vote
           </button>
         ) : (
@@ -311,8 +353,10 @@ function SharedPollCard({ node }: { node: any }) {
 }
 
 // Shared between CMS preview and public frontend — guarantees complete visual and layout parity
-export function SharedRender({ content }: SharedRenderProps) {
+export function SharedRender({ content, viewport, isMobile }: SharedRenderProps) {
   if (!content || !content.content) return <p className="text-sm text-text-tertiary">No content</p>;
+
+  const isMobileView = viewport === "mobile" || Boolean(isMobile);
 
   const faqNodes = content.content.filter((n: any) => n.type === "faq");
   const faqJsonLd = faqNodes.length
@@ -327,7 +371,7 @@ export function SharedRender({ content }: SharedRenderProps) {
     : null;
 
   return (
-    <div className="prose prose-slate max-w-none text-navy leading-relaxed prose-headings:text-navy prose-a:text-brand prose-blockquote:border-brand prose-code:bg-navy prose-code:text-brand">
+    <div className={`prose prose-slate max-w-none text-navy leading-relaxed prose-headings:text-navy prose-a:text-brand prose-blockquote:border-brand prose-code:bg-navy prose-code:text-brand ${isMobileView ? "preview-mobile" : ""}`} data-preview-viewport={viewport}>
       {content.content.map((node: any, i: number) => {
         switch (node.type) {
           case "paragraph": {
@@ -357,7 +401,7 @@ export function SharedRender({ content }: SharedRenderProps) {
             if (lvl === 6) return <h6 key={i} className={`${sizeCls} ${alignCls}`}>{kids}</h6>;
             return <h2 key={i} className={`${sizeCls} ${alignCls}`}>{kids}</h2>;
           }
-                    case "image": {
+          case "image": {
             const {
               src = "",
               alt = "",
@@ -383,12 +427,27 @@ export function SharedRender({ content }: SharedRenderProps) {
             const isWide = layout === "wide";
             const isInline = layout === "inline";
 
-            // Float container CSS: On mobile ALWAYS centered block; on desktop (sm:) float left/right
-            let floatClass = "w-full my-6 sm:my-8 clear-both mx-auto text-center flex flex-col items-center";
-            if (isLeft) floatClass = "w-full sm:w-[48%] block sm:inline-block sm:float-left clear-both sm:clear-none mx-auto sm:mx-0 sm:mr-6 mb-6 text-center sm:text-left flex flex-col items-center sm:items-start";
-            if (isRight) floatClass = "w-full sm:w-[48%] block sm:inline-block sm:float-right clear-both sm:clear-none mx-auto sm:mx-0 sm:ml-6 mb-6 text-center sm:text-right flex flex-col items-center sm:items-end";
-            if (isWide) floatClass = "w-full my-6 sm:my-8 clear-both mx-auto text-center flex flex-col items-center";
-            if (isInline) floatClass = "w-full sm:w-auto block sm:inline-block clear-both sm:clear-none align-middle my-4 sm:my-2 mx-auto sm:mx-2 text-center";
+            // Float container CSS: In mobile preview ALWAYS centered block (full width); on tablet/desktop float left/right with matched proportions
+            let floatClass = "w-full my-6 sm:my-8 clear-both mx-auto text-center flex flex-col items-center max-w-full sm:max-w-2xl";
+            if (isMobileView) {
+              floatClass = "w-full my-6 clear-both mx-auto text-center flex flex-col items-center block";
+            } else if (isLeft) {
+              floatClass = "w-full sm:w-[45%] md:w-[45%] lg:w-[48%] sm:max-w-[360px] lg:max-w-none block sm:inline-block sm:float-left clear-both sm:clear-none mx-auto sm:mx-0 ml-0 mr-0 sm:mr-6 md:mr-7 lg:mr-8 mb-4 sm:mb-6 text-center sm:text-left flex flex-col items-center sm:items-start";
+            } else if (isRight) {
+              floatClass = "w-full sm:w-[45%] md:w-[45%] lg:w-[48%] sm:max-w-[360px] lg:max-w-none block sm:inline-block sm:float-right clear-both sm:clear-none mx-auto sm:mx-0 mr-0 ml-0 sm:ml-6 md:ml-7 lg:ml-8 mb-4 sm:mb-6 text-center sm:text-right flex flex-col items-center sm:items-end";
+            } else if (isWide) {
+              floatClass = "w-full my-6 sm:my-8 clear-both mx-auto text-center flex flex-col items-center";
+            } else if (isInline) {
+              floatClass = "w-full sm:w-auto block sm:inline-block clear-both sm:clear-none align-middle my-4 sm:my-2 mx-auto sm:mx-2 text-center";
+            }
+
+            const effectiveCaptionAlign = isMobileView
+              ? "text-center"
+              : isLeft
+              ? "text-left"
+              : isRight
+              ? "text-right"
+              : `text-center sm:text-${captionAlign}`;
 
             const shadowMap: Record<string, string> = {
               none: "shadow-none",
@@ -405,7 +464,9 @@ export function SharedRender({ content }: SharedRenderProps) {
                 alt={isDecorative ? "" : alt || ""}
                 title={title || undefined}
                 loading="lazy"
-                className={`block max-w-full h-auto object-contain mx-auto ${shadowMap[shadow] || "shadow-xs"} transition-all`}
+                className={`block max-w-full w-full h-auto object-contain ${
+                  isLeft ? "mr-auto ml-0" : isRight ? "ml-auto mr-0" : "mx-auto"
+                } ${shadowMap[shadow] || "shadow-xs"} transition-all`}
                 style={{
                   borderRadius: `${borderRadius}px`,
                   borderWidth: borderWidth ? `${borderWidth}px` : undefined,
@@ -418,13 +479,13 @@ export function SharedRender({ content }: SharedRenderProps) {
             );
 
             return (
-              <figure key={i} className={`floating-image-render max-w-full ${floatClass}`}>
+              <figure key={i} className={`floating-image-render max-w-full ${floatClass}`} data-float={float} data-layout={layout}>
                 {link ? (
                   <a
                     href={link}
                     target={openLinkInNewTab ? "_blank" : undefined}
                     rel="noopener noreferrer"
-                    className="block mx-auto max-w-full"
+                    className={`block w-full ${isLeft ? "mr-auto ml-0" : isRight ? "ml-auto mr-0" : "mx-auto"} max-w-full`}
                   >
                     {imageElement}
                   </a>
@@ -433,7 +494,7 @@ export function SharedRender({ content }: SharedRenderProps) {
                 )}
                 {caption && (
                   <figcaption
-                    className={`mt-2 text-xs text-text-tertiary text-center sm:text-${captionAlign} max-w-full`}
+                    className={`mt-2 text-xs text-text-tertiary max-w-full mx-auto ${effectiveCaptionAlign}`}
                   >
                     {caption}
                   </figcaption>
@@ -490,7 +551,7 @@ export function SharedRender({ content }: SharedRenderProps) {
           }
           case "poll":
           case "pollBlock": {
-            return <SharedPollCard key={i} node={node} />;
+            return <SharedPollCard key={i} node={node} isMobileView={isMobileView} />;
           }
           case "gallery": {
             const images = node.attrs?.images ?? node.attrs?.items ?? [];

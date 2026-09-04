@@ -18,7 +18,6 @@ export function Header() {
 
   const navLinks = [
     { href: "/", label: "Home" },
-    { href: "/blog", label: "Articles" },
   ];
 
   return (

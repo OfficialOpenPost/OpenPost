@@ -97,18 +97,21 @@ export function ImageCardView({
     { key: "wide", label: "Full Width", icon: Maximize2 },
   ] as const;
 
-  const sizePresets = ["25%", "50%", "75%", "100%"];
+  const sizePresets = ["35%", "45%", "50%", "65%", "75%", "100%"];
 
   // Drag-to-resize from Right edge/corners
   const onResizeRight = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     const startX = e.clientX;
-    const currentNum = parseInt(String(width).replace("%", "")) || 100;
+    const editorEl = (e.currentTarget as HTMLElement).closest(".ProseMirror") || (e.currentTarget as HTMLElement).closest(".tiptap") || (document.querySelector(".ProseMirror") as HTMLElement | null);
+    const parentW = editorEl ? editorEl.clientWidth : 750;
+    const currentNum = parseInt(String(width || (layout === "left" || layout === "right" ? "45" : "100")).replace("%", "")) || 50;
 
     const onMove = (ev: MouseEvent) => {
-      const deltaPercent = ((ev.clientX - startX) / (window.innerWidth * 0.45)) * 100;
-      const next = Math.min(100, Math.max(15, currentNum + deltaPercent));
+      ev.preventDefault();
+      const deltaPercent = ((ev.clientX - startX) / parentW) * 100;
+      const next = Math.min(100, Math.max(20, currentNum + deltaPercent));
       updateAttributes({ width: `${Math.round(next)}%` });
     };
 
@@ -126,11 +129,14 @@ export function ImageCardView({
     e.preventDefault();
     e.stopPropagation();
     const startX = e.clientX;
-    const currentNum = parseInt(String(width).replace("%", "")) || 100;
+    const editorEl = (e.currentTarget as HTMLElement).closest(".ProseMirror") || (e.currentTarget as HTMLElement).closest(".tiptap") || (document.querySelector(".ProseMirror") as HTMLElement | null);
+    const parentW = editorEl ? editorEl.clientWidth : 750;
+    const currentNum = parseInt(String(width || (layout === "left" || layout === "right" ? "45" : "100")).replace("%", "")) || 50;
 
     const onMove = (ev: MouseEvent) => {
-      const deltaPercent = ((startX - ev.clientX) / (window.innerWidth * 0.45)) * 100;
-      const next = Math.min(100, Math.max(15, currentNum + deltaPercent));
+      ev.preventDefault();
+      const deltaPercent = ((startX - ev.clientX) / parentW) * 100;
+      const next = Math.min(100, Math.max(20, currentNum + deltaPercent));
       updateAttributes({ width: `${Math.round(next)}%` });
     };
 
@@ -143,11 +149,21 @@ export function ImageCardView({
     window.addEventListener("mouseup", onUp);
   };
 
+  const handleLayoutSelect = (newLayout: "left" | "center" | "right" | "wide") => {
+    let newWidth = width;
+    if ((newLayout === "left" || newLayout === "right") && (!width || width === "100%")) {
+      newWidth = "45%";
+    } else if (newLayout === "wide") {
+      newWidth = "100%";
+    }
+    updateAttributes({ layout: newLayout, align: newLayout, width: newWidth });
+  };
+
   const wrapperClass =
     layout === "left"
-      ? "image-align-left float-left mr-8 mb-4 clear-none inline-block"
+      ? "image-align-left float-left mr-6 md:mr-7 lg:mr-8 ml-0 mb-4 clear-none inline-block"
       : layout === "right"
-      ? "image-align-right float-right ml-8 mb-4 clear-none inline-block"
+      ? "image-align-right float-right ml-6 md:ml-7 lg:ml-8 mr-0 mb-4 clear-none inline-block"
       : layout === "wide"
       ? "image-align-wide block w-full my-8 clear-both"
       : "image-align-center block w-full my-8 clear-both";
@@ -162,15 +178,20 @@ export function ImageCardView({
       ? "w-full mx-0"
       : "mx-auto"; // center
 
-  const currentWidthVal = width || "100%";
+  const defaultWidthVal = layout === "wide" ? "100%" : (layout === "left" || layout === "right" ? "45%" : "100%");
+  const currentWidthVal = width || defaultWidthVal;
   const widthStyle = { width: currentWidthVal, maxWidth: "100%" };
 
   return (
     <NodeViewWrapper
-      className={`my-4 ${wrapperClass} transition-all select-none`}
+      className={`openpost-image-card my-4 ${wrapperClass} transition-all select-none`}
+      style={widthStyle as any}
+      data-image-card="true"
+      data-float={layout}
+      data-layout={layout}
       data-drag-handle
     >
-      <div className={`relative group ${innerMarginCls}`} style={widthStyle as any}>
+      <div className={`relative group ${innerMarginCls} w-full`} style={{ width: "100%", maxWidth: "100%" }}>
         {/* Main Image Box */}
         <div
           className={`relative rounded-2xl border bg-white shadow-xs overflow-visible transition ${
@@ -245,9 +266,7 @@ export function ImageCardView({
                 <button
                   key={l.key}
                   type="button"
-                  onClick={() => {
-                    updateAttributes({ layout: l.key, align: l.key });
-                  }}
+                  onClick={() => handleLayoutSelect(l.key)}
                   title={l.label}
                   className={`flex h-7 items-center gap-1 rounded-full px-2.5 text-xs font-bold transition ${
                     layout === l.key

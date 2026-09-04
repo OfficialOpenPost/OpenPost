@@ -387,3 +387,248 @@ a, button {
     animation: none !important;
   }
 }
+
+/* ==========================================================================
+   Mobile Responsive & Mobile Preview Overrides for Floating Images & Polls
+   ========================================================================== */
+
+@media (max-width: 639px) {
+  figure.openpost-floating-image,
+  .prose figure.openpost-floating-image,
+  figure.openpost-floating-image[data-float="left"],
+  figure.openpost-floating-image[data-float="right"],
+  .prose figure.openpost-floating-image[data-float="left"],
+  .prose figure.openpost-floating-image[data-float="right"],
+  .floating-image-render,
+  .openpost-floating-image-node,
+  .openpost-floating-image-node[data-float="left"],
+  .openpost-floating-image-node[data-float="right"],
+  .openpost-image-card,
+  .openpost-poll-card,
+  .openpost-poll-node,
+  .openpost-poll-block,
+  [data-poll-block],
+  .image-align-left,
+  .image-align-right,
+  .image-align-center,
+  .image-align-wide {
+    float: none !important;
+    clear: both !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    margin-top: 1.25rem !important;
+    margin-bottom: 1.25rem !important;
+    display: block !important;
+    text-align: center !important;
+  }
+
+  figure.openpost-floating-image img,
+  .prose figure.openpost-floating-image img,
+  .floating-image-render img,
+  .openpost-floating-image-node img,
+  .openpost-image-card img {
+    margin-left: auto !important;
+    margin-right: auto !important;
+    display: block !important;
+    max-width: 100% !important;
+    height: auto !important;
+  }
+
+  figcaption,
+  .prose figcaption {
+    text-align: center !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+
+  .openpost-poll-card > div,
+  .openpost-poll-block > div,
+  .openpost-image-card > div,
+  .image-align-left > div,
+  .image-align-right > div {
+    margin-left: auto !important;
+    margin-right: auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+}
+
+.preview-mobile figure.openpost-floating-image,
+.preview-mobile .prose figure.openpost-floating-image,
+.preview-mobile figure.openpost-floating-image[data-float="left"],
+.preview-mobile figure.openpost-floating-image[data-float="right"],
+.preview-mobile .prose figure.openpost-floating-image[data-float="left"],
+.preview-mobile .prose figure.openpost-floating-image[data-float="right"],
+.preview-mobile .floating-image-render,
+.preview-mobile .openpost-floating-image-node,
+.preview-mobile .openpost-floating-image-node[data-float="left"],
+.preview-mobile .openpost-floating-image-node[data-float="right"],
+.preview-mobile .openpost-image-card,
+.preview-mobile .openpost-poll-card,
+.preview-mobile .openpost-poll-node,
+.preview-mobile .openpost-poll-block,
+.preview-mobile [data-poll-block],
+.preview-mobile .image-align-left,
+.preview-mobile .image-align-right,
+.preview-mobile .image-align-center,
+.preview-mobile .image-align-wide,
+[data-preview-viewport="mobile"] figure.openpost-floating-image,
+[data-preview-viewport="mobile"] .prose figure.openpost-floating-image,
+[data-preview-viewport="mobile"] figure.openpost-floating-image[data-float="left"],
+[data-preview-viewport="mobile"] figure.openpost-floating-image[data-float="right"],
+[data-preview-viewport="mobile"] .prose figure.openpost-floating-image[data-float="left"],
+[data-preview-viewport="mobile"] .prose figure.openpost-floating-image[data-float="right"],
+[data-preview-viewport="mobile"] .floating-image-render,
+[data-preview-viewport="mobile"] .openpost-floating-image-node,
+[data-preview-viewport="mobile"] .openpost-image-card,
+[data-preview-viewport="mobile"] .openpost-poll-card,
+[data-preview-viewport="mobile"] .openpost-poll-node,
+[data-preview-viewport="mobile"] .openpost-poll-block,
+[data-preview-viewport="mobile"] [data-poll-block],
+[data-preview-viewport="mobile"] .image-align-left,
+[data-preview-viewport="mobile"] .image-align-right,
+[data-preview-viewport="mobile"] .image-align-center,
+[data-preview-viewport="mobile"] .image-align-wide {
+  float: none !important;
+  clear: both !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  margin-top: 1.25rem !important;
+  margin-bottom: 1.25rem !important;
+  display: block !important;
+  text-align: center !important;
+}
+
+.preview-mobile figure.openpost-floating-image img,
+.preview-mobile .prose figure.openpost-floating-image img,
+.preview-mobile .floating-image-render img,
+.preview-mobile .openpost-floating-image-node img,
+.preview-mobile .openpost-image-card img,
+[data-preview-viewport="mobile"] figure.openpost-floating-image img,
+[data-preview-viewport="mobile"] .prose figure.openpost-floating-image img,
+[data-preview-viewport="mobile"] .floating-image-render img,
+[data-preview-viewport="mobile"] .openpost-floating-image-node img,
+[data-preview-viewport="mobile"] .openpost-image-card img {
+  margin-left: auto !important;
+  margin-right: auto !important;
+  display: block !important;
+  max-width: 100% !important;
+  height: auto !important;
+}
+
+.preview-mobile figcaption,
+.preview-mobile .prose figcaption,
+[data-preview-viewport="mobile"] figcaption,
+[data-preview-viewport="mobile"] .prose figcaption {
+  text-align: center !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+
+.preview-mobile .openpost-poll-card > div,
+.preview-mobile .openpost-poll-block > div,
+.preview-mobile .openpost-image-card > div,
+.preview-mobile .image-align-left > div,
+.preview-mobile .image-align-right > div,
+[data-preview-viewport="mobile"] .openpost-poll-card > div,
+[data-preview-viewport="mobile"] .openpost-poll-block > div,
+[data-preview-viewport="mobile"] .openpost-image-card > div,
+[data-preview-viewport="mobile"] .image-align-left > div,
+[data-preview-viewport="mobile"] .image-align-right > div {
+  margin-left: auto !important;
+  margin-right: auto !important;
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+/* Tablet Responsive overrides */
+@media (min-width: 640px) and (max-width: 1023px) {
+  figure.openpost-floating-image[data-float="left"],
+  .prose figure.openpost-floating-image[data-float="left"],
+  .openpost-floating-image-node[data-float="left"] {
+    float: left !important;
+    clear: none !important;
+    max-width: 38% !important;
+    margin-right: 1.25rem !important;
+    margin-bottom: 0.75rem !important;
+  }
+  figure.openpost-floating-image[data-float="right"],
+  .prose figure.openpost-floating-image[data-float="right"],
+  .openpost-floating-image-node[data-float="right"] {
+    float: right !important;
+    clear: none !important;
+    max-width: 38% !important;
+    margin-left: 1.25rem !important;
+    margin-bottom: 0.75rem !important;
+  }
+  .openpost-poll-card,
+  .openpost-poll-node,
+  .openpost-poll-block,
+  [data-poll-block] {
+    max-width: 100% !important;
+  }
+  .openpost-poll-card[data-poll-align="left"],
+  [data-poll-block][data-poll-align="left"] {
+    float: left !important;
+    clear: none !important;
+    max-width: 100% !important;
+    margin-right: 1.25rem !important;
+    margin-bottom: 0.75rem !important;
+  }
+  .openpost-poll-card[data-poll-align="right"],
+  [data-poll-block][data-poll-align="right"] {
+    float: right !important;
+    clear: none !important;
+    max-width: 100% !important;
+    margin-left: 1.25rem !important;
+    margin-bottom: 0.75rem !important;
+  }
+}
+
+/* Tablet Preview mode overrides */
+.preview-tablet figure.openpost-floating-image[data-float="left"],
+.preview-tablet .prose figure.openpost-floating-image[data-float="left"],
+.preview-tablet .openpost-floating-image-node[data-float="left"],
+[data-preview-viewport="tablet"] figure.openpost-floating-image[data-float="left"],
+[data-preview-viewport="tablet"] .prose figure.openpost-floating-image[data-float="left"],
+[data-preview-viewport="tablet"] .openpost-floating-image-node[data-float="left"] {
+  float: left !important;
+  clear: none !important;
+  width: 38% !important;
+  max-width: 290px !important;
+  margin-right: 1.25rem !important;
+  margin-bottom: 0.75rem !important;
+  margin-left: 0 !important;
+  display: block !important;
+}
+
+.preview-tablet figure.openpost-floating-image[data-float="right"],
+.preview-tablet .prose figure.openpost-floating-image[data-float="right"],
+.preview-tablet .openpost-floating-image-node[data-float="right"],
+[data-preview-viewport="tablet"] figure.openpost-floating-image[data-float="right"],
+[data-preview-viewport="tablet"] .prose figure.openpost-floating-image[data-float="right"],
+[data-preview-viewport="tablet"] .openpost-floating-image-node[data-float="right"] {
+  float: right !important;
+  clear: none !important;
+  width: 38% !important;
+  max-width: 290px !important;
+  margin-left: 1.25rem !important;
+  margin-bottom: 0.75rem !important;
+  margin-right: 0 !important;
+  display: block !important;
+}
+
+.preview-tablet .openpost-poll-card,
+.preview-tablet .openpost-poll-node,
+.preview-tablet .openpost-poll-block,
+.preview-tablet [data-poll-block],
+[data-preview-viewport="tablet"] .openpost-poll-card,
+[data-preview-viewport="tablet"] .openpost-poll-node,
+[data-preview-viewport="tablet"] .openpost-poll-block,
+[data-preview-viewport="tablet"] [data-poll-block] {
+  max-width: 100% !important;
+}

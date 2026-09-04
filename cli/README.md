@@ -1,11 +1,11 @@
-# openpost-cli v0.2.3 — Connect any frontend to OpenPost CMS
+# openpost-cli v0.2.4 — Connect any frontend to OpenPost CMS
 
 <p align="center"><img src="../public/logo.svg" width="64" height="64" alt="OpenPost Logo" /></p>
 
 Headless CMS connector for **OpenPost**. One command to link your Next.js (or any) frontend to your self-hosted OpenPost instance — no manual `.env` editing.
 
 **Package:** `openpost-cli` on npm → `npx openpost-cli` (single bin `openpost-cli` only, no `create-openpost` alias)  
-**Version:** `0.2.3` — see [CHANGELOG]  
+**Version:** `0.2.4` — see [CHANGELOG]  
 **Source:** `OfficialOpenPost/OpenPost` → `cli/`
 
 ---
@@ -52,7 +52,7 @@ cd my-blog && npm install && npm run dev
 
 ## Requirements
 
-- Node.js 18+ (`openpost-cli v0.2.0` checks `Node >=18`)
+- Node.js 18+ (`openpost-cli v0.2.4` checks `Node >=18`)
 - Running OpenPost CMS (`DATABASE_URL` + `R2_*` + `NEXT_PUBLIC_SUPABASE_URL` set, `supabase/migrations` 001→021 run, `npm run build` 67 pages)
 - Single bin `openpost-cli` — use `npx openpost-cli`, not `create-openpost`
 

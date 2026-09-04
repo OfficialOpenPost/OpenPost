@@ -254,7 +254,7 @@ export default async function BlogPostPage({
                 Recommended Stories
               </h3>
             </div>
-            <Link href="/blog" className="text-xs font-bold text-blue-600 hover:underline flex items-center gap-1">
+            <Link href="/" className="text-xs font-bold text-blue-600 hover:underline flex items-center gap-1">
               See all articles <ArrowRight className="h-3 w-3" />
             </Link>
           </div>

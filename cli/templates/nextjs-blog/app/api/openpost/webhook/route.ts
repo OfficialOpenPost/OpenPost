@@ -35,10 +35,9 @@ export async function POST(req: NextRequest) {
   const payload = JSON.parse(rawBody);
   // Revalidate based on event
   if (event.startsWith("blog.")) {
-    revalidatePath("/blog");
+    revalidatePath("/");
     if (payload.data?.slug) {
       revalidatePath(`/${payload.data.slug}`);
-      revalidatePath(`/blog/${payload.data.slug}`);
     }
   }
 

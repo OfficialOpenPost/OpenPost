@@ -33,7 +33,7 @@ export default async function AuthorProfilePage({
     <div className="w-full max-w-[1520px] 2xl:max-w-[1680px] mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-16 space-y-12">
       <div>
         <Link
-          href="/blog"
+          href="/"
           className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3.5 py-1.5 text-xs font-bold text-slate-600 hover:border-slate-300 hover:text-blue-600 transition shadow-2xs"
         >
           <ArrowLeft className="h-3.5 w-3.5" /> All Publications

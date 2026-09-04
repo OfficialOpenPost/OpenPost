@@ -36,7 +36,7 @@ export function Footer() {
             <div className="space-y-3">
               <h4 className="font-bold text-slate-200">Features</h4>
               <ul className="space-y-2 text-slate-400">
-                <li><Link href="/blog" className="hover:text-white transition">All Articles</Link></li>
+                <li><Link href="/" className="hover:text-white transition">All Articles</Link></li>
                 <li><Link href="/feed.xml" className="hover:text-white transition">RSS Feed</Link></li>
                 <li><Link href="/search" className="hover:text-white transition">Search Engine</Link></li>
               </ul>
@@ -56,7 +56,7 @@ export function Footer() {
             <div className="space-y-3">
               <h4 className="font-bold text-slate-200">Resources</h4>
               <ul className="space-y-2 text-slate-400">
-                <li><Link href="/blog" className="hover:text-white transition">Blog</Link></li>
+                <li><Link href="/" className="hover:text-white transition">Publications</Link></li>
                 <li><Link href="/feed.xml" className="hover:text-white transition">Newsletter</Link></li>
                 {OPENPOST_URL && (
                   <li>
@@ -73,7 +73,7 @@ export function Footer() {
               <h4 className="font-bold text-slate-200">About</h4>
               <ul className="space-y-2 text-slate-400">
                 <li><Link href="/" className="hover:text-white transition">Company</Link></li>
-                <li><Link href="/blog" className="hover:text-white transition">Careers</Link></li>
+                <li><Link href="/" className="hover:text-white transition">Careers</Link></li>
                 <li><Link href="/" className="hover:text-white transition">Privacy Policy</Link></li>
               </ul>
             </div>

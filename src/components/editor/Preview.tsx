@@ -73,7 +73,10 @@ export function Preview({
 
       <div className="mx-auto p-3 sm:p-6 md:p-8 transition-all duration-300">
         <div
-          className={`mx-auto bg-white rounded-2xl sm:rounded-3xl shadow-lg border border-slate-200 overflow-hidden w-full transition-all duration-300 ${widths[viewport]}`}
+          data-preview-viewport={viewport}
+          className={`mx-auto bg-white rounded-2xl sm:rounded-3xl shadow-lg border border-slate-200 overflow-hidden w-full transition-all duration-300 ${widths[viewport]} ${
+            viewport === "mobile" ? "preview-mobile" : ""
+          }`}
         >
           {/* Cover Image if available */}
           {coverImage && (
@@ -105,9 +108,9 @@ export function Preview({
               {title || "Untitled"}
             </h1>
 
-            <div className="tiptap prose prose-lg prose-navy max-w-none pt-4 border-t border-slate-100">
+            <div className={`tiptap prose prose-lg prose-navy max-w-none pt-4 border-t border-slate-100 ${viewport === "mobile" ? "preview-mobile" : ""}`} data-preview-viewport={viewport}>
               {json ? (
-                <SharedRender content={json} />
+                <SharedRender content={json} viewport={viewport} />
               ) : (
                 <div dangerouslySetInnerHTML={{ __html: html }} />
               )}

@@ -71,6 +71,7 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
 
   const [blogId, setBlogId] = useState<string | null>(effectiveId || null);
   const blogIdRef = useRef<string | null>(effectiveId || null);
+  const loadedBlogIdRef = useRef<string | null>(effectiveId || null);
   const isSavingRef = useRef<boolean>(false);
   const pendingSaveRef = useRef<boolean>(false);
 
@@ -131,6 +132,10 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
   // Load existing post if editing
   useEffect(() => {
     if (!effectiveId) return;
+    if (loadedBlogIdRef.current === effectiveId && !loadingInitial) {
+      return;
+    }
+    loadedBlogIdRef.current = effectiveId;
     setLoadingInitial(true);
     isInitialLoadRef.current = true;
     contentSyncedRef.current = false;
@@ -444,6 +449,7 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
         if (!currentBlogId && jsonRes.data.id) {
           const newId = jsonRes.data.id;
           blogIdRef.current = newId;
+          loadedBlogIdRef.current = newId;
           setBlogId(newId);
           window.history.replaceState({}, "", `/dashboard/editor?id=${newId}`);
         }
@@ -561,7 +567,12 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
           </span>
         </div>
 
-        <div className={`w-full ${previewWidthClass} bg-white rounded-2xl sm:rounded-3xl border border-slate-200/90 shadow-[0_4px_24px_rgba(0,0,0,0.06)] px-5 sm:px-14 py-8 sm:py-12 my-2 transition-all duration-300`}>
+        <div
+          data-preview-viewport={previewViewport}
+          className={`w-full ${previewWidthClass} bg-white rounded-2xl sm:rounded-3xl border border-slate-200/90 shadow-[0_4px_24px_rgba(0,0,0,0.06)] px-5 sm:px-14 py-8 sm:py-12 my-2 transition-all duration-300 ${
+            previewViewport === "mobile" ? "preview-mobile" : ""
+          }`}
+        >
           {/* Metadata Row */}
           <div className="flex flex-wrap items-center gap-3 text-xs mb-4">
             <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 border border-blue-200 px-3 py-1 font-bold text-blue-700">
@@ -587,9 +598,14 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
             </div>
           )}
           <style dangerouslySetInnerHTML={{ __html: EDITOR_STYLES }} />
-          <div className="tiptap prose prose-lg prose-navy max-w-none">
+          <div
+            className={`tiptap prose prose-lg prose-navy max-w-none ${
+              previewViewport === "mobile" ? "preview-mobile" : ""
+            }`}
+            data-preview-viewport={previewViewport}
+          >
             {editor ? (
-              <SharedRender content={editor.getJSON()} />
+              <SharedRender content={editor.getJSON()} viewport={previewViewport} />
             ) : (
               <div dangerouslySetInnerHTML={{ __html: html }} />
             )}
@@ -650,6 +666,7 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
           </span>
 
           <button
+            type="button"
             onClick={() => {
               if (editor) setHtml(editor.getHTML());
               setPreview(true);
@@ -661,6 +678,7 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
 
           {/* Save Draft Button */}
           <button
+            type="button"
             disabled={
               (isSavingRef.current || saveStatus === "saving") ||
               (!isDirty && status === "draft" && Boolean(blogIdRef.current)) ||
@@ -688,6 +706,7 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
           {status === "published" ? (
             /* Update Post Button (Visibly Gray & Disabled until user makes changes) */
             <button
+              type="button"
               disabled={(isSavingRef.current || saveStatus === "saving") || !isDirty}
               onClick={() => save("Updated post", "published", "update")}
               className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-1.5 text-xs font-bold transition ${
@@ -707,6 +726,7 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
           ) : (
             /* Publish / Schedule Button (Active for drafts and new articles) */
             <button
+              type="button"
               disabled={
                 (isSavingRef.current || saveStatus === "saving") ||
                 !Boolean(title.trim().length > 0 || (editor && !editor.isEmpty))

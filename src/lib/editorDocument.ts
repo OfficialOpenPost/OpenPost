@@ -145,7 +145,20 @@ export interface AccordionBlock {
 
 export interface PollBlock {
   type: "poll";
-  attrs: { pollId: string };
+  attrs: {
+    pollId: string;
+    question?: string;
+    description?: string;
+    options?: any[];
+    type?: string;
+    showResults?: string;
+    allowAnonymous?: boolean;
+    closesAt?: string | null;
+    align?: string;
+    layout?: string;
+    width?: string;
+    themeColor?: string;
+  };
 }
 
 export type InlineContent =
@@ -263,6 +276,27 @@ export function tiptapToEditorDocument(tiptap: any): EditorDocument {
             attrs: {
               layout: n.attrs?.layout || "grid",
               images: (n.attrs?.images || []).map((im: any) => ({ mediaId: im.mediaId || null, src: im.src || null, alt: im.alt || "", caption: im.caption || null })),
+            },
+          });
+          break;
+        }
+        case "poll":
+        case "pollBlock": {
+          blocks.push({
+            type: "poll",
+            attrs: {
+              pollId: n.attrs?.pollId || n.attrs?.id || "",
+              question: n.attrs?.question || "",
+              description: n.attrs?.description || "",
+              options: n.attrs?.options || [],
+              type: n.attrs?.type || "single",
+              showResults: n.attrs?.showResults || "always",
+              allowAnonymous: n.attrs?.allowAnonymous !== false,
+              closesAt: n.attrs?.closesAt || null,
+              align: n.attrs?.align || n.attrs?.layout || "center",
+              layout: n.attrs?.layout || n.attrs?.align || "center",
+              width: n.attrs?.width || "100%",
+              themeColor: n.attrs?.themeColor || n.attrs?.color || "#FEA611",
             },
           });
           break;
@@ -422,7 +456,9 @@ export function editorDocumentToHtml(doc: EditorDocument): string {
       }
       case "poll": {
         const p = b as PollBlock;
-        return `<div class="openpost-poll" data-poll-id="${esc(p.attrs.pollId)}"><!-- poll:${esc(p.attrs.pollId)} --></div>`;
+        const widthStyle = p.attrs?.width ? ` style="width:${esc(String(p.attrs.width))};max-width:100%"` : "";
+        const alignClass = `openpost-poll--${p.attrs?.align || p.attrs?.layout || "center"}`;
+        return `<div class="openpost-poll ${alignClass}" data-poll-id="${esc(p.attrs?.pollId || "")}"${widthStyle}><!-- poll:${esc(p.attrs?.pollId || "")} --></div>`;
       }
       default:
         return "";

@@ -35,6 +35,7 @@ const OPTIONS = [
           layout: "center",
           width: "100%",
           status: "open",
+          themeColor: "#FEA611",
         },
       }).run(),
   },

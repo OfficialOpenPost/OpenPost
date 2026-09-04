@@ -94,6 +94,7 @@ export function InsertBlockModal({
   const [pollAllowAnonymous, setPollAllowAnonymous] = useState(true);
   const [pollClosesAt, setPollClosesAt] = useState("");
   const [pollAlign, setPollAlign] = useState<"left" | "center" | "right" | "wide">("center");
+  const [pollThemeColor, setPollThemeColor] = useState("#FEA611");
   const [projectPolls, setProjectPolls] = useState<any[]>([]);
   const [loadingPolls, setLoadingPolls] = useState(false);
 
@@ -227,6 +228,7 @@ export function InsertBlockModal({
           layout: pollAlign,
           width: "100%",
           status: "open",
+          themeColor: pollThemeColor || "#FEA611",
         },
       })
       .run();
@@ -792,6 +794,61 @@ export function InsertBlockModal({
                   </div>
 
 
+
+                  {/* Poll Theme & Border Color Palette */}
+                  <div className="pt-2 border-t border-border">
+                    <label className="block text-xs font-bold text-navy mb-1.5">
+                      Poll Theme &amp; Border Color
+                    </label>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {[
+                        { name: "Amber Orange", hex: "#FEA611" },
+                        { name: "Royal Blue", hex: "#2563EB" },
+                        { name: "Emerald Green", hex: "#10B981" },
+                        { name: "Purple / Violet", hex: "#8B5CF6" },
+                        { name: "Rose Crimson", hex: "#F43F5E" },
+                        { name: "Slate / Navy", hex: "#1E293B" },
+                        { name: "Teal Cyan", hex: "#0D9488" },
+                        { name: "Sunset Coral", hex: "#EA580C" },
+                      ].map((c) => (
+                        <button
+                          key={c.hex}
+                          type="button"
+                          onClick={() => setPollThemeColor(c.hex)}
+                          className={`h-7 w-7 rounded-lg transition-transform flex items-center justify-center shadow-xs ${
+                            pollThemeColor.toLowerCase() === c.hex.toLowerCase()
+                              ? "ring-2 ring-offset-2 ring-slate-900 scale-110"
+                              : "hover:scale-105"
+                          }`}
+                          style={{ backgroundColor: c.hex }}
+                          title={c.name}
+                        >
+                          {pollThemeColor.toLowerCase() === c.hex.toLowerCase() && (
+                            <Check className="h-3.5 w-3.5 text-white drop-shadow-md" />
+                          )}
+                        </button>
+                      ))}
+
+                      {/* Custom Color Input */}
+                      <div className="flex items-center gap-1.5 ml-1 pl-2 border-l border-slate-200">
+                        <input
+                          type="color"
+                          value={pollThemeColor}
+                          onChange={(e) => setPollThemeColor(e.target.value)}
+                          className="h-7 w-7 cursor-pointer rounded-lg border border-slate-200 p-0 bg-transparent"
+                          title="Choose custom color"
+                        />
+                        <input
+                          type="text"
+                          value={pollThemeColor}
+                          onChange={(e) => setPollThemeColor(e.target.value)}
+                          placeholder="#FEA611"
+                          maxLength={7}
+                          className="w-20 h-7 rounded-lg border border-border px-2 text-[11px] font-mono text-navy font-bold uppercase focus:border-brand focus:outline-none"
+                        />
+                      </div>
+                    </div>
+                  </div>
 
                   <div className="pt-2 border-t border-border">
                     <label className="block text-xs font-bold text-navy mb-1.5">

@@ -34,7 +34,7 @@ export default async function CategoryArchivePage({
       {/* Back link */}
       <div>
         <Link
-          href="/blog"
+          href="/"
           className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3.5 py-1.5 text-xs font-bold text-slate-600 hover:border-slate-300 hover:text-blue-600 transition shadow-2xs"
         >
           <ArrowLeft className="h-3.5 w-3.5" /> All Publications
@@ -63,7 +63,7 @@ export default async function CategoryArchivePage({
       {posts.length === 0 ? (
         <div className="py-24 text-center space-y-3 rounded-3xl border border-dashed border-slate-200 bg-white p-8">
           <p className="text-base font-bold text-slate-900">No articles found in this category.</p>
-          <Link href="/blog" className="text-xs font-bold text-blue-600 hover:underline">
+          <Link href="/" className="text-xs font-bold text-blue-600 hover:underline">
             Browse all articles &rarr;
           </Link>
         </div>

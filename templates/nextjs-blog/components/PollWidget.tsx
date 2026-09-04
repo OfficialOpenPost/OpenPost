@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { submitPollVote } from "@/lib/openpost";
 import { CheckCircle2, BarChart2, Loader2, ShieldCheck } from "lucide-react";
 

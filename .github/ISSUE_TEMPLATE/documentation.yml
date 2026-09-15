@@ -1,0 +1,49 @@
+name: Documentation
+description: Report missing or incorrect documentation
+labels: ["documentation"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve OpenPost documentation! Please fill out the information below.
+
+  - type: dropdown
+    id: type
+    attributes:
+      label: Type
+      description: What kind of documentation issue is this?
+      options:
+        - Missing documentation
+        - Incorrect documentation
+        - Unclear documentation
+        - Outdated documentation
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: location
+    attributes:
+      label: Location
+      description: Where is the issue? (URL, file path, or section name)
+      placeholder: "e.g., docs/api/posts.md, README.md quickstart section"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Describe the documentation issue and how it should be improved.
+      placeholder: Tell us what's wrong or what's missing...
+    validations:
+      required: true
+
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested Improvement
+      description: If you know how to fix it, describe the improvement.
+      placeholder: "The documentation should say..."
+    validations:
+      required: false

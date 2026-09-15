@@ -452,7 +452,23 @@ Webhooks are delivered with a **5-second timeout** per attempt. Each webhook eve
 
 **Security:** All payloads are signed with HMAC-SHA256 (`X-Webhook-Signature` header). Verify using your webhook secret. SSRF protection blocks `localhost`, `10.x`, `192.168.x`, `172.16.x`, `169.254.x`.
 
-Report: `officialopenpost@outlook.com`. See `supabase/migrations/README.md` `001→021` RLS docs + `DEPLOYMENT.md`.
+Report: `officialopenpost@outlook.com`. See [SECURITY.md](SECURITY.md) and `supabase/migrations/README.md` `001→021` RLS docs + `DEPLOYMENT.md`.
+
+---
+
+## 🤝 Contributing
+
+We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide.
+
+```bash
+git clone https://github.com/your-username/OpenPost.git
+cd OpenPost
+npm ci
+cp .env.example .env  # configure
+npm run dev
+```
+
+Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
 
 ---
 

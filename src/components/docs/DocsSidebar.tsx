@@ -41,6 +41,7 @@ export const DOCS_NAVIGATION: NavSection[] = [
     items: [
       { title: "Supabase & Postgres Setup", href: "/docs/supabase-setup", badge: "SQL" },
       { title: "Cloudflare R2 Media", href: "/docs/cloudflare-setup" },
+      { title: "Media & Storage System", href: "/docs/media-storage" },
     ],
   },
   {
@@ -48,6 +49,8 @@ export const DOCS_NAVIGATION: NavSection[] = [
     icon: PenTool,
     items: [
       { title: "Editor & 16 Slash Blocks", href: "/docs/editor", badge: "Tiptap" },
+      { title: "Editor Custom Blocks", href: "/docs/editor-blocks" },
+      { title: "Editor Extensions", href: "/docs/editor-extensions" },
     ],
   },
   {
@@ -61,6 +64,7 @@ export const DOCS_NAVIGATION: NavSection[] = [
       { title: "Polls & Voting API", href: "/docs/api/polls" },
       { title: "Media & Presign API", href: "/docs/api/media" },
       { title: "Cron & Health API", href: "/docs/api/cron-health" },
+      { title: "API Examples & Recipes", href: "/docs/api-examples" },
     ],
   },
   {
@@ -68,8 +72,10 @@ export const DOCS_NAVIGATION: NavSection[] = [
     icon: Webhook,
     items: [
       { title: "Webhooks Engine", href: "/docs/webhooks", badge: "HMAC" },
+      { title: "Webhooks API Reference", href: "/docs/webhooks-api" },
       { title: "OpenPost CLI (openpost-cli)", href: "/docs/cli", badge: "CLI" },
       { title: "Frontend Integration (Next.js)", href: "/docs/frontend" },
+      { title: "Frontend Editing Integration", href: "/docs/frontend-editing" },
     ],
   },
   {
@@ -78,6 +84,19 @@ export const DOCS_NAVIGATION: NavSection[] = [
     items: [
       { title: "Projects & Workspaces", href: "/docs/projects" },
       { title: "Security & RBAC Matrix", href: "/docs/security" },
+      { title: "RBAC Permissions Detail", href: "/docs/rbac" },
+      { title: "Authentication & Sessions", href: "/docs/authentication" },
+    ],
+  },
+  {
+    title: "Deep Dive",
+    icon: BookOpen,
+    items: [
+      { title: "System Architecture", href: "/docs/architecture" },
+      { title: "Database Schema", href: "/docs/database" },
+      { title: "Content Format (JSON AST)", href: "/docs/content-format" },
+      { title: "SEO & Social Sharing", href: "/docs/seo" },
+      { title: "Environment Variables", href: "/docs/environment" },
     ],
   },
   {
@@ -86,6 +105,7 @@ export const DOCS_NAVIGATION: NavSection[] = [
     items: [
       { title: "Deployment & Self-Hosting", href: "/docs/deployment", badge: "Docker" },
       { title: "Troubleshooting Guide", href: "/docs/troubleshooting" },
+      { title: "Contributing Guide", href: "/docs/contributing" },
     ],
   },
 ];
@@ -99,6 +119,7 @@ export function DocsSidebar() {
     "Headless REST API": true,
     "Automation & CLI": true,
     "Multi-Tenancy & Security": true,
+    "Deep Dive": true,
     "Operations & Ops": true,
   });
   const [mobileOpen, setMobileOpen] = useState(false);

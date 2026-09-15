@@ -28,11 +28,18 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
           createdAt: true,
           createdBy: true,
           content: true,
+          wordCount: true,
+          user: { select: { name: true } },
         },
       })
     );
 
-    return NextResponse.json({ data: revisions });
+    const mapped = revisions.map((r) => ({
+      ...r,
+      authorName: r.user?.name ?? "Unknown",
+    }));
+
+    return NextResponse.json({ data: mapped });
   } catch (error: any) {
     const status = error instanceof AuthError ? error.statusCode : 500;
     const code = error instanceof AuthError ? error.code : "FETCH_FAILED";

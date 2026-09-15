@@ -72,7 +72,8 @@ export default function DocsLandingPage() {
       desc: "Tiptap engine, 16 custom Slash blocks, 6 image layouts, 2s autosave, and SEO snippet inspector.",
       links: [
         { label: "Editor & 16 Slash Blocks", href: "/docs/editor" },
-        { label: "Image Layouts & Resizing", href: "/docs/editor#image-layouts" },
+        { label: "Editor Custom Blocks", href: "/docs/editor-blocks" },
+        { label: "Editor Extensions Reference", href: "/docs/editor-extensions" },
         { label: "Autosave & Crash Recovery", href: "/docs/editor#autosave-engine" },
       ],
     },
@@ -81,11 +82,11 @@ export default function DocsLandingPage() {
       icon: Terminal,
       desc: "Full endpoint documentation with query parameters, request bodies, and cURL snippets.",
       links: [
+        { label: "API Overview & Auth", href: "/docs/api/overview" },
         { label: "Posts & Revisions API", href: "/docs/api/posts" },
         { label: "Categories & Tags API", href: "/docs/api/taxonomies" },
         { label: "Authors API", href: "/docs/api/authors" },
-        { label: "Polls & Voting API", href: "/docs/api/polls" },
-        { label: "Media & Presign API", href: "/docs/api/media" },
+        { label: "API Examples & Recipes", href: "/docs/api-examples" },
       ],
     },
     {
@@ -94,18 +95,19 @@ export default function DocsLandingPage() {
       desc: "Publish/update lifecycle events, HMAC SHA-256 signature verification, and deploy triggers.",
       links: [
         { label: "Webhooks Engine Guide", href: "/docs/webhooks" },
-        { label: "HMAC Signature Verification", href: "/docs/webhooks#hmac-signature-verification" },
-        { label: "Vercel & Netlify Deploy Hooks", href: "/docs/webhooks#deploy-hooks" },
+        { label: "Webhooks API Reference", href: "/docs/webhooks-api" },
+        { label: "OpenPost CLI", href: "/docs/cli" },
       ],
     },
     {
-      title: "CLI & Frontend Starters",
-      icon: Code2,
-      desc: "One command CLI to connect any Next.js, Remix, or Astro frontend with browser handshake.",
+      title: "Architecture & Database",
+      icon: Database,
+      desc: "System architecture, database schema, content format, and environment configuration.",
       links: [
-        { label: "OpenPost CLI (openpost-cli)", href: "/docs/cli" },
-        { label: "Next.js Frontend Integration", href: "/docs/frontend" },
-        { label: "ContentRenderer Component", href: "/docs/frontend#content-renderer" },
+        { label: "System Architecture", href: "/docs/architecture" },
+        { label: "Database Schema Reference", href: "/docs/database" },
+        { label: "Content Format (JSON AST)", href: "/docs/content-format" },
+        { label: "Environment Variables", href: "/docs/environment" },
       ],
     },
     {
@@ -113,8 +115,21 @@ export default function DocsLandingPage() {
       icon: Shield,
       desc: "Row-Level Security (RLS), RBAC permissions matrix, SSRF defenses, and project workspaces.",
       links: [
-        { label: "Projects & Multi-Tenancy", href: "/docs/projects" },
-        { label: "Security & RBAC Matrix", href: "/docs/security" },
+        { label: "Authentication & Sessions", href: "/docs/authentication" },
+        { label: "RBAC Permissions Matrix", href: "/docs/rbac" },
+        { label: "Security Deep Dive", href: "/docs/security" },
+        { label: "Projects & Workspaces", href: "/docs/projects" },
+      ],
+    },
+    {
+      title: "Media & Frontend Integration",
+      icon: Code2,
+      desc: "Cloudflare R2 media storage, frontend rendering, ISR caching, and preview mode.",
+      links: [
+        { label: "Media & Storage System", href: "/docs/media-storage" },
+        { label: "Frontend Integration", href: "/docs/frontend" },
+        { label: "Frontend Editing Integration", href: "/docs/frontend-editing" },
+        { label: "SEO & Social Sharing", href: "/docs/seo" },
       ],
     },
     {
@@ -123,8 +138,8 @@ export default function DocsLandingPage() {
       desc: "Deploying to Vercel, Docker Compose production stack, cron scheduler, and troubleshooting.",
       links: [
         { label: "Deployment & Self-Hosting", href: "/docs/deployment" },
-        { label: "Scheduled Posts Cron", href: "/docs/api/cron-health" },
         { label: "Troubleshooting Guide", href: "/docs/troubleshooting" },
+        { label: "Contributing Guide", href: "/docs/contributing" },
       ],
     },
   ];

@@ -371,6 +371,38 @@ export const EDITOR_STYLES = `
     }
   }
 
+  /* Mobile Editor Improvements */
+  @media (max-width: 768px) {
+    /* Hide word count on mobile */
+    .openpost-editor-wrapper + div .text-xs.font-mono {
+      display: none;
+    }
+
+    /* Make the editor canvas full width on mobile */
+    .openpost-editor-wrapper {
+      padding-left: 1rem !important;
+      padding-right: 1rem !important;
+    }
+
+    /* Ensure tables scroll horizontally */
+    .tiptap table {
+      display: block;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    /* Better touch targets */
+    .tiptap .task-list-label input[type="checkbox"] {
+      width: 20px;
+      height: 20px;
+    }
+
+    /* Slash menu full width on mobile */
+    .tippy-box[data-placement^="bottom"] {
+      max-width: calc(100vw - 2rem) !important;
+    }
+  }
+
   /* Mobile Preview Mode overrides (forces full-width centered layout on any screen width) */
   .preview-mobile figure.openpost-floating-image,
   .preview-mobile .prose figure.openpost-floating-image,

@@ -9,6 +9,7 @@ import {
   Underline as UnderlineIcon,
   Link2,
 } from "lucide-react";
+import { CODE_LANGUAGES } from "./extensions/CodeBlockLanguage";
 
 export function SelectionBubbleMenu({ editor }: { editor: Editor | null }) {
   const [showLinkPopover, setShowLinkPopover] = useState(false);
@@ -169,6 +170,44 @@ export function SelectionBubbleMenu({ editor }: { editor: Editor | null }) {
           </div>
         )}
       </div>
+    </BubbleMenu>
+  );
+}
+
+export function CodeBlockBubbleMenu({ editor }: { editor: Editor | null }) {
+  if (!editor || editor.isDestroyed || !editor.view) return null;
+
+  const currentLanguage = editor.getAttributes("codeBlock").language ?? "";
+
+  return (
+    <BubbleMenu
+      editor={editor}
+      tippyOptions={{
+        duration: 150,
+        placement: "top",
+        offset: [0, 10],
+        zIndex: 50,
+      }}
+      shouldShow={({ editor: ed }) => {
+        if (!ed || ed.isDestroyed || !ed.view) return false;
+        return ed.isActive("codeBlock");
+      }}
+      className="flex items-center gap-2 rounded-2xl border border-slate-700/80 bg-[#1E293B] px-2.5 py-1.5 shadow-2xl text-white backdrop-blur-md animate-in fade-in zoom-in-95 duration-150 select-none relative"
+    >
+      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mr-1">Language</span>
+      <select
+        value={currentLanguage}
+        onChange={(e) => {
+          editor.chain().focus().updateAttributes("codeBlock", { language: e.target.value }).run();
+        }}
+        className="rounded-lg bg-white/10 px-2 py-1 text-xs text-white focus:outline-none focus:ring-1 focus:ring-brand cursor-pointer"
+      >
+        {CODE_LANGUAGES.map((lang) => (
+          <option key={lang.value} value={lang.value} className="bg-[#1E293B] text-white">
+            {lang.label}
+          </option>
+        ))}
+      </select>
     </BubbleMenu>
   );
 }

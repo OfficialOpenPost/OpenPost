@@ -35,6 +35,7 @@ import { PollBlock } from "./blocks/Poll";
 import { VideoBlock } from "./blocks/Video";
 import { EmbedBlock } from "./blocks/Embed";
 import { TrailingNode } from "./extensions/TrailingNode";
+import { CodeBlockLanguage } from "./extensions/CodeBlockLanguage";
 
 const HeadingShortcuts = Extension.create({
   name: "headingShortcuts",
@@ -171,6 +172,7 @@ export const editorExtensions = [
   VideoBlock,
   EmbedBlock,
   TrailingNode,
+  CodeBlockLanguage,
   Placeholder.configure({
     placeholder: ({ node }) => {
       if (node.type.name === "heading") return "Heading";

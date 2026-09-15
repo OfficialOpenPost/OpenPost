@@ -10,10 +10,12 @@ interface MediaItem {
   name: string;
   url: string;
   size: string;
+  sizeBytes?: number;
   dimensions: string;
   usedIn: string[];
   originalFilename?: string;
   mimeType?: string;
+  createdAt?: string;
 }
 
 export default function MediaPage() {
@@ -27,6 +29,8 @@ export default function MediaPage() {
   const [error, setError] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<MediaItem | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const fetchMedia = async (q?: string) => {
@@ -41,15 +45,17 @@ export default function MediaPage() {
       const res = await fetch(url, activeProjId ? { headers: { "X-OpenPost-Project": activeProjId } } : undefined);
       const json = await res.json();
       if (Array.isArray(json.data)) {
-        const mapped: MediaItem[] = json.data.map((m: any) => ({
+          const mapped: MediaItem[] = json.data.map((m: any) => ({
           id: m.id,
           name: m.originalFilename ?? m.name ?? "media",
           url: m.url ?? m.publicUrl ?? m.variants?.publicUrl ?? m.variants?.webp?.url ?? "",
           size: m.size ?? (m.sizeBytes ? formatBytes(Number(m.sizeBytes)) : "-"),
+          sizeBytes: m.sizeBytes ? Number(m.sizeBytes) : undefined,
           dimensions: m.dimensions ?? (m.width && m.height ? `${m.width}×${m.height}` : "-"),
           usedIn: m.usedIn ?? [],
           originalFilename: m.originalFilename,
           mimeType: m.mimeType,
+          createdAt: m.createdAt,
         }));
         setItems(mapped);
       }
@@ -66,7 +72,7 @@ export default function MediaPage() {
   }, [debouncedSearch]);
 
   const [filterType, setFilterType] = useState<"all" | "images" | "documents">("all");
-  const [sortBy, setSortBy] = useState<"date" | "size" | "name">("date");
+  const [sortBy, setSortBy] = useState<"newest" | "oldest" | "name-az" | "name-za" | "size">("newest");
   const [page, setPage] = useState(1);
   const perPage = 50;
 
@@ -76,9 +82,18 @@ export default function MediaPage() {
     if (filterType === "documents" && m.mimeType?.startsWith("image/")) return false;
     return true;
   }).sort((a,b)=>{
-    if (sortBy==="name") return a.name.localeCompare(b.name);
-    if (sortBy==="size") { const pa = parseFloat(a.size) || 0; const pb = parseFloat(b.size) || 0; return pb-pa; }
-    return 0; // date: keep API order (desc)
+    if (sortBy==="name-az") return a.name.localeCompare(b.name);
+    if (sortBy==="name-za") return b.name.localeCompare(a.name);
+    if (sortBy==="size") { const pa = a.sizeBytes ?? (parseFloat(a.size) || 0); const pb = b.sizeBytes ?? (parseFloat(b.size) || 0); return pb-pa; }
+    if (sortBy==="oldest") {
+      const da = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const db = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return da - db;
+    }
+    // newest: keep API order (desc) or sort by createdAt desc
+    const da = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const db = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+    return db - da;
   });
 
   const totalPages = Math.max(1, Math.ceil(filteredAll.length / perPage));
@@ -159,6 +174,39 @@ export default function MediaPage() {
     } catch (e: any) { setDeleteError(e.message); }
   };
 
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filtered.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filtered.map(i => i.id)));
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    setBulkDeleting(true);
+    const ids = Array.from(selectedIds);
+    let failed = 0;
+    for (const id of ids) {
+      try {
+        const res = await fetch(`/api/media/${id}`, { method: "DELETE" });
+        if (!res.ok) failed++;
+      } catch { failed++; }
+    }
+    setItems(prev => prev.filter(x => !selectedIds.has(x.id)));
+    setSelectedIds(new Set());
+    setBulkDeleting(false);
+    if (failed > 0) setError(`Failed to delete ${failed} item(s)`);
+  };
+
   return (
     <div className="p-6 md:p-8 max-w-7xl mx-auto">
       <input ref={fileRef} type="file" accept="image/*,.png,.jpg,.jpeg,.gif,.webp,.svg" multiple className="hidden" onChange={(e) => handleFiles(e.target.files)} />
@@ -198,9 +246,11 @@ export default function MediaPage() {
             </select>
           </div>
           <select value={sortBy} onChange={e=>setSortBy(e.target.value as any)} className="h-10 rounded-xl border border-border bg-white px-3 text-sm font-medium">
-            <option value="date">Sort: Date</option>
-            <option value="name">Sort: Name</option>
-            <option value="size">Sort: Size</option>
+            <option value="newest">Newest first</option>
+            <option value="oldest">Oldest first</option>
+            <option value="name-az">Name A-Z</option>
+            <option value="name-za">Name Z-A</option>
+            <option value="size">Largest first</option>
           </select>
           <div className="flex rounded-xl border border-border bg-white p-1">
             <button onClick={() => setView("grid")} className={`flex h-8 w-8 items-center justify-center rounded-lg ${view === "grid" ? "bg-navy text-white" : "text-text-tertiary hover:bg-surface-raised"}`}>
@@ -213,8 +263,34 @@ export default function MediaPage() {
         </div>
       </div>
 
+      <div className="mt-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={selectedIds.size === filtered.length && filtered.length > 0}
+              onChange={toggleSelectAll}
+              className="h-4 w-4 rounded border-border text-brand focus:ring-brand/20"
+            />
+            <span className="text-xs font-medium text-text-secondary">
+              {selectedIds.size > 0 ? `${selectedIds.size} selected` : `Select all`}
+            </span>
+          </label>
+          {selectedIds.size > 0 && (
+            <button
+              onClick={handleBulkDelete}
+              disabled={bulkDeleting}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-flame/10 px-3 py-1.5 text-xs font-semibold text-flame hover:bg-flame/20 transition disabled:opacity-50"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              {bulkDeleting ? "Deleting…" : `Delete ${selectedIds.size}`}
+            </button>
+          )}
+        </div>
+      </div>
+
       {view === "grid" ? (
-        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {filtered.map((item) => (
             <div
               key={item.id}
@@ -222,6 +298,13 @@ export default function MediaPage() {
               className={`group relative overflow-hidden rounded-xl border bg-white cursor-pointer transition h-[240px] flex flex-col ${selected === item.id ? "border-brand ring-2 ring-brand/20" : "border-border hover:border-brand/20 hover:shadow-md"}`}
             >
               <div className="relative h-32 bg-surface-raised overflow-hidden">
+                <input
+                  type="checkbox"
+                  checked={selectedIds.has(item.id)}
+                  onChange={(e) => { e.stopPropagation(); toggleSelect(item.id); }}
+                  onClick={(e) => e.stopPropagation()}
+                  className="absolute top-2 left-2 z-10 h-4 w-4 rounded border-white/80 bg-white/80 text-brand focus:ring-brand/20 opacity-0 group-hover:opacity-100 transition cursor-pointer"
+                />
                 {item.url ? <img src={item.url} alt={item.name} className="h-full w-full object-cover group-hover:scale-105 transition duration-300" /> : <div className="h-full w-full flex items-center justify-center text-text-tertiary"><ImageIcon className="h-8 w-8" /></div>}
                 <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition">
                   <button onClick={(e) => { e.stopPropagation(); window.open(item.url, "_blank"); }} className="flex h-7 w-7 items-center justify-center rounded-full bg-white/90 backdrop-blur shadow-sm hover:bg-white">
@@ -231,13 +314,14 @@ export default function MediaPage() {
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
                 </div>
-                {item.mimeType === "image/webp" && <span className="absolute top-2 left-2 rounded-full bg-brand px-2 py-0.5 text-[10px] font-bold text-navy">WebP</span>}
+                {item.mimeType === "image/webp" && <span className="absolute top-2 left-2 rounded-full bg-brand px-2 py-0.5 text-[10px] font-bold text-navy ml-6">WebP</span>}
                 {item.usedIn.length > 0 && <span className="absolute bottom-2 left-2 rounded-full bg-navy/80 px-2 py-1 text-xs font-semibold text-white backdrop-blur">Used in {item.usedIn.length}</span>}
               </div>
               <div className="p-3 flex-1 flex flex-col">
                 <p className="text-sm font-semibold text-navy truncate">{item.name}</p>
                 <p className="text-xs text-text-tertiary">
                   {item.dimensions} · {item.size}
+                  {item.createdAt && <> · {new Date(item.createdAt).toLocaleDateString()}</>}
                 </p>
                 {item.usedIn.length > 0 ? (
                   <p className="mt-auto pt-2 text-xs text-brand truncate">Used in: {item.usedIn.join(", ")}</p>
@@ -249,28 +333,46 @@ export default function MediaPage() {
           ))}
         </div>
       ) : (
-        <div className="mt-6 overflow-hidden rounded-xl border border-border bg-white">
+        <div className="mt-3 overflow-hidden rounded-xl border border-border bg-white">
           <div className="overflow-x-auto">
             <table className="w-full text-left">
               <thead className="bg-surface-raised border-b border-border">
                 <tr className="text-xs font-semibold text-text-tertiary">
+                  <th className="px-4 py-3 w-8">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.size === filtered.length && filtered.length > 0}
+                      onChange={toggleSelectAll}
+                      className="h-4 w-4 rounded border-border text-brand focus:ring-brand/20"
+                    />
+                  </th>
                   <th className="px-4 py-3">Preview</th>
                   <th className="px-4 py-3">Filename</th>
                   <th className="px-4 py-3 hidden md:table-cell">Dimensions</th>
                   <th className="px-4 py-3">Size</th>
+                  <th className="px-4 py-3 hidden lg:table-cell">Uploaded</th>
                   <th className="px-4 py-3 hidden lg:table-cell">Used in</th>
                   <th className="px-4 py-3">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {filtered.map((item) => (
-                  <tr key={item.id} className="hover:bg-surface-raised/50 h-[64px]">
+                  <tr key={item.id} className={`hover:bg-surface-raised/50 h-[64px] ${selectedIds.has(item.id) ? "bg-brand/5" : ""}`}>
+                    <td className="px-4 py-2">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(item.id)}
+                        onChange={() => toggleSelect(item.id)}
+                        className="h-4 w-4 rounded border-border text-brand focus:ring-brand/20"
+                      />
+                    </td>
                     <td className="px-4 py-2">
                       {item.url ? <img src={item.url} alt={item.name} className="h-10 w-10 rounded-lg object-cover border border-border" /> : <div className="h-10 w-10 rounded-lg bg-surface-raised" />}
                     </td>
                     <td className="px-4 py-2 text-sm font-medium text-navy"><span className="truncate">{item.name}</span> {item.mimeType === "image/webp" && <span className="ml-1 rounded bg-brand/10 px-1.5 py-0.5 text-[10px] font-bold text-brand">WebP</span>}</td>
                     <td className="px-4 py-2 hidden md:table-cell text-sm text-text-secondary">{item.dimensions}</td>
                     <td className="px-4 py-2 text-sm text-text-secondary">{item.size}</td>
+                    <td className="px-4 py-2 hidden lg:table-cell text-xs text-text-tertiary">{item.createdAt ? new Date(item.createdAt).toLocaleDateString() : "—"}</td>
                     <td className="px-4 py-2 hidden lg:table-cell text-xs text-brand">{item.usedIn.length ? item.usedIn.join(", ") : "—"}</td>
                     <td className="px-4 py-2">
                       <div className="flex gap-1">
@@ -279,9 +381,6 @@ export default function MediaPage() {
                         </button>
                         <button onClick={() => setDeleteTarget(item)} className="flex h-8 w-8 items-center justify-center rounded-lg border border-border hover:bg-flame/10 text-flame">
                           <Trash2 className="h-4 w-4" />
-                        </button>
-                        <button className="flex h-8 w-8 items-center justify-center rounded-lg border border-border hover:bg-surface-raised">
-                          <MoreHorizontal className="h-4 w-4 text-text-secondary" />
                         </button>
                       </div>
                     </td>
@@ -297,12 +396,24 @@ export default function MediaPage() {
         <div className="mt-12 text-center text-sm text-text-tertiary flex items-center justify-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Loading media…</div>
       ) : filtered.length === 0 ? (
         <div className="mt-12 rounded-xl border-2 border-dashed border-border bg-white p-12 text-center">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-brand/10 text-brand">
-            <ImageIcon className="h-6 w-6" />
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-brand/10 text-brand">
+            <ImageIcon className="h-8 w-8" />
           </div>
-          <p className="mt-4 text-sm font-semibold text-navy">No media found</p>
-          <p className="mt-1 text-sm text-text-secondary">Upload your first image — it will be converted to WebP in the browser before uploading (≈ 30–60% smaller, no server sharp needed).</p>
-          <button onClick={() => fileRef.current?.click()} className="mt-4 inline-flex items-center gap-2 rounded-xl bg-brand px-5 py-2.5 text-sm font-bold text-navy"><Upload className="h-4 w-4" /> Upload image</button>
+          {search || filterType !== "all" ? (
+            <>
+              <p className="mt-4 text-sm font-semibold text-navy">No media matches your filters</p>
+              <p className="mt-1 text-sm text-text-secondary">Try adjusting your search or filter criteria.</p>
+              <button onClick={() => { setSearch(""); setFilterType("all"); }} className="mt-4 inline-flex items-center gap-2 rounded-xl border border-border bg-white px-5 py-2.5 text-sm font-semibold hover:bg-surface-raised transition">Clear filters</button>
+            </>
+          ) : (
+            <>
+              <p className="mt-4 text-sm font-semibold text-navy">No media yet</p>
+              <p className="mt-1 text-sm text-text-secondary max-w-sm mx-auto">Upload your first image by dragging it here or clicking the upload button. Images are converted to WebP automatically (30-60% smaller).</p>
+              <button onClick={() => fileRef.current?.click()} className="mt-4 inline-flex items-center gap-2 rounded-xl bg-brand px-5 py-2.5 text-sm font-bold text-navy hover:bg-brand-hover transition">
+                <Upload className="h-4 w-4" /> Upload image
+              </button>
+            </>
+          )}
         </div>
       ) : null}
 

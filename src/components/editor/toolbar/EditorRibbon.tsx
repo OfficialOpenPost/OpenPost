@@ -252,6 +252,7 @@ export function EditorRibbon({
       ref={menuContainerRef}
       className="w-full border border-border bg-white shadow-sm select-none transition-all text-navy"
     >
+      <style>{`.editor-ribbon { scrollbar-width: none; } .editor-ribbon::-webkit-scrollbar { display: none; }`}</style>
       {/* TIER 1: WORD-STYLE TOP MENU BAR (File, Edit, Insert, Format, View, Tools) */}
       <div className="flex items-center gap-1.5 px-3.5 py-1.5 border-b border-border/80 text-xs font-bold bg-[#F8FAFC]">
         {/* FILE MENU */}
@@ -549,7 +550,7 @@ export function EditorRibbon({
       </div>
 
       {/* TIER 2: PROFESSIONAL TOOLBAR — single bar with thin separators (no excessive cards) */}
-      <div className="flex flex-wrap items-center gap-0.5 p-1.5 overflow-x-auto text-navy border-t border-border/60 bg-white">
+      <div className="editor-ribbon flex items-center gap-0.5 p-1.5 overflow-x-auto flex-nowrap text-navy border-t border-border/60 bg-white">
         {/* Undo / Redo */}
         <div className="flex items-center gap-0.5 pr-2 border-r border-border/60 mr-1">
           <button

@@ -8,6 +8,7 @@ import {
   Plus,
   Trash2,
   ArrowUpDown,
+  FileText,
   Eye,
   Edit3,
   Clock,
@@ -301,17 +302,9 @@ export default function BlogsPage() {
         {/* Header bar */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/80 pb-5">
           <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl sm:text-3xl font-extrabold text-navy">
-                Articles & Publications
-              </h1>
-              <Link
-                href="/dashboard/editor"
-                className="inline-flex items-center gap-1.5 rounded-xl bg-brand px-3.5 py-1.5 text-xs font-bold text-navy hover:bg-brand-hover transition shadow-xs"
-              >
-                <Plus className="h-3.5 w-3.5" /> New Article
-              </Link>
-            </div>
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-navy">
+              Articles & Publications
+            </h1>
             <p className="mt-1 text-xs sm:text-sm text-text-secondary flex items-center gap-2 flex-wrap">
               <span>{posts.length} total articles</span>
               <span>·</span>
@@ -335,6 +328,12 @@ export default function BlogsPage() {
             >
               <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin text-brand" : ""}`} /> Refresh
             </button>
+            <Link
+              href="/dashboard/editor"
+              className="inline-flex items-center gap-2 rounded-xl bg-[#2D3440] px-5 py-2.5 text-sm font-bold text-white hover:bg-navy transition shadow-sm"
+            >
+              <Plus className="h-4 w-4" /> New Article
+            </Link>
           </div>
         </div>
 
@@ -647,23 +646,43 @@ export default function BlogsPage() {
                   <tr>
                     <td colSpan={7} className="px-4 py-16 text-center">
                       <div className="mx-auto max-w-sm">
-                        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-surface-dim">
-                          <SearchX className="h-6 w-6 text-text-tertiary" />
-                        </div>
-                        <p className="mt-4 text-sm font-bold text-navy">No matching articles</p>
-                        <p className="mt-1 text-xs text-text-secondary">
-                          Try adjusting search keywords, status filter, or category selection.
-                        </p>
-                        <button
-                          onClick={() => {
-                            setSearch("");
-                            setStatus("all");
-                            setSelectedCategory("all");
-                          }}
-                          className="mt-4 rounded-xl border border-border bg-surface px-4 py-2 text-xs font-bold text-navy hover:bg-surface-raised transition shadow-xs cursor-pointer"
-                        >
-                          Reset Filters
-                        </button>
+                        {posts.length === 0 ? (
+                          <>
+                            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-brand/10">
+                              <FileText className="h-7 w-7 text-brand" />
+                            </div>
+                            <p className="mt-4 text-base font-bold text-navy">No articles yet</p>
+                            <p className="mt-1.5 text-xs text-text-secondary">
+                              Create your first article to get started with your blog.
+                            </p>
+                            <Link
+                              href="/dashboard/editor"
+                              className="mt-5 inline-flex items-center gap-2 rounded-xl bg-[#2D3440] px-5 py-2.5 text-sm font-bold text-white hover:bg-navy transition shadow-sm"
+                            >
+                              <Plus className="h-4 w-4" /> New Article
+                            </Link>
+                          </>
+                        ) : (
+                          <>
+                            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-surface-dim">
+                              <SearchX className="h-6 w-6 text-text-tertiary" />
+                            </div>
+                            <p className="mt-4 text-sm font-bold text-navy">No matching articles</p>
+                            <p className="mt-1 text-xs text-text-secondary">
+                              Try adjusting search keywords, status filter, or category selection.
+                            </p>
+                            <button
+                              onClick={() => {
+                                setSearch("");
+                                setStatus("all");
+                                setSelectedCategory("all");
+                              }}
+                              className="mt-4 rounded-xl border border-border bg-surface px-4 py-2 text-xs font-bold text-navy hover:bg-surface-raised transition shadow-xs cursor-pointer"
+                            >
+                              Reset Filters
+                            </button>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>

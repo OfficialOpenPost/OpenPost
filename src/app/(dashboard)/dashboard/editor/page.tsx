@@ -7,8 +7,9 @@ import { useOpenPostEditor } from "@/components/editor/useOpenPostEditor";
 import { EditorContent } from "@tiptap/react";
 import { EditorRibbon } from "@/components/editor/toolbar/EditorRibbon";
 import { EditorSidePanel } from "@/components/editor/panels/EditorSidePanel";
-import { SelectionBubbleMenu } from "@/components/editor/BubbleMenus";
+import { SelectionBubbleMenu, CodeBlockBubbleMenu } from "@/components/editor/BubbleMenus";
 import { FindReplaceBar } from "@/components/editor/toolbar/FindReplaceBar";
+import { BlockHandle } from "@/components/editor/block-controls/BlockHandle";
 import { EDITOR_STYLES } from "@/components/editor/extensions";
 import { tiptapToEditorDocument, editorDocumentToHtml } from "@/lib/editorDocument";
 import { SharedRender } from "@/components/render/SharedRender";
@@ -29,13 +30,14 @@ import {
   Monitor,
   Tablet,
   Smartphone,
+  Printer,
 } from "lucide-react";
 
 interface EditorPageProps {
   initialBlogId?: string;
 }
 
-function StatusIndicator({ status }: { status: "saved" | "saving" | "unsaved" | "error" }) {
+function StatusIndicator({ status, onRetry }: { status: "saved" | "saving" | "unsaved" | "error"; onRetry?: () => void }) {
   if (status === "saving") {
     return (
       <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
@@ -54,6 +56,14 @@ function StatusIndicator({ status }: { status: "saved" | "saving" | "unsaved" | 
     return (
       <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200">
         <AlertCircle className="h-3 w-3" /> Save Error
+        {onRetry && (
+          <button
+            onClick={onRetry}
+            className="ml-1 underline hover:text-rose-900 transition"
+          >
+            Retry
+          </button>
+        )}
       </span>
     );
   }
@@ -92,6 +102,9 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(340);
   const [isResizing, setIsResizing] = useState(false);
+  const [focusMode, setFocusMode] = useState(false);
+  const [focusBarOpacity, setFocusBarOpacity] = useState(1);
+  const focusBarTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [featuredImage, setFeaturedImage] = useState<string | null>(null);
   const [category, setCategory] = useState("");
   const [categoryId, setCategoryId] = useState<string | null>(null);
@@ -105,7 +118,8 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
   const [ogDesc, setOgDesc] = useState("");
   const [ogImage, setOgImage] = useState("");
   const [scheduledAt, setScheduledAt] = useState("");
-  const [revisions, setRevisions] = useState<Array<{ id: string; label: string | null; createdAt: string; createdBy: string; content?: any }>>([]);
+  const [excerpt, setExcerpt] = useState("");
+  const [revisions, setRevisions] = useState<Array<{ id: string; label: string | null; createdAt: string; createdBy: string; content?: any; wordCount?: number | null; authorName?: string }>>([]);
   const [catOptions, setCatOptions] = useState<Array<{ id: string; name: string; slug: string }>>([]);
   const [loadingInitial, setLoadingInitial] = useState(Boolean(effectiveId));
 
@@ -161,6 +175,7 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
             setOgTitle(post.seo.ogTitle || "");
             setOgDesc(post.seo.ogDesc || "");
             setOgImage(post.seo.ogImage || "");
+            setExcerpt(post.seo.excerpt || "");
           }
           const cover =
             post.featuredImage?.variants?.publicUrl ||
@@ -244,12 +259,40 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
     };
   }, []);
 
-  // Global Keyboard Shortcuts (Ctrl+F for find, F11 for fullscreen, Ctrl+S to save)
+  // Focus mode toggle handler
+  const toggleFocusMode = useCallback(() => {
+    setFocusMode((prev) => {
+      const next = !prev;
+      if (next) {
+        setFocusBarOpacity(1);
+      }
+      return next;
+    });
+  }, []);
+
+  // Global Keyboard Shortcuts (Ctrl+F for find, F11 for fullscreen, Ctrl+Shift+F for focus mode, Esc to exit focus/preview, Ctrl+S to save)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "f") {
+        e.preventDefault();
+        toggleFocusMode();
+      }
+      if (e.key === "Escape") {
+        if (preview) {
+          e.preventDefault();
+          setPreview(false);
+        } else if (focusMode) {
+          e.preventDefault();
+          setFocusMode(false);
+        }
+      }
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === "f") {
         e.preventDefault();
         setShowFindReplace(true);
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        save("Quick save", undefined, "draft");
       }
       if (e.key === "F11") {
         e.preventDefault();
@@ -258,7 +301,37 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [toggleFullscreen]);
+  }, [toggleFullscreen, toggleFocusMode, focusMode, preview]);
+
+  // Warn user about unsaved changes when leaving the page
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (isDirty) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [isDirty]);
+
+  // Auto-hide floating toolbar on mouse inactivity (3s), show on mouse move near top
+  useEffect(() => {
+    if (!focusMode) return;
+    const handleMouseMove = (e: MouseEvent) => {
+      if (e.clientY < 100) {
+        setFocusBarOpacity(1);
+        if (focusBarTimerRef.current) clearTimeout(focusBarTimerRef.current);
+        focusBarTimerRef.current = setTimeout(() => setFocusBarOpacity(0), 3000);
+      }
+    };
+    focusBarTimerRef.current = setTimeout(() => setFocusBarOpacity(0), 3000);
+    window.addEventListener("mousemove", handleMouseMove);
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      if (focusBarTimerRef.current) clearTimeout(focusBarTimerRef.current);
+    };
+  }, [focusMode]);
 
   // Handle resizable sidebar (on right)
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -319,8 +392,33 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
     if (!seoDesc || seoDesc.length < 50) w.push("Meta description is missing or too short");
     if (!featuredImage) w.push("No featured cover image selected");
     if (plain.split(/\s+/).filter(Boolean).length < 200) w.push("Article is short (under 200 words)");
+
+    // Check for missing alt text on images in content
+    const hasImagesInContent = editor?.getJSON().content?.some((node: any) => {
+      if (node.type === "image") return true;
+      if (node.content) {
+        return node.content.some((child: any) => child.type === "image");
+      }
+      return false;
+    });
+    if (hasImagesInContent && !ogImage) {
+      w.push("Post contains images but no OG image set for social sharing");
+    }
+
+    // Check for heading hierarchy (no H2)
+    const hasH2 = editor?.getJSON().content?.some((node: any) => {
+      if (node.type === "heading" && node.attrs?.level === 2) return true;
+      if (node.content) {
+        return node.content.some((child: any) => child.type === "heading" && child.attrs?.level === 2);
+      }
+      return false;
+    });
+    if (!hasH2 && plain.length > 200) {
+      w.push("No H2 headings found — add subheadings for better SEO structure");
+    }
+
     return w;
-  }, [title, seoDesc, featuredImage, editor]);
+  }, [title, seoDesc, featuredImage, editor, ogImage]);
 
   // Word count & Reading time
   const { words, minutes } = useMemo(() => {
@@ -412,6 +510,7 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
           ogTitle: ogTitle || title,
           ogDesc: ogDesc || seoDesc,
           ogImage: ogImage || featuredImage,
+          excerpt: excerpt,
         },
       };
 
@@ -495,15 +594,15 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
     }
   };
 
-  // Auto-save: 15 seconds after last edit, only if dirty
+  // Auto-save: 8 seconds after last edit, only if dirty
   useEffect(() => {
     if (isInitialLoadRef.current || !isDirty) return;
     if (!title && !editor?.getText()?.trim()) return;
     const timer = setTimeout(() => {
       if (isDirty) save();
-    }, 15000);
+    }, 8000);
     return () => clearTimeout(timer);
-  }, [title, html, category, tags, seoTitle, seoDesc, featuredImage, status, scheduledAt, isDirty]);
+  }, [title, html, category, tags, seoTitle, seoDesc, featuredImage, status, scheduledAt, excerpt, isDirty]);
 
   if (loadingInitial) {
     return (
@@ -562,6 +661,14 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
             ))}
           </div>
 
+          <button
+            onClick={() => window.print()}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-white px-3 py-1.5 text-xs font-bold text-navy hover:bg-surface-raised transition shadow-xs"
+            title="Print preview"
+          >
+            <Printer className="h-4 w-4" /> Print
+          </button>
+
           <span className="text-xs font-mono text-text-tertiary">
             {words} words · ~{minutes} min read
           </span>
@@ -599,7 +706,7 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
           )}
           <style dangerouslySetInnerHTML={{ __html: EDITOR_STYLES }} />
           <div
-            className={`tiptap prose prose-lg prose-navy max-w-none ${
+            className={`tiptap max-w-none ${
               previewViewport === "mobile" ? "preview-mobile" : ""
             }`}
             data-preview-viewport={previewViewport}
@@ -623,6 +730,7 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
       <style dangerouslySetInnerHTML={{ __html: EDITOR_STYLES }} />
 
       {/* ── TOP 56px HEADER ── */}
+      {!focusMode && (
       <header className="h-14 bg-white border-b border-border px-3 sm:px-5 flex items-center justify-between z-30 shrink-0 select-none">
         {/* Left: Back + Doc Title Breadcrumb */}
         <div className="flex items-center gap-3 min-w-0">
@@ -642,7 +750,10 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
             </p>
           </div>
           <span className="hidden md:inline-flex">
-            <StatusIndicator status={saveStatus} />
+            <StatusIndicator
+              status={saveStatus}
+              onRetry={saveStatus === "error" ? () => save("Retry save", undefined, "draft") : undefined}
+            />
           </span>
         </div>
 
@@ -778,6 +889,115 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
           </button>
         </div>
       </header>
+      )}
+
+      {/* ── FOCUS MODE FLOATING TOOLBAR ── */}
+      {focusMode && (
+        <div
+          className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-white/95 backdrop-blur-md rounded-2xl border border-border shadow-lg px-4 py-2 flex items-center gap-3 transition-opacity duration-300"
+          style={{ opacity: focusBarOpacity }}
+        >
+          <Link
+            href="/dashboard/blogs"
+            className="flex h-7 w-7 items-center justify-center rounded-lg border border-border bg-white text-navy hover:bg-surface-raised transition shrink-0"
+            title="Back to Articles"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+          </Link>
+
+          <StatusIndicator
+            status={saveStatus}
+            onRetry={saveStatus === "error" ? () => save("Retry save", undefined, "draft") : undefined}
+          />
+
+          <span className="text-[11px] font-mono text-text-tertiary hidden sm:inline">
+            {words} words
+          </span>
+
+          <div className="w-px h-5 bg-border" />
+
+          <button
+            type="button"
+            disabled={
+              (isSavingRef.current || saveStatus === "saving") ||
+              (!isDirty && status === "draft" && Boolean(blogIdRef.current)) ||
+              !Boolean(title.trim().length > 0 || (editor && !editor.isEmpty))
+            }
+            onClick={() => save("Saved draft", "draft", "draft")}
+            className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[11px] font-bold transition ${
+              !(isSavingRef.current || saveStatus === "saving") &&
+              (isDirty || status !== "draft" || !blogIdRef.current) &&
+              Boolean(title.trim().length > 0 || (editor && !editor.isEmpty))
+                ? "border-border bg-white text-navy hover:bg-surface-raised cursor-pointer"
+                : "border-slate-200 bg-slate-100/80 text-slate-400 cursor-not-allowed opacity-60"
+            }`}
+            title="Save as Draft"
+          >
+            {activeSaveAction === "draft" ? (
+              <Loader2 className="h-3 w-3 animate-spin text-brand" />
+            ) : (
+              <Save className="h-3 w-3 text-text-tertiary" />
+            )}
+            <span className="hidden sm:inline">{activeSaveAction === "draft" ? "Saving..." : "Save Draft"}</span>
+          </button>
+
+          {status === "published" ? (
+            <button
+              type="button"
+              disabled={(isSavingRef.current || saveStatus === "saving") || !isDirty}
+              onClick={() => save("Updated post", "published", "update")}
+              className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1 text-[11px] font-bold transition ${
+                isDirty && !(isSavingRef.current || saveStatus === "saving")
+                  ? "bg-brand text-navy hover:bg-brand-hover hover:text-white cursor-pointer"
+                  : "bg-slate-200 text-slate-400 cursor-not-allowed opacity-60"
+              }`}
+            >
+              {activeSaveAction === "update" ? (
+                <Loader2 className="h-3 w-3 animate-spin text-navy" />
+              ) : (
+                <Sparkles className="h-3 w-3" />
+              )}
+              <span className="hidden sm:inline">{activeSaveAction === "update" ? "Updating..." : "Update"}</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled={
+                (isSavingRef.current || saveStatus === "saving") ||
+                !Boolean(title.trim().length > 0 || (editor && !editor.isEmpty))
+              }
+              onClick={() => {
+                const target = scheduledAt && new Date(scheduledAt) > new Date() ? "scheduled" : "published";
+                save("Published post", target, "publish");
+              }}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3 py-1 text-[11px] font-bold text-navy hover:bg-brand-hover hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition"
+            >
+              {activeSaveAction === "publish" ? (
+                <Loader2 className="h-3 w-3 animate-spin text-navy" />
+              ) : (
+                <Sparkles className="h-3 w-3" />
+              )}
+              <span className="hidden sm:inline">
+                {activeSaveAction === "publish"
+                  ? "Publishing..."
+                  : status === "scheduled"
+                  ? "Schedule"
+                  : "Publish"}
+              </span>
+            </button>
+          )}
+
+          <div className="w-px h-5 bg-border" />
+
+          <button
+            onClick={toggleFocusMode}
+            className="flex h-7 w-7 items-center justify-center rounded-lg border border-border bg-white text-navy hover:bg-surface-raised transition shrink-0"
+            title="Exit Focus Mode (Esc)"
+          >
+            <Minimize className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* ── MAIN WORKSPACE CONTAINER (Directly below 56px header) ── */}
       <div className="flex-1 flex overflow-hidden relative min-h-0 w-full">
@@ -791,6 +1011,7 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
         {/* ── LEFT & CENTER WORKSPACE (Contains Fixed Options Navbar + Main Document Card) ── */}
         <div className="flex-1 flex flex-col h-full overflow-hidden min-h-0 min-w-0">
           {/* FIXED TOP OPTIONS NAVBAR (Directly under header, perfectly above canvas, never hides sidebar) */}
+          {!focusMode && (
           <div className="w-full shrink-0 border-b border-border bg-white px-3 sm:px-5 py-1.5 flex justify-center z-10 shadow-xs relative">
             <div className="w-full max-w-[1440px] 2xl:max-w-[1680px]">
               <EditorRibbon
@@ -806,11 +1027,12 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
               />
             </div>
           </div>
+          )}
 
           {/* MAIN DOCUMENT CANVAS AREA */}
           <main className="flex-1 flex flex-col items-center p-3 sm:p-4 h-full overflow-hidden relative min-h-0 w-full">
             {/* Central Document Paper Card — Locked to screen height, ONLY internal content scrolls */}
-            <div className="w-full max-w-[1440px] 2xl:max-w-[1680px] h-full flex flex-col bg-white rounded-2xl border border-slate-200/90 shadow-[0_4px_24px_rgba(0,0,0,0.05)] overflow-hidden relative transition-all min-h-0">
+            <div className={`w-full h-full flex flex-col bg-white rounded-2xl border border-slate-200/90 shadow-[0_4px_24px_rgba(0,0,0,0.05)] overflow-hidden relative transition-all min-h-0 ${focusMode ? "max-w-3xl" : "max-w-[1440px] 2xl:max-w-[1680px]"}`}>
               {/* Fixed Title Header Section */}
               <div className="px-8 sm:px-14 pt-6 pb-4 shrink-0 border-b border-slate-100 bg-white">
                 {/* Add Cover Image trigger when no cover is set */}
@@ -833,9 +1055,13 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
               </div>
 
               {/* Dedicated Internal Scrolling Canvas Body */}
-              <div className="flex-1 overflow-y-auto overflow-x-hidden px-8 sm:px-14 py-8 relative select-text min-h-0">
+              <div className="flex-1 overflow-y-auto overflow-x-hidden px-8 sm:px-14 py-8 relative select-text min-h-0 openpost-editor-wrapper">
                 {/* Selection Bubble Menu */}
                 {editor && <SelectionBubbleMenu editor={editor} />}
+                {editor && <CodeBlockBubbleMenu editor={editor} />}
+
+                {/* Block Handle Controls (WordPress/Sanity-style drag handle, menu, add block) */}
+                {editor && <BlockHandle editor={editor} />}
 
                 {/* Big Uncropped Featured Cover Image — Placed just below Title */}
                 {featuredImage && (
@@ -888,7 +1114,7 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
         </div>
 
         {/* Resizer Handle */}
-        {showSidebar && (
+        {showSidebar && !focusMode && (
           <div
             onMouseDown={handleMouseDown}
             className="hidden lg:block w-1 hover:w-1.5 bg-border hover:bg-brand cursor-col-resize shrink-0 z-20 transition-colors h-full"
@@ -896,7 +1122,7 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
         )}
 
         {/* Right-hand Context Inspector Sidebar — NEVER hidden by top navbar */}
-        {showSidebar && (
+        {showSidebar && !focusMode && (
           <aside
             style={{ width: `${sidebarWidth}px` }}
             className="flex flex-col border-l border-border bg-white h-full shrink-0 overflow-y-auto shadow-xs z-20 min-h-0"
@@ -938,6 +1164,8 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
               seoWarnings={seoWarnings}
               words={words}
               minutes={minutes}
+              excerpt={excerpt}
+              setExcerpt={(val: string) => { setExcerpt(val); setIsDirty(true); setSaveStatus("unsaved"); }}
             />
           </aside>
         )}

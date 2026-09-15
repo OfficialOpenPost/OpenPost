@@ -3,7 +3,7 @@
 import { useEditor, EditorContent } from "@tiptap/react";
 import type { Editor } from "@tiptap/core";
 import { editorExtensions, EDITOR_STYLES } from "./extensions";
-import { SelectionBubbleMenu, ImageBubbleMenu } from "./BubbleMenus";
+import { SelectionBubbleMenu, ImageBubbleMenu, CodeBlockBubbleMenu } from "./BubbleMenus";
 
 interface OpenPostEditorProps {
   content?: string;
@@ -41,6 +41,7 @@ export function OpenPostEditor({ content = "", onChange, editable = true, editor
       <div className="w-full bg-surface">
         <div className="mx-auto max-w-[900px]">
           <SelectionBubbleMenu editor={editor} />
+          <CodeBlockBubbleMenu editor={editor} />
           <ImageBubbleMenu editor={editor} />
           <EditorContent editor={editor} />
         </div>

@@ -157,9 +157,9 @@ export default async function BlogPostPage({
           )}
 
           {/* Article Content Render */}
-          <article className="tiptap prose prose-lg prose-navy max-w-none">
+          <article className="tiptap max-w-none">
             {isJson ? (
-              <SharedRender content={content} />
+              <SharedRender content={content} viewport="wide" />
             ) : (
               <div dangerouslySetInnerHTML={{ __html: String(content || "") }} />
             )}

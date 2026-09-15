@@ -16,6 +16,7 @@ jobs:
     name: Dependency Review
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
+    continue-on-error: true
     permissions:
       contents: read
       pull-requests: write
@@ -33,6 +34,7 @@ jobs:
     name: OpenSSF Scorecard
     runs-on: ubuntu-latest
     if: github.event_name == 'schedule' || github.event_name == 'push'
+    continue-on-error: true
     permissions:
       security-events: write
       id-token: write

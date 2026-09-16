@@ -11,7 +11,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 # OpenPost — Agent Guide (AI Coding Agents)
 
 > **Product:** Multi-tenant headless CMS & Publishing Studio (Next.js 16 App Router + Supabase + Prisma + R2 + Tiptap).
-> **Package manager:** npm (no yarn/pnpm in repo). **CLI:** `openpost-cli` v0.2.4 only (bin `openpost-cli`, no `create-openpost` alias).
+> **Package manager:** npm (no yarn/pnpm in repo). **CLI:** `openpost-cli` v0.2.5 only (bin `openpost-cli`, no `create-openpost` alias).
 > **Database:** Supabase (managed PostgreSQL + Auth + RLS). Self-hosted PostgreSQL requires manual auth setup.
 > **Read this before touching code.**
 
@@ -27,7 +27,7 @@ D:/Openpost
 ├── src/components/project/  # ProjectSwitcher (localStorage openpost_active_project_id + projectChanged event)
 ├── prisma/schema.prisma     # UserRole enum OWNER/ADMIN/EDITOR/AUTHOR/CONTRIBUTOR (+ WRITER alias), Profile, Project, ProjectMember, Author, Blog, Media...
 ├── supabase/migrations/     # 001 → 021_site_config_and_cleanup.sql (run in order via SQL Editor)
-├── cli/                     # openpost-cli v0.2.4 → dist/index.js (single bin openpost-cli)
+├── cli/                     # openpost-cli v0.2.5 → dist/index.js (single bin openpost-cli)
 ├── templates/nextjs-blog/   # Next.js 15 blog starter copied by CLI
 ├── public/logo.svg          # Icon used in README & UI
 ├── scripts/cms.ts           # cms:doctor, cms:bootstrap (OWNER creation)
@@ -80,14 +80,20 @@ Rules:
 - `POST /api/cron/publish` requires `Authorization: Bearer CRON_SECRET` (fail-closed 500 if missing in prod), no `?secret=`, atomic `updateMany where status=scheduled`.
 - `audit_logs` via `createAuditLog()` on `post.*, user.status_*, project.member_*, author.*, bootstrap.owner_created` → `GET /api/audit` + UI `/dashboard/audit`.
 
-## 9) CLI (`openpost-cli` v0.2.4, single bin)
+## 9) CLI (`openpost-cli` v0.2.5, single bin)
 
 ```
-npx openpost-cli [init|doctor|login|help|version] [--cms-url URL] [--code OP-XXXX] [--project dir] [--skip-health] [--yes]
+npx openpost-cli [init|dev|build|start|status|upgrade|reconnect|doctor|login|logout|help|version] [--cms-url URL] [--code OP-XXXX] [--project dir] [--port N] [--template-only] [--skip-health] [--yes]
 ```
 
-- Init prompts `cmsUrl` → `healthCheck` `/api/health` (8s abort, fail fast) → open `${cmsUrl}/cli/connect` → paste `OP-XXXX` → `POST /api/cli/exchange` (3 retries, hashed `op_live_64hex` via `generateApiToken()`, 10-min single-use) → receives `siteConfig` from CMS → prompt `projectName` → `templates/nextjs-blog` → `.env.local` (`OPENPOST_URL/PROJECT_ID/TOKEN` + site config env vars) → customizes `layout.tsx`, `Header.tsx`, `Footer.tsx`, `page.tsx` with project name/tagline → `git init`.
-- `doctor` checks `/api/health` + template.
+- **init** prompts `cmsUrl` → health check → open `${cmsUrl}/cli/connect` → paste `OP-XXXX` → `POST /api/cli/exchange` (3 retries, hashed token, 10-min single-use) → receives `siteConfig` → prompt `projectName` → `templates/nextjs-blog` → `.env.local` → customizes `layout.tsx`, `Header.tsx`, `Footer.tsx`, `page.tsx` → `git init`.
+- **dev** finds project root (`.env.local`), validates CMS connection, runs `npm run dev -- -p PORT`.
+- **build** validates `.env.local`, installs deps if missing, runs `npm run build`.
+- **start** checks `.next` build exists, runs `npm run start -- -p PORT`.
+- **status** shows project config, Node/npm/CLI versions, `node_modules`/`.next` status, CMS health.
+- **upgrade** copies latest template (preserves `.env.local`/`node_modules`/`.next`/`.git`), shows dep changes, runs `npm install`.
+- **reconnect** switches CMS URL in `.env.local`, re-authorizes via browser flow.
+- **doctor** checks `/api/health` + template.
 - Build: `cd cli && npm run build` → `dist/index.js` (shebang, `openpost-cli` bin only).
 
 ## 10) Commands to Verify (run in order)
@@ -100,7 +106,7 @@ npm run test        # vitest 30/30 (rbac 8, api-token 3, storage 7, ssrf 6, slug
 npm run build       # next build (Turbopack) → 67 pages incl. /dashboard/team + /authors/[slug]
 npm run cms:doctor  # checks Node≥18, env, DB connection, tables, user_role enum 5 roles
 npm run cms:bootstrap -- --email admin@example.com --password StrongPass123  # creates OWNER
-cd cli && npm run build && node dist/index.js --help  # → openpost-cli v0.2.4
+cd cli && npm run build && node dist/index.js --help  # → openpost-cli v0.2.5
 node dist/index.js doctor --cms-url http://localhost:3000  # health
 ```
 

@@ -38,7 +38,7 @@ const proofPillars = [
       "Built-in 5-tier role hierarchy (Owner, Admin, Editor, Author, Contributor) with Supabase Row Level Security, HMAC webhooks, and SSRF guards.",
     action: {
       label: "Security Specs",
-      href: "/docs/security",
+      href: "/security",
       external: false,
     },
     highlights: ["5-Tier RBAC & RLS", "HMAC SHA-256 Webhooks", "SSRF IP Blocklist"],

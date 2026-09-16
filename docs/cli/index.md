@@ -1,4 +1,4 @@
-# OpenPost CLI (`openpost-cli` v0.2.4)
+# OpenPost CLI (`openpost-cli` v0.2.5)
 
 > **Single bin:** `openpost-cli` only — always use `npx openpost-cli` (legacy alias `create-openpost` removed).
 

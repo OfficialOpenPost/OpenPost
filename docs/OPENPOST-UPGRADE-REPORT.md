@@ -9,7 +9,7 @@ The repository contained a mature Next.js 16 App Router CMS with:
 - 5-tier RBAC (OWNER > ADMIN > EDITOR > AUTHOR > CONTRIBUTOR)
 - Multi-tenant architecture with project isolation
 - Public REST API (v1) for headless consumption
-- CLI tool (openpost-cli v0.2.4)
+- CLI tool (openpost-cli v0.2.5)
 - Webhook system with HMAC signing
 - Scheduled publishing with cron
 - Basic slash command menu
@@ -113,7 +113,7 @@ The repository contained a mature Next.js 16 App Router CMS with:
 - **RBAC** — 5-tier system untouched, already comprehensive
 - **Multi-tenancy** — Project isolation untouched, already enforced
 - **Webhooks** — HMAC signing and delivery untouched
-- **CLI** — openpost-cli v0.2.4 untouched
+- **CLI** — openpost-cli v0.2.5 untouched
 - **Public API v1** — Endpoints untouched for backward compatibility
 - **Cloudflare R2** — Storage system untouched
 - **Custom Blocks** — All 11 existing blocks untouched

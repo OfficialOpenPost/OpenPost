@@ -3,11 +3,11 @@ import prompts from "prompts";
 import open from "open";
 import fs from "fs";
 import path from "path";
-import { execSync } from "child_process";
+import { execSync, spawn } from "child_process";
 
 // --- helpers ---
 const pkg = (() => {
-  try { return JSON.parse(fs.readFileSync(path.join(__dirname, "../package.json"), "utf-8")); } catch { return { version: "0.2.4", name: "openpost-cli" }; }
+  try { return JSON.parse(fs.readFileSync(path.join(__dirname, "../package.json"), "utf-8")); } catch { return { version: "0.2.5", name: "openpost-cli" }; }
 })();
 const VERSION = pkg.version;
 const NAME = "openpost-cli";
@@ -26,6 +26,9 @@ try {
     cyan: (s: string) => s,
     dim: (s: string) => s,
     bold: (s: string) => s,
+    gray: (s: string) => s,
+    white: (s: string) => s,
+    magenta: (s: string) => s,
   };
 }
 
@@ -33,6 +36,113 @@ function logStep(msg: string) { console.log(chalk.cyan("→"), msg); }
 function logSuccess(msg: string) { console.log(chalk.green("✓"), msg); }
 function logError(msg: string) { console.error(chalk.red("✗"), msg); }
 function logWarn(msg: string) { console.warn(chalk.yellow("!"), msg); }
+
+// ─── .env file utilities ─────────────────────────────────────────────────────
+
+function readEnvFile(filePath: string): Record<string, string> {
+  const result: Record<string, string> = {};
+  if (!fs.existsSync(filePath)) return result;
+  const content = fs.readFileSync(filePath, "utf-8");
+  for (const line of content.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const eqIdx = trimmed.indexOf("=");
+    if (eqIdx === -1) continue;
+    const key = trimmed.slice(0, eqIdx).trim();
+    const value = trimmed.slice(eqIdx + 1).trim();
+    result[key] = value;
+  }
+  return result;
+}
+
+function writeEnvFile(filePath: string, vars: Record<string, string>, header?: string) {
+  const lines: string[] = [];
+  if (header) lines.push(`# ${header}`);
+  for (const [key, value] of Object.entries(vars)) {
+    lines.push(`${key}=${value}`);
+  }
+  // Atomic write: write to temp file then rename
+  const tmpPath = filePath + ".tmp";
+  fs.writeFileSync(tmpPath, lines.join("\n") + "\n", "utf-8");
+  fs.renameSync(tmpPath, filePath);
+}
+
+function updateEnvFile(filePath: string, updates: Record<string, string>) {
+  const existing = readEnvFile(filePath);
+  const merged = { ...existing, ...updates };
+  // Preserve comments and ordering from original file
+  if (fs.existsSync(filePath)) {
+    const lines = fs.readFileSync(filePath, "utf-8").split("\n");
+    const usedKeys = new Set<string>();
+    const output: string[] = [];
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) {
+        output.push(line);
+        continue;
+      }
+      const eqIdx = trimmed.indexOf("=");
+      if (eqIdx === -1) { output.push(line); continue; }
+      const key = trimmed.slice(0, eqIdx).trim();
+      if (key in updates) {
+        output.push(`${key}=${updates[key]}`);
+        usedKeys.add(key);
+      } else {
+        output.push(line);
+        usedKeys.add(key);
+      }
+    }
+    // Append any new keys not in original
+    for (const [key, value] of Object.entries(updates)) {
+      if (!usedKeys.has(key)) output.push(`${key}=${value}`);
+    }
+    const tmpPath = filePath + ".tmp";
+    fs.writeFileSync(tmpPath, output.join("\n") + "\n", "utf-8");
+    fs.renameSync(tmpPath, filePath);
+  } else {
+    writeEnvFile(filePath, merged);
+  }
+}
+
+// ─── project root detection ──────────────────────────────────────────────────
+
+function findProjectRoot(startDir?: string): string | null {
+  let dir = startDir || process.cwd();
+  for (let i = 0; i < 10; i++) {
+    if (fs.existsSync(path.join(dir, ".env.local"))) return dir;
+    if (fs.existsSync(path.join(dir, "package.json"))) {
+      // Check if this is an OpenPost project (has openpost metadata or NEXT_PUBLIC_OPENPOST_URL in .env*)
+      const envLocal = path.join(dir, ".env.local");
+      const envProduction = path.join(dir, ".env.production");
+      if (fs.existsSync(envLocal) || fs.existsSync(envProduction)) return dir;
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return null;
+}
+
+// ─── connection validation ───────────────────────────────────────────────────
+
+async function validateConnection(cmsUrl: string): Promise<{ ok: boolean; checks?: Record<string, string>; error?: string }> {
+  try {
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), 8000);
+    const res = await fetch(`${cmsUrl}/api/health`, {
+      signal: controller.signal,
+      headers: { "User-Agent": `${NAME}/${VERSION}` },
+    });
+    clearTimeout(t);
+    if (!res.ok) return { ok: false, error: `HTTP ${res.status}` };
+    const json = await res.json().catch(() => ({}));
+    return { ok: json.status === "ok", checks: json.checks, error: json.status !== "ok" ? "Degraded" : undefined };
+  } catch (e: any) {
+    return { ok: false, error: e.message || "Connection failed" };
+  }
+}
+
+// ─── argument parsing ────────────────────────────────────────────────────────
 
 function parseArgs(argv: string[]) {
   const args: Record<string, string | boolean> = {};
@@ -42,21 +152,25 @@ function parseArgs(argv: string[]) {
     else if (a === "--version" || a === "-v") args.version = true;
     else if (a === "--yes" || a === "-y") args.yes = true;
     else if (a === "--skip-health") args.skipHealth = true;
+    else if (a === "--template-only") args.templateOnly = true;
     else if (a.startsWith("--cms-url=")) args.cmsUrl = a.split("=")[1];
     else if (a.startsWith("--code=")) args.code = a.split("=")[1];
     else if (a.startsWith("--project=")) args.project = a.split("=")[1];
-    else if (a === "--cms-url" && argv[i+1]) args.cmsUrl = argv[++i];
-    else if (a === "--code" && argv[i+1]) args.code = argv[++i];
-    else if (a === "--project" && argv[i+1]) args.project = argv[++i];
-    else if (!a.startsWith("-") && !args.command) args.command = a;
+    else if (a.startsWith("--port=")) args.port = a.split("=")[1];
+    else if (a === "--cms-url" && argv[i + 1]) args.cmsUrl = argv[++i];
+    else if (a === "--code" && argv[i + 1]) args.code = argv[++i];
+    else if (a === "--project" && argv[i + 1]) args.project = argv[++i];
+    else if (a === "--port" && argv[i + 1]) args.port = argv[++i];
     else if (!a.startsWith("-") && !args.command) args.command = a;
   }
   return args;
 }
 
+// ─── help ────────────────────────────────────────────────────────────────────
+
 function printHelp() {
   console.log(`
-${chalk.bold("OpenPost CLI")} — Headless CMS connector (like sanity init)
+${chalk.bold("OpenPost CLI")} — Headless CMS connector & blog starter
 
 ${chalk.bold("Usage:")}
   npx ${NAME} [command] [options]
@@ -66,6 +180,12 @@ ${chalk.bold("Commands:")}
   login               Authenticate with CMS (opens browser)
   logout              Clear saved token (local)
   doctor              Run CMS health checks
+  dev                 Start local development server
+  build               Build production bundle
+  start               Start production server
+  status              Show project health & config
+  upgrade             Update project template & dependencies
+  reconnect           Connect to a different CMS instance
   help                Show this help
   version             Show version
 
@@ -73,6 +193,8 @@ ${chalk.bold("Options:")}
   --cms-url <url>     CMS URL (e.g. https://cms.example.com)
   --code <OP-XXXX>    Authorization code (skip prompt)
   --project <name>    Project directory name (skip prompt)
+  --port <number>     Port for dev/start (default: 3000)
+  --template-only     Upgrade: skip npm install
   --skip-health       Skip CMS health check (not recommended)
   --yes, -y           Non-interactive defaults
   --help, -h          Show help
@@ -80,12 +202,18 @@ ${chalk.bold("Options:")}
 
 ${chalk.bold("Examples:")}
   npx ${NAME} init my-blog
-  npx ${NAME} --cms-url http://localhost:3000 --project my-blog
-  npx ${NAME} doctor --cms-url https://cms.example.com
+  npx ${NAME} dev
+  npx ${NAME} build
+  npx ${NAME} start --port 8080
+  npx ${NAME} status
+  npx ${NAME} upgrade
+  npx ${NAME} reconnect
 
 Docs: https://github.com/OfficialOpenPost/OpenPost
 `);
 }
+
+// ─── shared utilities ────────────────────────────────────────────────────────
 
 function checkNode() {
   const major = parseInt(process.versions.node.split(".")[0], 10);
@@ -102,12 +230,29 @@ function copyRecursiveSync(src: string, dest: string) {
   if (isDirectory) {
     if (!fs.existsSync(dest)) fs.mkdirSync(dest, { recursive: true });
     for (const child of fs.readdirSync(src)) {
-      // Skip heavy dirs that shouldn't be in template
       if (["node_modules", ".next", ".git", "dist"].includes(child)) continue;
       copyRecursiveSync(path.join(src, child), path.join(dest, child));
     }
   } else if (exists) {
-    // Skip if src is same as dest or outside
+    fs.copyFileSync(src, dest);
+  }
+}
+
+function copyTemplateForUpgrade(src: string, dest: string) {
+  const exists = fs.existsSync(src);
+  const stats = exists && fs.statSync(src);
+  const isDirectory = exists && stats && (stats as any).isDirectory();
+  if (isDirectory) {
+    if (!fs.existsSync(dest)) fs.mkdirSync(dest, { recursive: true });
+    for (const child of fs.readdirSync(src)) {
+      // Skip heavy dirs and user data during upgrade
+      if (["node_modules", ".next", ".git", "dist", ".env.local", ".env.production", ".env.development"].includes(child)) continue;
+      copyTemplateForUpgrade(path.join(src, child), path.join(dest, child));
+    }
+  } else if (exists) {
+    // Never overwrite .env files during upgrade
+    const basename = path.basename(dest);
+    if (basename === ".env.local" || basename === ".env.production" || basename === ".env.development") return;
     fs.copyFileSync(src, dest);
   }
 }
@@ -126,7 +271,6 @@ async function healthCheck(cmsUrl: string, skip: boolean) {
       throw new Error(`HTTP ${res.status} ${text.slice(0,120)}`);
     }
     const json = await res.json().catch(() => ({}));
-    // health endpoint returns { status: "ok" } or similar
     logSuccess(`Connected to OpenPost CMS (${cmsUrl})`);
     if (json.version) console.log(chalk.dim(`  CMS version: ${json.version}`));
     return true;
@@ -156,7 +300,6 @@ async function exchangeCode(cmsUrl: string, code: string) {
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
         const msg = j.error?.message || res.statusText;
-        // 400 invalid/expired should not retry
         if (res.status === 400 && /invalid|expired|used/i.test(msg)) throw new Error(msg);
         throw new Error(msg);
       }
@@ -191,13 +334,11 @@ async function exchangeCode(cmsUrl: string, code: string) {
 }
 
 function findTemplateDir(): string | null {
-  // When installed from repo: templates/ is at repo root
-  // When installed via npm: templates/ is bundled inside the package (see "files" in package.json)
   const candidates = [
-    path.resolve(__dirname, "../templates/nextjs-blog"),          // npm install: dist/ -> openpost-cli/templates/
-    path.resolve(__dirname, "../../templates/nextjs-blog"),       // repo root:   cli/dist/ -> templates/
-    path.resolve(process.cwd(), "templates/nextjs-blog"),        // CWD
-    path.resolve(process.cwd(), "../templates/nextjs-blog"),     // parent of CWD
+    path.resolve(__dirname, "../templates/nextjs-blog"),
+    path.resolve(__dirname, "../../templates/nextjs-blog"),
+    path.resolve(process.cwd(), "templates/nextjs-blog"),
+    path.resolve(process.cwd(), "../templates/nextjs-blog"),
   ];
   for (const c of candidates) {
     if (fs.existsSync(c) && fs.statSync(c).isDirectory()) {
@@ -206,6 +347,8 @@ function findTemplateDir(): string | null {
   }
   return null;
 }
+
+// ─── runInit (unchanged) ─────────────────────────────────────────────────────
 
 async function runInit(args: Record<string, any>) {
   console.log(chalk.bold("\n======================================================="));
@@ -220,15 +363,12 @@ async function runInit(args: Record<string, any>) {
   let code = args.code as string | undefined;
   let projectDirArg = args.project as string | undefined;
 
-  // If command was `init my-blog` the first free arg is project name
-  const positionalProject = typeof args.command === "string" && !["init","login","logout","doctor","help","version"].includes(args.command) ? args.command as string : undefined;
-  // Also check raw argv for second positional
+  const positionalProject = typeof args.command === "string" && !["init","login","logout","doctor","help","version","dev","build","start","status","upgrade","reconnect"].includes(args.command) ? args.command as string : undefined;
   const raw = process.argv.slice(2);
   if (!projectDirArg && positionalProject) projectDirArg = positionalProject;
   if (!projectDirArg) {
-    // check if init <dir> style: e.g. npx openpost-cli init my-blog
     const initIdx = raw.indexOf("init");
-    if (initIdx !== -1 && raw[initIdx+1] && !raw[initIdx+1].startsWith("-")) projectDirArg = raw[initIdx+1];
+    if (initIdx !== -1 && raw[initIdx + 1] && !raw[initIdx + 1].startsWith("-")) projectDirArg = raw[initIdx + 1];
   }
 
   if (!cmsUrl) {
@@ -247,7 +387,6 @@ async function runInit(args: Record<string, any>) {
   if (!cmsUrl) { console.log("Setup aborted."); process.exit(1); }
   const cleanCmsUrl = cmsUrl.replace(/\/$/, "");
 
-  // Health check (fail fast like sanity)
   try {
     await healthCheck(cleanCmsUrl, Boolean(args.skipHealth));
   } catch {
@@ -286,9 +425,8 @@ async function runInit(args: Record<string, any>) {
     process.exit(1);
   }
   const { token, projectId, projectName: cmsProjectName, projectSlug, siteConfig } = exchange!;
-  logSuccess(`Authorized for project: ${chalk.bold(cmsProjectName || projectSlug || projectId)} (${projectId.slice(0,8)}…)`);
+  logSuccess(`Authorized for project: ${chalk.bold(cmsProjectName || projectSlug || projectId)} (${projectId.slice(0, 8)}…)`);
 
-  // Project directory
   let projectName = projectDirArg;
   if (!projectName) {
     const ans = await prompts({
@@ -306,7 +444,6 @@ async function runInit(args: Record<string, any>) {
   }
   if (!projectName) { console.log("Setup aborted."); process.exit(1); }
   projectName = projectName.trim();
-  // Validate slug-like but allow any dir name
   if (!/^[a-z0-9._-]+$/i.test(projectName)) {
     logWarn(`Project name "${projectName}" contains unusual characters. Using as-is.`);
   }
@@ -328,7 +465,6 @@ async function runInit(args: Record<string, any>) {
   fs.mkdirSync(dest, { recursive: true });
   copyRecursiveSync(templateDir, dest);
 
-  // Write .env.local (and .env.example reference)
   const siteName = siteConfig?.name || cmsProjectName || "My Blog";
   const siteTagline = siteConfig?.tagline || "";
   const siteDescription = siteConfig?.description || "";
@@ -371,11 +507,9 @@ SOCIAL_LINKEDIN=${socialLinkedin}
   fs.writeFileSync(path.join(dest, ".env.local"), envContent, "utf-8");
   logSuccess(`Wrote ${path.join(projectName, ".env.local")}`);
 
-  // Also write .env.example if missing
   const envExamplePath = path.join(dest, ".env.example");
   if (!fs.existsSync(envExamplePath)) fs.writeFileSync(envExamplePath, envContent, "utf-8");
 
-  // Customize package.json name + add openpost metadata
   const pkgPath = path.join(dest, "package.json");
   if (fs.existsSync(pkgPath)) {
     try {
@@ -386,7 +520,6 @@ SOCIAL_LINKEDIN=${socialLinkedin}
     } catch {}
   }
 
-  // Customize layout.tsx with site config
   const layoutPath = path.join(dest, "app", "layout.tsx");
   if (fs.existsSync(layoutPath)) {
     try {
@@ -399,7 +532,6 @@ SOCIAL_LINKEDIN=${socialLinkedin}
     } catch {}
   }
 
-  // Customize Header.tsx with site name and logo
   const headerPath = path.join(dest, "components", "Header.tsx");
   if (fs.existsSync(headerPath)) {
     try {
@@ -415,7 +547,6 @@ SOCIAL_LINKEDIN=${socialLinkedin}
     } catch {}
   }
 
-  // Customize Footer.tsx with site name
   const footerPath = path.join(dest, "components", "Footer.tsx");
   if (fs.existsSync(footerPath)) {
     try {
@@ -431,7 +562,6 @@ SOCIAL_LINKEDIN=${socialLinkedin}
     } catch {}
   }
 
-  // Customize page.tsx hero section with site name/tagline
   const homePath = path.join(dest, "app", "page.tsx");
   if (fs.existsSync(homePath)) {
     try {
@@ -443,7 +573,6 @@ SOCIAL_LINKEDIN=${socialLinkedin}
     } catch {}
   }
 
-  // Git init hint (like sanity)
   let didGitInit = false;
   try {
     if (!fs.existsSync(path.join(dest, ".git"))) {
@@ -464,23 +593,494 @@ SOCIAL_LINKEDIN=${socialLinkedin}
   if (didGitInit) console.log(chalk.dim("  • Initialized git repository"));
   console.log(chalk.dim("  • CMS:     ") + chalk.cyan(cleanCmsUrl));
   console.log(chalk.dim("  • Project: ") + chalk.cyan(projectSlug || cmsProjectName || projectId));
-  console.log(chalk.dim("  • Token:   ") + chalk.cyan(`op_live_${token.slice(8,12)}… (saved to .env.local, keep secret)`));
+  console.log(chalk.dim("  • Token:   ") + chalk.cyan(`op_live_${token.slice(8, 12)}… (saved to .env.local, keep secret)`));
   console.log("");
   console.log(chalk.dim("  Docs: https://github.com/OfficialOpenPost/OpenPost/blob/main/README.md#cli-starter-generator"));
   console.log(chalk.dim("  Need a new token? Re-run: ") + chalk.cyan(`npx ${NAME} --cms-url ${cleanCmsUrl}`));
   console.log("");
 }
 
+// ─── runDoctor (unchanged) ───────────────────────────────────────────────────
+
 async function runDoctor(args: Record<string, any>) {
   const cmsUrl = (args.cmsUrl as string) || "http://localhost:3000";
   console.log(chalk.bold("\nOpenPost Doctor — CMS connectivity check\n"));
   await healthCheck(cmsUrl.replace(/\/$/, ""), Boolean(args.skipHealth)).then(() => logSuccess("Doctor: CMS is reachable")).catch(() => process.exit(1));
-  // Check template
   const tpl = findTemplateDir();
   if (tpl) logSuccess(`Template found: ${tpl}`);
   else logWarn("Template not found (expected for npm-published CLI without repo)");
   console.log("");
 }
+
+// ─── runDev ──────────────────────────────────────────────────────────────────
+
+async function runDev(args: Record<string, any>) {
+  console.log(chalk.bold("\nOpenPost Dev — Local Development Server\n"));
+  checkNode();
+
+  const root = findProjectRoot();
+  if (!root) {
+    logError("No OpenPost project found. Run this command from your blog directory, or run `npx openpost-cli init` to create one.");
+    process.exit(1);
+  }
+
+  const envPath = path.join(root, ".env.local");
+  const env = readEnvFile(envPath);
+  const cmsUrl = env.OPENPOST_URL;
+  const projectId = env.OPENPOST_PROJECT_ID;
+
+  if (!cmsUrl) {
+    logError("OPENPOST_URL not found in .env.local. Run `npx openpost-cli reconnect` to reconfigure.");
+    process.exit(1);
+  }
+
+  logStep(`Project: ${root}`);
+  logStep(`CMS: ${chalk.cyan(cmsUrl)}`);
+  if (projectId) logStep(`Project ID: ${chalk.dim(projectId.slice(0, 8) + "…")}`);
+
+  // Validate connection
+  const result = await validateConnection(cmsUrl);
+  if (result.ok) {
+    logSuccess("CMS connection verified");
+  } else {
+    logWarn(`CMS connection issue: ${result.error}`);
+    console.log(chalk.dim("  Starting dev server anyway — check CMS availability.\n"));
+  }
+
+  const port = (args.port as string) || "3000";
+  logStep(`Starting Next.js dev server on port ${port}...\n`);
+
+  const child = spawn("npm", ["run", "dev", "--", "-p", port], {
+    cwd: root,
+    stdio: "inherit",
+    shell: true,
+  });
+
+  // Handle graceful shutdown
+  const cleanup = () => {
+    if (!child.killed) {
+      child.kill("SIGTERM");
+      setTimeout(() => { if (!child.killed) child.kill("SIGKILL"); }, 5000);
+    }
+  };
+  process.on("SIGINT", cleanup);
+  process.on("SIGTERM", cleanup);
+
+  child.on("close", (code) => {
+    process.removeListener("SIGINT", cleanup);
+    process.removeListener("SIGTERM", cleanup);
+    if (code !== 0 && code !== null) {
+      logError(`Dev server exited with code ${code}`);
+      process.exit(code);
+    }
+  });
+
+  child.on("error", (err) => {
+    logError(`Failed to start dev server: ${err.message}`);
+    process.exit(1);
+  });
+}
+
+// ─── runBuild ────────────────────────────────────────────────────────────────
+
+async function runBuild(args: Record<string, any>) {
+  console.log(chalk.bold("\nOpenPost Build — Production Bundle\n"));
+  checkNode();
+
+  const root = findProjectRoot();
+  if (!root) {
+    logError("No OpenPost project found. Run this command from your blog directory.");
+    process.exit(1);
+  }
+
+  const envPath = path.join(root, ".env.local");
+  if (!fs.existsSync(envPath)) {
+    logError(".env.local not found. Run `npx openpost-cli init` or `npx openpost-cli reconnect` first.");
+    process.exit(1);
+  }
+
+  const env = readEnvFile(envPath);
+  if (!env.OPENPOST_URL) {
+    logError("OPENPOST_URL not found in .env.local.");
+    process.exit(1);
+  }
+
+  logStep(`Project: ${root}`);
+  logStep(`CMS: ${chalk.cyan(env.OPENPOST_URL)}`);
+
+  // Check if node_modules exists
+  if (!fs.existsSync(path.join(root, "node_modules"))) {
+    logWarn("node_modules not found. Running npm install first...");
+    logStep("npm install ...");
+    try {
+      execSync("npm install", { cwd: root, stdio: "inherit" });
+      logSuccess("Dependencies installed");
+    } catch (e: any) {
+      logError("npm install failed. Run `npm install` manually and try again.");
+      process.exit(1);
+    }
+  }
+
+  const startTime = Date.now();
+  logStep("Building production bundle...\n");
+
+  try {
+    execSync("npm run build", { cwd: root, stdio: "inherit" });
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    console.log("");
+    logSuccess(`Build completed in ${elapsed}s`);
+    logStep(`Output: ${chalk.dim(path.join(root, ".next"))}`);
+    logStep(`Run ${chalk.cyan("npx openpost-cli start")} to serve the production build`);
+    console.log("");
+  } catch (e: any) {
+    logError("Build failed. Check the output above for errors.");
+    process.exit(1);
+  }
+}
+
+// ─── runStart ────────────────────────────────────────────────────────────────
+
+async function runStart(args: Record<string, any>) {
+  console.log(chalk.bold("\nOpenPost Start — Production Server\n"));
+  checkNode();
+
+  const root = findProjectRoot();
+  if (!root) {
+    logError("No OpenPost project found. Run this command from your blog directory.");
+    process.exit(1);
+  }
+
+  const envPath = path.join(root, ".env.local");
+  if (!fs.existsSync(envPath)) {
+    logError(".env.local not found. Run `npx openpost-cli init` or `npx openpost-cli reconnect` first.");
+    process.exit(1);
+  }
+
+  const env = readEnvFile(envPath);
+  if (!env.OPENPOST_URL) {
+    logError("OPENPOST_URL not found in .env.local.");
+    process.exit(1);
+  }
+
+  // Check if build exists
+  if (!fs.existsSync(path.join(root, ".next"))) {
+    logWarn("No .next build found. Running build first...");
+    logStep("npm run build ...");
+    try {
+      execSync("npm run build", { cwd: root, stdio: "inherit" });
+      logSuccess("Build completed");
+    } catch (e: any) {
+      logError("Build failed. Run `npx openpost-cli build` manually and try again.");
+      process.exit(1);
+    }
+  }
+
+  const port = (args.port as string) || "3000";
+  logStep(`Project: ${root}`);
+  logStep(`CMS: ${chalk.cyan(env.OPENPOST_URL)}`);
+  logStep(`Starting production server on port ${port}...\n`);
+
+  const child = spawn("npm", ["run", "start", "--", "-p", port], {
+    cwd: root,
+    stdio: "inherit",
+    shell: true,
+    env: { ...process.env, PORT: port },
+  });
+
+  const cleanup = () => {
+    if (!child.killed) {
+      child.kill("SIGTERM");
+      setTimeout(() => { if (!child.killed) child.kill("SIGKILL"); }, 5000);
+    }
+  };
+  process.on("SIGINT", cleanup);
+  process.on("SIGTERM", cleanup);
+
+  child.on("close", (code) => {
+    process.removeListener("SIGINT", cleanup);
+    process.removeListener("SIGTERM", cleanup);
+    if (code !== 0 && code !== null) {
+      logError(`Server exited with code ${code}`);
+      process.exit(code);
+    }
+  });
+
+  child.on("error", (err) => {
+    logError(`Failed to start server: ${err.message}`);
+    process.exit(1);
+  });
+}
+
+// ─── runStatus ───────────────────────────────────────────────────────────────
+
+async function runStatus(args: Record<string, any>) {
+  console.log(chalk.bold("\nOpenPost Status — Project Health\n"));
+
+  const root = findProjectRoot();
+  if (!root) {
+    logError("No OpenPost project found. Run this command from your blog directory.");
+    process.exit(1);
+  }
+
+  const envPath = path.join(root, ".env.local");
+  const env = readEnvFile(envPath);
+
+  // Project info
+  console.log(chalk.bold("  Project"));
+  console.log(`  ${chalk.dim("Root:")}       ${root}`);
+  if (env.OPENPOST_URL) console.log(`  ${chalk.dim("CMS URL:")}    ${chalk.cyan(env.OPENPOST_URL)}`);
+  if (env.OPENPOST_PROJECT_ID) console.log(`  ${chalk.dim("Project ID:")} ${chalk.dim(env.OPENPOST_PROJECT_ID.slice(0, 8) + "…")}`);
+  if (env.OPENPOST_TOKEN) console.log(`  ${chalk.dim("Token:")}      ${chalk.dim(`op_live_${env.OPENPOST_TOKEN.slice(8, 12)}…`)}`);
+  console.log("");
+
+  // Environment
+  console.log(chalk.bold("  Environment"));
+  console.log(`  ${chalk.dim("Node.js:")}   ${process.version}`);
+  console.log(`  ${chalk.dim("npm:")}       ${(() => { try { return execSync("npm --version", { encoding: "utf-8" }).trim(); } catch { return "unknown"; } })()}`);
+  console.log(`  ${chalk.dim("CLI:")}       v${VERSION}`);
+  console.log("");
+
+  // Dependencies
+  const nodeModulesExists = fs.existsSync(path.join(root, "node_modules"));
+  const buildExists = fs.existsSync(path.join(root, ".next"));
+
+  console.log(chalk.bold("  Build Status"));
+  console.log(`  ${chalk.dim("node_modules:")} ${nodeModulesExists ? chalk.green("installed") : chalk.red("missing — run npm install")}`);
+  console.log(`  ${chalk.dim(".next build:")}  ${buildExists ? chalk.green("exists") : chalk.yellow("missing — run npx openpost-cli build")}`);
+  console.log("");
+
+  // CMS Connection
+  if (env.OPENPOST_URL) {
+    console.log(chalk.bold("  CMS Connection"));
+    const result = await validateConnection(env.OPENPOST_URL);
+    if (result.ok) {
+      console.log(`  ${chalk.dim("Status:")}     ${chalk.green("connected")}`);
+      if (result.checks) {
+        for (const [key, value] of Object.entries(result.checks)) {
+          const color = value === "Connected" || value === "Valid" || value === "Operational" ? chalk.green : chalk.yellow;
+          console.log(`  ${chalk.dim(`${key}:`)}        ${color(value)}`);
+        }
+      }
+    } else {
+      console.log(`  ${chalk.dim("Status:")}     ${chalk.red("disconnected")} — ${result.error}`);
+    }
+    console.log("");
+  }
+
+  // Quick actions
+  console.log(chalk.bold("  Quick Actions"));
+  console.log(`  ${chalk.cyan("npx openpost-cli dev")}          Start development server`);
+  console.log(`  ${chalk.cyan("npx openpost-cli build")}        Build for production`);
+  console.log(`  ${chalk.cyan("npx openpost-cli start")}        Start production server`);
+  console.log(`  ${chalk.cyan("npx openpost-cli upgrade")}      Update template & deps`);
+  console.log(`  ${chalk.cyan("npx openpost-cli reconnect")}    Connect to different CMS`);
+  console.log("");
+}
+
+// ─── runUpgrade ──────────────────────────────────────────────────────────────
+
+async function runUpgrade(args: Record<string, any>) {
+  console.log(chalk.bold("\nOpenPost Upgrade — Update Project Template\n"));
+  checkNode();
+
+  const root = findProjectRoot();
+  if (!root) {
+    logError("No OpenPost project found. Run this command from your blog directory.");
+    process.exit(1);
+  }
+
+  const templateDir = findTemplateDir();
+  if (!templateDir) {
+    logError("Could not locate templates/nextjs-blog directory. If installed via npm, update the CLI first: npm install -g openpost-cli");
+    process.exit(1);
+  }
+
+  const envPath = path.join(root, ".env.local");
+  const env = readEnvFile(envPath);
+
+  logStep(`Project: ${root}`);
+  logStep(`Template: ${templateDir}`);
+
+  // Check for changes
+  logStep("Comparing template files...");
+
+  // Copy template files (preserving .env.local, node_modules, .next, .git)
+  logStep("Updating template files...");
+  copyTemplateForUpgrade(templateDir, root);
+  logSuccess("Template files updated");
+
+  // Update package.json name and openpost metadata if they exist
+  const pkgPath = path.join(root, "package.json");
+  if (fs.existsSync(pkgPath)) {
+    try {
+      const projectPkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
+      const templatePkg = JSON.parse(fs.readFileSync(path.join(templateDir, "package.json"), "utf-8"));
+
+      // Check for dependency changes
+      const allDeps = { ...templatePkg.dependencies, ...templatePkg.devDependencies };
+      const projectDeps = { ...projectPkg.dependencies, ...projectPkg.devDependencies };
+      const changes: string[] = [];
+
+      for (const [dep, version] of Object.entries(allDeps)) {
+        const current = projectDeps[dep];
+        if (!current) {
+          changes.push(`  ${chalk.green("+")} ${dep}@${version} (new)`);
+        } else if (current !== version) {
+          changes.push(`  ${chalk.yellow("~")} ${dep}: ${current} → ${version}`);
+        }
+      }
+
+      if (changes.length > 0) {
+        console.log(`\n${chalk.bold("  Dependency changes:")}`);
+        console.log(changes.join("\n"));
+      } else {
+        logSuccess("Dependencies are up to date");
+      }
+    } catch {}
+  }
+
+  // Install dependencies unless --template-only
+  if (!args.templateOnly) {
+    logStep("Installing updated dependencies...");
+    try {
+      execSync("npm install", { cwd: root, stdio: "inherit" });
+      logSuccess("Dependencies installed");
+    } catch (e: any) {
+      logWarn("npm install had issues. You may need to run it manually.");
+    }
+  } else {
+    logStep("Skipping npm install (--template-only)");
+  }
+
+  console.log(chalk.green("\n======================================================="));
+  console.log(chalk.green("  ✨ Upgrade complete!"));
+  console.log(chalk.green("=======================================================\n"));
+  logStep("Run `npx openpost-cli status` to verify everything is working");
+  logStep("Run `npx openpost-cli dev` to start developing");
+  console.log("");
+}
+
+// ─── runReconnect ────────────────────────────────────────────────────────────
+
+async function runReconnect(args: Record<string, any>) {
+  console.log(chalk.bold("\nOpenPost Reconnect — Connect to a Different CMS\n"));
+  checkNode();
+
+  const root = findProjectRoot();
+  if (!root) {
+    // No project found — run init instead
+    logWarn("No existing project found. Running init to create a new project...");
+    return runInit(args);
+  }
+
+  const envPath = path.join(root, ".env.local");
+  const env = readEnvFile(envPath);
+  const currentCmsUrl = env.OPENPOST_URL;
+
+  if (currentCmsUrl) {
+    logStep(`Current CMS: ${chalk.cyan(currentCmsUrl)}`);
+  }
+
+  let cmsUrl = args.cmsUrl as string | undefined;
+  if (!cmsUrl) {
+    const ans = await prompts({
+      type: "text",
+      name: "cmsUrl",
+      message: "Enter the new OpenPost CMS URL:",
+      initial: currentCmsUrl || "http://localhost:3000",
+      validate: (v: string) => { try { new URL(v); return true; } catch { return "Please enter a valid URL"; } },
+    });
+    cmsUrl = ans.cmsUrl;
+  }
+  if (!cmsUrl) { console.log("Reconnect aborted."); process.exit(1); }
+  const cleanCmsUrl = cmsUrl.replace(/\/$/, "");
+
+  if (cleanCmsUrl === currentCmsUrl) {
+    logWarn("Same CMS URL as current. No changes needed.");
+    return;
+  }
+
+  // Health check
+  try {
+    await healthCheck(cleanCmsUrl, Boolean(args.skipHealth));
+  } catch {
+    if (!args.skipHealth) {
+      const { retry } = await prompts({ type: "confirm", name: "retry", message: "Health check failed. Continue anyway?", initial: false });
+      if (!retry) process.exit(1);
+    }
+  }
+
+  // Open browser for code
+  const connectUrl = `${cleanCmsUrl}/cli/connect`;
+  console.log(`\n${chalk.bold("Authorize this CLI:")}`);
+  console.log(`  1. Open ${chalk.cyan(connectUrl)} in your browser`);
+  console.log(`  2. Log in and copy the authorization code`);
+  console.log(chalk.dim("  (Code expires in 10 minutes, single-use)\n"));
+
+  try { await open(connectUrl); logSuccess("Opened browser for authorization"); } catch { console.log(`Please open manually: ${connectUrl}`); }
+
+  let code = args.code as string | undefined;
+  if (!code) {
+    const ans = await prompts({
+      type: "text",
+      name: "code",
+      message: "Paste the authorization code:",
+      validate: (v: string) => (v && v.trim().length >= 6 ? true : "Please enter the authorization code."),
+    });
+    code = ans.code;
+  }
+  if (!code) { console.log("Reconnect aborted."); process.exit(1); }
+
+  let exchange;
+  try {
+    exchange = await exchangeCode(cleanCmsUrl, code);
+  } catch (e: any) {
+    logError(`Code exchange failed: ${e.message}`);
+    process.exit(1);
+  }
+
+  const { token, projectId, projectName: cmsProjectName, projectSlug } = exchange!;
+  logSuccess(`Authorized for project: ${chalk.bold(cmsProjectName || projectSlug || projectId)}`);
+
+  // Update .env.local — preserve all other vars
+  const updates: Record<string, string> = {
+    OPENPOST_URL: cleanCmsUrl,
+    OPENPOST_PROJECT_ID: projectId,
+    OPENPOST_TOKEN: token,
+    NEXT_PUBLIC_OPENPOST_URL: cleanCmsUrl,
+  };
+
+  // Update site config from new CMS if available
+  if (exchange!.siteConfig) {
+    const sc = exchange!.siteConfig;
+    if (sc.name) { updates.SITE_NAME = sc.name; updates.NEXT_PUBLIC_SITE_NAME = sc.name; }
+    if (sc.tagline !== undefined) { updates.SITE_TAGLINE = sc.tagline; updates.NEXT_PUBLIC_SITE_TAGLINE = sc.tagline; }
+    if (sc.description !== undefined) { updates.SITE_DESCRIPTION = sc.description; updates.NEXT_PUBLIC_SITE_DESCRIPTION = sc.description; }
+    if (sc.logoUrl !== undefined) { updates.SITE_LOGO_URL = sc.logoUrl; updates.NEXT_PUBLIC_SITE_LOGO_URL = sc.logoUrl; }
+    if (sc.primaryColor) { updates.SITE_PRIMARY_COLOR = sc.primaryColor; updates.NEXT_PUBLIC_SITE_PRIMARY_COLOR = sc.primaryColor; }
+    if (sc.url) updates.SITE_URL = sc.url;
+    if (sc.language) updates.SITE_LANGUAGE = sc.language;
+    if (sc.timezone) updates.SITE_TIMEZONE = sc.timezone;
+    if (sc.social?.twitter !== undefined) updates.SOCIAL_TWITTER = sc.social.twitter;
+    if (sc.social?.github !== undefined) updates.SOCIAL_GITHUB = sc.social.github;
+    if (sc.social?.linkedin !== undefined) updates.SOCIAL_LINKEDIN = sc.social.linkedin;
+  }
+
+  updateEnvFile(envPath, updates);
+  logSuccess("Updated .env.local with new CMS connection");
+
+  console.log(chalk.green("\n======================================================="));
+  console.log(chalk.green("  ✨ Reconnect complete!"));
+  console.log(chalk.green("=======================================================\n"));
+  console.log(`  ${chalk.dim("CMS:")}     ${chalk.cyan(cleanCmsUrl)}`);
+  console.log(`  ${chalk.dim("Project:")} ${chalk.cyan(projectSlug || cmsProjectName || projectId)}`);
+  console.log(`  ${chalk.dim("Token:")}   ${chalk.cyan(`op_live_${token.slice(8, 12)}…`)}`);
+  console.log("");
+  logStep("Run `npx openpost-cli dev` to start developing with the new CMS");
+  console.log("");
+}
+
+// ─── main ────────────────────────────────────────────────────────────────────
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
@@ -493,8 +1093,13 @@ async function main() {
   if (["version", "--version", "-v"].includes(cmd)) { console.log(`${NAME} v${VERSION}`); process.exit(0); }
 
   if (cmd === "doctor") return runDoctor(args);
-  if (cmd === "init" || cmd === "create" || !["login","logout","doctor"].includes(cmd)) {
-    // login is alias to init (code exchange)
+  if (cmd === "dev") return runDev(args);
+  if (cmd === "build") return runBuild(args);
+  if (cmd === "start") return runStart(args);
+  if (cmd === "status") return runStatus(args);
+  if (cmd === "upgrade") return runUpgrade(args);
+  if (cmd === "reconnect") return runReconnect(args);
+  if (cmd === "init" || cmd === "create" || !["login", "logout", "doctor", "dev", "build", "start", "status", "upgrade", "reconnect"].includes(cmd)) {
     return runInit(args);
   }
   if (cmd === "login") return runInit(args);

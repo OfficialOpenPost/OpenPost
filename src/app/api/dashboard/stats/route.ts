@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, withDbRetry } from "@/lib/db";
 import { requireApprovedUser, requireProjectMember, AuthError } from "@/lib/auth";
+import { queryCache } from "@/lib/cache";
 
 export async function GET(req: NextRequest) {
   try {
@@ -23,78 +24,70 @@ export async function GET(req: NextRequest) {
     }
 
     const projectWhere = targetProjectId ? { projectId: targetProjectId } : {};
+    const cacheKey = `dashboard:${targetProjectId || "all"}`;
 
-    // 1. Group blogs by status in a SINGLE query instead of 4 separate queries
-    const statusGroups = await withDbRetry(() =>
-      db.blog.groupBy({
-        by: ["status"],
-        where: projectWhere,
-        _count: { _all: true },
-      })
-    );
+    const result = await queryCache.getOrSet(cacheKey, 15_000, async () => {
+      // 1. Group blogs by status in a SINGLE query instead of 4 separate queries
+      const [statusGroups, counts, aggregates, recentBlogs] = await withDbRetry(() =>
+        Promise.all([
+          db.blog.groupBy({
+            by: ["status"],
+            where: projectWhere,
+            _count: { _all: true },
+          }),
+          Promise.all([
+            db.category.count({ where: projectWhere }),
+            db.tag.count({ where: projectWhere }),
+            db.author.count({ where: projectWhere }),
+            db.media.count({ where: projectWhere }),
+            db.webhook.count({ where: projectWhere }),
+          ]),
+          db.blog.aggregate({
+            where: projectWhere,
+            _sum: { wordCount: true },
+            _avg: { readingTime: true },
+          }),
+          db.blog.findMany({
+            where: projectWhere,
+            take: 6,
+            orderBy: { updatedAt: "desc" },
+            select: {
+              id: true,
+              title: true,
+              slug: true,
+              status: true,
+              updatedAt: true,
+              createdAt: true,
+              publishedAt: true,
+              scheduledAt: true,
+              wordCount: true,
+              readingTime: true,
+              seo: true,
+              category: { select: { id: true, name: true, slug: true } },
+              author: { select: { name: true, email: true } },
+              featuredImage: { select: { id: true, variants: true } },
+            },
+          }),
+        ])
+      );
 
-    let publishedCount = 0;
-    let draftsCount = 0;
-    let scheduledCount = 0;
-    let trashCount = 0;
+      let publishedCount = 0;
+      let draftsCount = 0;
+      let scheduledCount = 0;
+      let trashCount = 0;
 
-    for (const group of statusGroups) {
-      if (group.status === "published") publishedCount = group._count._all;
-      else if (group.status === "draft") draftsCount = group._count._all;
-      else if (group.status === "scheduled") scheduledCount = group._count._all;
-      else if (group.status === "trash") trashCount = group._count._all;
-    }
+      for (const group of statusGroups) {
+        if (group.status === "published") publishedCount = group._count._all;
+        else if (group.status === "draft") draftsCount = group._count._all;
+        else if (group.status === "scheduled") scheduledCount = group._count._all;
+        else if (group.status === "trash") trashCount = group._count._all;
+      }
 
-    // 2. Fetch taxonomies and media counts in a small parallel batch
-    const [categoriesCount, tagsCount, authorsCount, mediaCount, webhooksCount] = await withDbRetry(() =>
-      Promise.all([
-        db.category.count({ where: projectWhere }),
-        db.tag.count({ where: projectWhere }),
-        db.author.count({ where: projectWhere }),
-        db.media.count({ where: projectWhere }),
-        db.webhook.count({ where: projectWhere }),
-      ])
-    );
+      const [categoriesCount, tagsCount, authorsCount, mediaCount, webhooksCount] = counts;
+      const totalWords = aggregates._sum.wordCount || 0;
+      const avgReadingTime = Math.round(aggregates._avg.readingTime || 0);
 
-    // 3. Fetch aggregates & top 6 recent articles
-    const [aggregates, recentBlogs] = await withDbRetry(() =>
-      Promise.all([
-        db.blog.aggregate({
-          where: projectWhere,
-          _sum: { wordCount: true },
-          _avg: { readingTime: true },
-        }),
-        db.blog.findMany({
-          where: projectWhere,
-          take: 6,
-          orderBy: { updatedAt: "desc" },
-          select: {
-            id: true,
-            title: true,
-            slug: true,
-            status: true,
-            updatedAt: true,
-            createdAt: true,
-            publishedAt: true,
-            scheduledAt: true,
-            wordCount: true,
-            readingTime: true,
-            seo: true,
-            category: { select: { id: true, name: true, slug: true } },
-            author: { select: { name: true, email: true } },
-            featuredImage: { select: { id: true, variants: true } },
-          },
-        }),
-      ])
-    );
-
-    const totalWords = aggregates._sum.wordCount || 0;
-    const avgReadingTime = Math.round(aggregates._avg.readingTime || 0);
-
-    return NextResponse.json({
-      data: {
-        projectId: targetProjectId,
-        userRole,
+      return {
         stats: {
           published: publishedCount,
           drafts: draftsCount,
@@ -110,6 +103,14 @@ export async function GET(req: NextRequest) {
           avgReadingTime,
         },
         recentBlogs,
+      };
+    });
+
+    return NextResponse.json({
+      data: {
+        projectId: targetProjectId,
+        userRole,
+        ...result,
       },
     });
   } catch (error: any) {

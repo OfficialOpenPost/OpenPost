@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, withDbRetry } from "@/lib/db";
 import { requireApprovedUser, requireProjectMember, AuthError, hasPermission, hasMinimumRole } from "@/lib/auth";
+import { queryCache } from "@/lib/cache";
 import crypto from "crypto";
 
 export async function GET(req: NextRequest) {
@@ -10,6 +11,7 @@ export async function GET(req: NextRequest) {
     const search = searchParams.get("search")?.trim();
     const projectId = searchParams.get("projectId") || req.headers.get("x-openpost-project");
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") ?? "50", 10)));
+    const offset = parseInt(searchParams.get("offset") || "0", 10);
 
     let targetProjectId = projectId;
     if (!targetProjectId) {
@@ -35,14 +37,18 @@ export async function GET(req: NextRequest) {
       delete where.projectId;
     }
 
-    const data = await withDbRetry(() =>
-      db.media.findMany({
-        where,
-        orderBy: { createdAt: "desc" },
-        take: limit,
-        select: { id: true, originalFilename: true, mimeType: true, sizeBytes: true, width: true, height: true, variants: true, altTextDefault: true, createdAt: true, projectId: true } as never,
-      })
-    );
+    const [data, total] = await Promise.all([
+      withDbRetry(() =>
+        db.media.findMany({
+          where,
+          orderBy: { createdAt: "desc" },
+          skip: offset,
+          take: limit,
+          select: { id: true, originalFilename: true, mimeType: true, sizeBytes: true, width: true, height: true, variants: true, altTextDefault: true, createdAt: true, projectId: true } as never,
+        })
+      ),
+      withDbRetry(() => db.media.count({ where })),
+    ]);
 
     const withUrl = (data as any[]).map((m) => ({
       ...m,
@@ -65,7 +71,7 @@ export async function GET(req: NextRequest) {
     } catch {
       withUsage = withUrl.map((m) => ({ ...m, usedIn: [] }));
     }
-    return NextResponse.json({ data: withUsage });
+    return NextResponse.json({ data: withUsage, total, hasMore: offset + limit < total });
   } catch (error: any) {
     if (error instanceof AuthError) {
       return NextResponse.json({ error: { code: error.code, message: error.message } }, { status: error.statusCode });
@@ -152,6 +158,7 @@ export async function POST(req: NextRequest) {
     );
 
     const serialized = { ...media, sizeBytes: media.sizeBytes ? Number(media.sizeBytes) : media.sizeBytes };
+    queryCache.invalidate("dashboard:");
     return NextResponse.json({ data: serialized }, { status: 201 });
   } catch (error: any) {
     if (error instanceof AuthError) {

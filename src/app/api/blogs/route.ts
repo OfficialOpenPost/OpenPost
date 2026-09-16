@@ -3,6 +3,7 @@ import { db, withDbRetry } from "@/lib/db";
 import { z } from "zod";
 import { requireApprovedUser, requireProjectMember, requirePermission, hasPermission, hasMinimumRole, AuthError, createAuditLog } from "@/lib/auth";
 import { countWords, readingTime as calcReadingTime } from "@/lib/publish";
+import { queryCache } from "@/lib/cache";
 import { triggerWebhooks } from "@/lib/webhooks";
 import { slugify } from "@/lib/slug";
 
@@ -241,6 +242,7 @@ export async function GET(req: NextRequest) {
     const user = await requireApprovedUser();
     const { searchParams } = new URL(req.url);
     const limit = parseInt(searchParams.get("limit") || "50", 10);
+    const offset = parseInt(searchParams.get("offset") || "0", 10);
     const status = searchParams.get("status");
     const projectId = searchParams.get("projectId") || req.headers.get("x-openpost-project");
 
@@ -270,26 +272,37 @@ export async function GET(req: NextRequest) {
       categoryId: true,
       featuredImageId: true,
       createdBy: true,
-      seo: true,
       category: { select: { id: true, name: true, slug: true } },
       author: { select: { name: true, email: true } },
       featuredImage: { select: { id: true, variants: true } },
-      project: { select: { id: true, name: true, slug: true } },
     };
 
-    const blogs = await withDbRetry(() =>
-      db.blog.findMany({
-        where: {
-          projectId: targetProjectId,
-          ...(status && status !== "all" ? { status: status as any } : {}),
-        },
-        take: Math.min(100, Math.max(1, limit)),
-        orderBy: { updatedAt: "desc" },
-        select: blogListSelect,
-      })
-    );
+    const cacheKey = `blogs:${targetProjectId}:${status || "all"}:${limit}:${offset}`;
 
-    return NextResponse.json({ data: blogs });
+    const [blogs, total] = await Promise.all([
+      withDbRetry(() =>
+        db.blog.findMany({
+          where: {
+            projectId: targetProjectId,
+            ...(status && status !== "all" ? { status: status as any } : {}),
+          },
+          skip: offset,
+          take: Math.min(100, Math.max(1, limit)),
+          orderBy: { updatedAt: "desc" },
+          select: blogListSelect,
+        })
+      ),
+      withDbRetry(() =>
+        db.blog.count({
+          where: {
+            projectId: targetProjectId,
+            ...(status && status !== "all" ? { status: status as any } : {}),
+          },
+        })
+      ),
+    ]);
+
+    return NextResponse.json({ data: blogs, total, hasMore: offset + limit < total });
   } catch (error: any) {
     const status = error instanceof AuthError ? error.statusCode : 500;
     const code = error instanceof AuthError ? error.code : "FETCH_FAILED";
@@ -652,6 +665,9 @@ export async function POST(req: NextRequest) {
         metadata: { title: updated.title, status: updated.status },
       });
 
+      queryCache.invalidate("blogs:");
+      queryCache.invalidate("dashboard:");
+
       return NextResponse.json({ data: updated });
     }
 
@@ -859,6 +875,9 @@ export async function POST(req: NextRequest) {
       targetId: blog.id,
       metadata: { title: blog.title, status: blog.status },
     });
+
+    queryCache.invalidate("blogs:");
+    queryCache.invalidate("dashboard:");
 
     return NextResponse.json({ data: blog }, { status: 201 });
   } catch (error: any) {

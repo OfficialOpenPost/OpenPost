@@ -16,6 +16,7 @@ import {
   AuthError,
 } from "@/lib/auth";
 import { rateLimit, getClientIp } from "@/lib/rateLimit";
+import { queryCache } from "@/lib/cache";
 import { z } from "zod";
 
 const updateUserSchema = z.object({
@@ -78,6 +79,17 @@ export async function GET(req: NextRequest) {
             projectId,
           },
           orderBy: { createdAt: "desc" },
+          select: {
+            id: true,
+            email: true,
+            projectId: true,
+            role: true,
+            createdBy: true,
+            createdAt: true,
+            expiresAt: true,
+            usedAt: true,
+            token: true,
+          },
         })
       ),
       // Also fetch pending users who signed up but have no project membership yet
@@ -241,6 +253,8 @@ export async function POST(req: NextRequest) {
         metadata: { email: cleanEmail, role },
       });
 
+      queryCache.invalidate("dashboard:");
+
       return NextResponse.json({ data: { user: profile, membership } }, { status: 201 });
     }
 
@@ -263,6 +277,8 @@ export async function POST(req: NextRequest) {
       targetId: invite.id,
       metadata: { email: cleanEmail, role },
     });
+
+    queryCache.invalidate("dashboard:");
 
     return NextResponse.json({ data: { invite } }, { status: 201 });
   } catch (error: any) {
@@ -467,6 +483,8 @@ export async function DELETE(req: NextRequest) {
         targetId: inviteId,
       });
 
+      queryCache.invalidate("dashboard:");
+
       return NextResponse.json({ data: { success: true, revoked: true } });
     }
 
@@ -578,6 +596,8 @@ export async function DELETE(req: NextRequest) {
       targetId: id,
       metadata: { email: targetProfile?.email, name: targetProfile?.displayName, permanentDeletion: otherMemberships === 0 },
     });
+
+    queryCache.invalidate("dashboard:");
 
     return NextResponse.json({ data: { success: true } });
   } catch (error: any) {

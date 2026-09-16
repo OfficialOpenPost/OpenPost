@@ -3,6 +3,7 @@ import { db, withDbRetry } from "@/lib/db";
 import { requireApprovedUser, requireProjectMember, requirePermission, requireAdmin, hasPermission, hasMinimumRole, createAuditLog, AuthError } from "@/lib/auth";
 import { countWords, readingTime as calcReadingTime } from "@/lib/publish";
 import { triggerWebhooks } from "@/lib/webhooks";
+import { queryCache } from "@/lib/cache";
 import { slugify } from "@/lib/slug";
 
 function extractPollBlocks(content: any): any[] {
@@ -517,6 +518,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       metadata: { title: updated.title, status: updated.status },
     });
 
+    queryCache.invalidate("blogs:");
+    queryCache.invalidate("dashboard:");
+
     return NextResponse.json({ data: updated });
   } catch (error: any) {
     const status = error instanceof AuthError ? error.statusCode : 500;
@@ -571,6 +575,9 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
       return NextResponse.json({ data: { success: true, id }, message: "Article permanently deleted." });
     }
+
+    queryCache.invalidate("blogs:");
+    queryCache.invalidate("dashboard:");
 
     // 2. SOFT DELETION (Move to Trash with user reason)
     // Check permission: author can delete own with posts.delete_own; otherwise posts.delete_others (EDITOR+)

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db, withDbRetry } from "@/lib/db";
 import { requireApprovedUser, requirePermission, createAuditLog, AuthError } from "@/lib/auth";
 import { deleteObject } from "@/lib/storage";
+import { queryCache } from "@/lib/cache";
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -65,6 +66,8 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
       targetId: id,
       metadata: { filename: media.originalFilename },
     });
+
+    queryCache.invalidate("dashboard:");
 
     return NextResponse.json({ data: { success: true } });
   } catch (error: any) {

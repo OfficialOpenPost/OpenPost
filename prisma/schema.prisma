@@ -178,6 +178,7 @@ model BlogAuthor {
   author Author @relation(fields: [authorId], references: [id], onDelete: Cascade)
 
   @@id([blogId, authorId])
+  @@index([authorId])
   @@map("blog_authors")
 }
 
@@ -189,6 +190,7 @@ model BlogTag {
   tag  Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
 
   @@id([blogId, tagId])
+  @@index([tagId])
   @@map("blog_tags")
 }
 
@@ -265,6 +267,7 @@ model MediaUsage {
   blog  Blog  @relation(fields: [blogId], references: [id], onDelete: Cascade)
 
   @@id([mediaId, blogId])
+  @@index([blogId])
   @@map("media_usage")
 }
 
@@ -288,6 +291,7 @@ model Poll {
   votes   PollVote[]
 
   @@index([projectId])
+  @@index([blogId])
   @@map("polls")
 }
 
@@ -378,6 +382,7 @@ model Profile {
   memberships ProjectMember[]
   ownedProjects Project[] @relation("ProjectOwner")
 
+  @@index([status])
   @@map("profiles")
 }
 
@@ -439,6 +444,7 @@ model ProjectMember {
 
   @@id([projectId, userId])
   @@index([userId])
+  @@index([projectId, role])
   @@map("project_members")
 }
 
@@ -457,6 +463,7 @@ model Invite {
 
   @@index([token])
   @@index([email])
+  @@index([projectId, usedAt])
   @@map("invites")
 }
 
@@ -519,6 +526,8 @@ model AuditLog {
   project Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
 
   @@index([projectId, createdAt])
+  @@index([actorId])
+  @@index([action])
   @@map("audit_logs")
 }
 

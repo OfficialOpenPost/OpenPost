@@ -7,6 +7,7 @@ const publicSchema = z.object({
   NEXT_PUBLIC_APP_URL: z.string().url().optional(),
   NEXT_PUBLIC_APP_NAME: z.string().optional(),
   NEXT_PUBLIC_ALLOW_SIGNUP: z.enum(["true", "false"]).optional(),
+  NEXT_PUBLIC_CMS_URL: z.string().url().optional(),
 });
 
 // SERVER-ONLY (never NEXT_PUBLIC_*)

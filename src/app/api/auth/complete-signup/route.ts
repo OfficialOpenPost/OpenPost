@@ -3,7 +3,7 @@ import { db, withDbRetry } from "@/lib/db";
 
 export async function POST(req: NextRequest) {
   try {
-    const { userId, email, displayName, isOwner } = await req.json();
+    const { userId, email, displayName, isOwner, pendingOnly } = await req.json();
 
     if (!userId || !email) {
       return NextResponse.json({ error: "userId and email required" }, { status: 400 });
@@ -11,6 +11,27 @@ export async function POST(req: NextRequest) {
 
     const cleanEmail = email.toLowerCase().trim();
     const name = displayName || cleanEmail.split("@")[0];
+
+    // If pendingOnly, just store minimal info — actual profile created by callback after email verification
+    if (pendingOnly) {
+      // Upsert with unapproved status; callback will confirm after verification
+      await withDbRetry(() =>
+        db.profile.upsert({
+          where: { id: userId },
+          create: {
+            id: userId,
+            email: cleanEmail,
+            displayName: name,
+            status: "pending",
+          },
+          update: {
+            email: cleanEmail,
+            displayName: name,
+          },
+        })
+      );
+      return NextResponse.json({ success: true, status: "pending" });
+    }
 
     // Upsert profile
     const profile = await withDbRetry(() =>

@@ -10,7 +10,7 @@ import { createClient } from "@/lib/supabase/client";
 export default function SignupPage() {
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
-  const [signupState, setSignupState] = useState<"idle" | "creating" | "success">("idle");
+  const [signupState, setSignupState] = useState<"idle" | "creating" | "success" | "email-verify">("idle");
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({ name: "", email: "", password: "", agree: false });
   const [hasOwners, setHasOwners] = useState<boolean | null>(null);
@@ -41,12 +41,13 @@ export default function SignupPage() {
         password: form.password,
         options: {
           data: { full_name: form.name },
+          emailRedirectTo: `${process.env.NEXT_PUBLIC_CMS_URL || window.location.origin}/auth/callback`,
         },
       });
 
       if (signUpError) throw signUpError;
 
-      // For first user (owner), auto-approve and complete signup
+      // For first user (owner), auto-approve and complete signup (no email verification)
       if (isFirstUser && data.user) {
         const completeRes = await fetch("/api/auth/complete-signup", {
           method: "POST",
@@ -71,8 +72,9 @@ export default function SignupPage() {
         return;
       }
 
-      // For subsequent users, create pending profile then sign out
+      // For subsequent users, show email verification screen
       if (data.user) {
+        // Store user metadata so callback can create pending profile
         await fetch("/api/auth/complete-signup", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -81,17 +83,12 @@ export default function SignupPage() {
             email: form.email,
             displayName: form.name,
             isOwner: false,
+            pendingOnly: true,
           }),
         });
-
-        // Sign out — user must wait for admin approval
-        await supabase.auth.signOut();
       }
 
-      setSignupState("success");
-      setTimeout(() => {
-        router.push("/pending-approval");
-      }, 1500);
+      setSignupState("email-verify");
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Failed to create account";
       setError(message);
@@ -152,6 +149,26 @@ export default function SignupPage() {
               )}
             </p>
 
+            {signupState === "email-verify" ? (
+              <div className="mt-8 text-center space-y-4">
+                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-brand/15">
+                  <Mail className="h-7 w-7 text-brand" />
+                </div>
+                <h3 className="text-lg font-bold text-navy">Check your email</h3>
+                <p className="text-sm text-text-secondary">
+                  We sent a verification link to <strong>{form.email}</strong>. Click the link to verify your email, then wait for admin approval.
+                </p>
+                <button
+                  onClick={() => {
+                    setSignupState("idle");
+                    router.push("/login");
+                  }}
+                  className="mt-4 rounded-xl bg-navy px-6 py-2.5 text-sm font-bold text-white hover:bg-navy-dark transition"
+                >
+                  Go to Sign In
+                </button>
+              </div>
+            ) : (
               <form onSubmit={handleSubmit} className="mt-8 space-y-5">
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium text-text-primary">Full name</label>
@@ -277,6 +294,7 @@ export default function SignupPage() {
                   )}
                 </button>
               </form>
+            )}
           </div>
         </motion.div>
       </div>

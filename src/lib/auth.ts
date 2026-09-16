@@ -252,11 +252,6 @@ export async function requireAuthenticatedUser(): Promise<AuthUser> {
  */
 export async function requireApprovedUser(): Promise<AuthUser> {
   const user = await requireAuthenticatedUser();
-  // Email verification check — allow bypass in dev/test if env explicitly disables
-  const requireVerification = process.env.REQUIRE_EMAIL_VERIFICATION === "true";
-  if (requireVerification && !user.emailVerified) {
-    throw new AuthError("Email verification required. Please verify your email.", 403, "EMAIL_NOT_VERIFIED");
-  }
   if (user.status !== "approved") {
     if (user.status === "pending") {
       throw new AuthError("Your account is pending administrator approval.", 403, "PENDING_APPROVAL");

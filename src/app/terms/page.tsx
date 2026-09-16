@@ -234,11 +234,7 @@ export default function TermsPage() {
                   <ul className="mt-3 space-y-2 text-sm leading-relaxed text-text-secondary list-disc pl-5 marker:text-brand">
                     <li>You must be 16+ and provide accurate email. You keep credentials confidential.</li>
                     <li>
-                      We may require verification (
-                      <code className="rounded bg-surface-raised px-1 py-0.5 font-mono text-xs">
-                        REQUIRE_EMAIL_VERIFICATION
-                      </code>
-                      ) and admin approval (
+                      Admin approval (
                       <code className="rounded bg-surface-raised px-1 py-0.5 font-mono text-xs">
                         pending → approved
                       </code>

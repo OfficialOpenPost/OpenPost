@@ -101,6 +101,7 @@ export default function DashboardPage() {
   });
   const [recentBlogs, setRecentBlogs] = useState<RecentBlog[]>([]);
   const [userRole, setUserRole] = useState<string>("OWNER");
+  const [userName, setUserName] = useState<string>("");
   const [loading, setLoading] = useState(true);
 
   const fetchDashboard = useCallback(async () => {
@@ -135,6 +136,13 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetchDashboard();
+    // Fetch user name for personalized welcome
+    fetch("/api/auth/user-status")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.displayName) setUserName(data.displayName);
+      })
+      .catch(() => {});
     const handleProjectChange = () => fetchDashboard();
     window.addEventListener("projectChanged", handleProjectChange);
     return () => window.removeEventListener("projectChanged", handleProjectChange);
@@ -195,7 +203,7 @@ export default function DashboardPage() {
               </span>
             </div>
             <h1 className="mt-2 text-2xl sm:text-3xl font-extrabold tracking-tight text-navy">
-              Editorial Studio Command
+              {userName ? `Welcome back, ${userName}` : "Editorial Studio Command"}
             </h1>
             <p className="mt-1 text-xs sm:text-sm text-text-secondary flex items-center gap-2 flex-wrap">
               <Calendar className="h-3.5 w-3.5 text-text-tertiary" />

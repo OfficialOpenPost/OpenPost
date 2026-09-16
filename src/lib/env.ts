@@ -20,7 +20,7 @@ const serverSchema = z.object({
   R2_PUBLIC_URL: z.string().optional(),
   R2_ENDPOINT: z.string().optional(),
   CRON_SECRET: z.string().optional(),
-  REQUIRE_EMAIL_VERIFICATION: z.enum(["true", "false"]).optional(),
+
   BOOTSTRAP_ADMIN_EMAIL: z.string().email().optional(),
   BOOTSTRAP_ADMIN_PASSWORD: z.string().optional(),
   BOOTSTRAP_ADMIN_NAME: z.string().optional(),

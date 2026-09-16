@@ -11,12 +11,13 @@ export async function middleware(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname;
 
-  // Skip middleware only for static machine-to-machine APIs (health, cron, webhooks, cli handshake)
+  // Skip middleware only for static machine-to-machine APIs (health, cron, webhooks, cli handshake, warmup)
   if (
     pathname.startsWith("/api/health") ||
     pathname.startsWith("/api/cron") ||
     pathname.startsWith("/api/cli") ||
-    pathname.startsWith("/api/webhooks")
+    pathname.startsWith("/api/webhooks") ||
+    pathname.startsWith("/api/warmup")
   ) {
     return NextResponse.next();
   }
@@ -45,6 +46,8 @@ export async function middleware(request: NextRequest) {
 
   const isAuthRoute = pathname === "/login" || pathname === "/signup";
   const isDashboardRoute = pathname.startsWith("/dashboard");
+  const isPendingRoute = pathname === "/pending-approval";
+  const isSetupRoute = pathname === "/setup";
 
   // 1. Unauthenticated user trying to access dashboard -> redirect to login
   if (!user && isDashboardRoute) {
@@ -59,6 +62,17 @@ export async function middleware(request: NextRequest) {
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = "/dashboard";
     return NextResponse.redirect(redirectUrl);
+  }
+
+  // 3. Authenticated user on pending-approval -> check if approved, redirect to dashboard
+  if (user && isPendingRoute) {
+    // Allow the page to render - it will check status client-side
+    return supabaseResponse;
+  }
+
+  // 4. Authenticated user on setup page -> allow
+  if (user && isSetupRoute) {
+    return supabaseResponse;
   }
 
   return supabaseResponse;

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Eye, EyeOff, ArrowRight, Mail, Lock, Sparkles, Check, Loader2 } from "lucide-react";
@@ -14,6 +14,14 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [authState, setAuthState] = useState<"idle" | "authenticating" | "redirecting">("idle");
   const [error, setError] = useState<string | null>(null);
+  const [hasOwners, setHasOwners] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    fetch("/api/auth/check-owners")
+      .then((r) => r.json())
+      .then((j) => setHasOwners(j.hasOwners))
+      .catch(() => setHasOwners(true));
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,8 +33,34 @@ export default function LoginPage() {
       const supabase = createClient();
       if (!supabase) throw new Error("Supabase not configured");
 
-      const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
+      const { data, error: authError } = await supabase.auth.signInWithPassword({ email, password });
       if (authError) throw authError;
+
+      if (data.user) {
+        // Check profile status
+        const statusRes = await fetch("/api/auth/user-status");
+        if (statusRes.ok) {
+          const { status } = await statusRes.json();
+
+          if (status === "pending") {
+            setAuthState("redirecting");
+            window.location.href = "/pending-approval";
+            return;
+          }
+          if (status === "rejected") {
+            setError("Your account request was rejected. Please contact an administrator.");
+            setAuthState("idle");
+            await supabase.auth.signOut();
+            return;
+          }
+          if (status === "suspended") {
+            setError("Your account has been suspended. Please contact an administrator.");
+            setAuthState("idle");
+            await supabase.auth.signOut();
+            return;
+          }
+        }
+      }
 
       setAuthState("redirecting");
       window.location.href = "/dashboard";
@@ -87,7 +121,7 @@ export default function LoginPage() {
               ))}
             </div>
             <p className="text-sm text-slate-300 leading-relaxed">
-              “OpenPost cut our publishing time in half. The editor is buttery smooth and the API just works.”
+              "OpenPost cut our publishing time in half. The editor is buttery smooth and the API just works."
             </p>
             <div className="mt-4 flex items-center gap-3">
               <div className="h-8 w-8 rounded-full bg-gradient-to-br from-brand to-orange" />
@@ -119,7 +153,14 @@ export default function LoginPage() {
 
           <div className="rounded-2xl border border-border bg-surface p-8 shadow-xl shadow-navy/5">
             <h2 className="text-2xl font-bold tracking-tight text-text-primary">Welcome back</h2>
-            {process.env.NEXT_PUBLIC_ALLOW_SIGNUP === "true" && (
+            {hasOwners === false ? (
+              <p className="mt-2 text-sm text-text-secondary">
+                No account yet?{" "}
+                <Link href="/signup" className="font-semibold text-brand hover:text-flame transition">
+                  Create the first owner account
+                </Link>
+              </p>
+            ) : (
               <p className="mt-2 text-sm text-text-secondary">
                 Don&apos;t have an account?{" "}
                 <Link href="/signup" className="font-semibold text-brand hover:text-flame transition">
@@ -189,7 +230,6 @@ export default function LoginPage() {
                     : "bg-brand text-navy shadow-brand/20 hover:bg-brand-hover hover:shadow-brand/30 active:scale-[0.99]"
                 }`}
               >
-                {/* Subtle animated shimmer effect */}
                 {authState !== "idle" && (
                   <motion.div
                     className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -skew-x-12"
@@ -216,7 +256,7 @@ export default function LoginPage() {
                     >
                       <Check className="h-3.5 w-3.5 text-white stroke-[3]" />
                     </motion.span>
-                    <span>Success! Redirecting to dashboard...</span>
+                    <span>Success! Redirecting...</span>
                   </span>
                 )}
 
@@ -226,34 +266,7 @@ export default function LoginPage() {
                   </span>
                 )}
               </button>
-
-              <div className="relative flex items-center justify-center">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-border" />
-                </div>
-                <span className="relative bg-surface px-3 text-xs text-text-tertiary">Or continue with</span>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                {[
-                  { label: "Google", icon: "G" },
-                  { label: "GitHub", icon: "◈" },
-                ].map((p) => (
-                  <button
-                    key={p.label}
-                    type="button"
-                    className="h-11 rounded-xl border border-border bg-surface text-sm font-semibold text-text-primary hover:bg-surface-raised transition"
-                  >
-                    <span className="inline-flex items-center gap-2">
-                      <span className="flex h-6 w-6 items-center justify-center rounded-md bg-surface-overlay text-xs">{p.icon}</span>
-                      {p.label}
-                    </span>
-                  </button>
-                ))}
-              </div>
             </form>
-
-
           </div>
 
           <p className="mt-6 text-center text-xs text-text-tertiary">

@@ -65,6 +65,7 @@ export default function TeamPage() {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteName, setInviteName] = useState("");
   const [inviteRole, setInviteRole] = useState<"OWNER" | "ADMIN" | "EDITOR" | "AUTHOR" | "CONTRIBUTOR">("CONTRIBUTOR");
+  const [pendingRoleAssignments, setPendingRoleAssignments] = useState<Record<string, string>>({});
   const [inviting, setInviting] = useState(false);
   const [statusMsg, setStatusMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
@@ -172,18 +173,21 @@ export default function TeamPage() {
     }
   };
 
-  const updateStatus = async (id: string, status: "approved" | "rejected" | "suspended") => {
+  const updateStatus = async (id: string, status: "approved" | "rejected" | "suspended", role?: string) => {
     if (!activeProjectId) return;
     try {
+      const body: any = { id, status, projectId: activeProjectId };
+      if (role) body.role = role;
+
       const res = await fetch("/api/settings/users", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, status, projectId: activeProjectId }),
+        body: JSON.stringify(body),
       });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error?.message || "Status update failed");
 
-      setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, status } : u)));
+      setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, status, role: role ? (role as any) : u.role } : u)));
       showToast(`User status updated to ${status.toUpperCase()}`);
     } catch (e: any) {
       showToast(e.message || "Failed to update status", "error");

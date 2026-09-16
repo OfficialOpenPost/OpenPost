@@ -104,7 +104,7 @@ export function Navbar() {
                 href="/signup"
                 className="rounded-lg bg-navy px-3.5 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-navy-dark transition"
               >
-                Start Free
+                Get Started
               </Link>
             </>
           )}
@@ -178,7 +178,7 @@ export function Navbar() {
                   className="rounded-lg bg-navy px-3 py-2 text-center text-xs font-bold text-white"
                   onClick={() => setMobileOpen(false)}
                 >
-                  Start Writing Free
+                  Get Started
                 </Link>
               </>
             )}

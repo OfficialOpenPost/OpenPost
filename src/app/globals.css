@@ -632,3 +632,116 @@ a, button {
 [data-preview-viewport="tablet"] [data-poll-block] {
   max-width: 100% !important;
 }
+
+/* ===== Scroll-Linked Animations ===== */
+
+/* Parallax fade on scroll */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes scaleInCenter {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Glow pulse for highlighted sections */
+@keyframes glowPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(254, 166, 17, 0);
+  }
+  50% {
+    box-shadow: 0 0 30px -5px rgba(254, 166, 17, 0.15);
+  }
+}
+
+.animate-glow-pulse {
+  animation: glowPulse 3s ease-in-out infinite;
+}
+
+/* Gradient border animation */
+@keyframes gradientBorder {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.animate-gradient-border {
+  background-size: 200% 200%;
+  animation: gradientBorder 3s ease infinite;
+}
+
+/* Smooth counter animation helper */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Intersection observer reveal helpers */
+.reveal-on-scroll {
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1), transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.reveal-on-scroll.revealed {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Stagger children reveal */
+.stagger-reveal > * {
+  opacity: 0;
+  transform: translateY(15px);
+  transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1), transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.stagger-reveal.revealed > *:nth-child(1) { transition-delay: 0ms; opacity: 1; transform: translateY(0); }
+.stagger-reveal.revealed > *:nth-child(2) { transition-delay: 60ms; opacity: 1; transform: translateY(0); }
+.stagger-reveal.revealed > *:nth-child(3) { transition-delay: 120ms; opacity: 1; transform: translateY(0); }
+.stagger-reveal.revealed > *:nth-child(4) { transition-delay: 180ms; opacity: 1; transform: translateY(0); }
+.stagger-reveal.revealed > *:nth-child(5) { transition-delay: 240ms; opacity: 1; transform: translateY(0); }
+.stagger-reveal.revealed > *:nth-child(6) { transition-delay: 300ms; opacity: 1; transform: translateY(0); }
+.stagger-reveal.revealed > *:nth-child(7) { transition-delay: 360ms; opacity: 1; transform: translateY(0); }
+.stagger-reveal.revealed > *:nth-child(8) { transition-delay: 420ms; opacity: 1; transform: translateY(0); }
+.stagger-reveal.revealed > *:nth-child(9) { transition-delay: 480ms; opacity: 1; transform: translateY(0); }

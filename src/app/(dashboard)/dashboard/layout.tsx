@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   LayoutDashboard,
   FileText,
@@ -41,6 +41,25 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter();
   const isEditor = pathname?.includes("/editor");
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [checkingStatus, setCheckingStatus] = useState(true);
+
+  // Guard: redirect pending/rejected/suspended users away from dashboard
+  useEffect(() => {
+    if (isEditor) {
+      setCheckingStatus(false);
+      return;
+    }
+    fetch("/api/auth/user-status")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.status === "pending" || data.status === "rejected" || data.status === "suspended") {
+          window.location.href = "/pending-approval";
+          return;
+        }
+        setCheckingStatus(false);
+      })
+      .catch(() => setCheckingStatus(false));
+  }, [pathname, isEditor]);
 
   // Quick Add Category Modal State
   const [isAddCatModalOpen, setIsAddCatModalOpen] = useState(false);
@@ -86,6 +105,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   if (isEditor) {
     return <div className="min-h-screen bg-surface">{children}</div>;
+  }
+
+  if (checkingStatus) {
+    return (
+      <div className="min-h-screen bg-[#F0F0F1] flex items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-brand" />
+      </div>
+    );
   }
 
   return (

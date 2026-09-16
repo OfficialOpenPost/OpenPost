@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, withDbRetry } from "@/lib/db";
+import { createClient } from "@/lib/supabase/server";
 import {
   requireAdmin,
   requireProjectMember,
@@ -45,7 +46,7 @@ export async function GET(req: NextRequest) {
 
     const adminUser = await requireAdmin(projectId);
 
-    const [profiles, invitesRaw] = await Promise.all([
+    const [profiles, invitesRaw, pendingWithoutMembership] = await Promise.all([
       withDbRetry(() =>
         db.profile.findMany({
           where: {
@@ -79,6 +80,31 @@ export async function GET(req: NextRequest) {
           orderBy: { createdAt: "desc" },
         })
       ),
+      // Also fetch pending users who signed up but have no project membership yet
+      withDbRetry(() =>
+        db.profile.findMany({
+          where: {
+            status: "pending",
+            memberships: { none: { projectId } },
+          },
+          orderBy: { createdAt: "asc" },
+          select: {
+            id: true,
+            email: true,
+            displayName: true,
+            status: true,
+            createdAt: true,
+            updatedAt: true,
+            memberships: {
+              include: {
+                project: {
+                  select: { id: true, name: true, slug: true },
+                },
+              },
+            },
+          },
+        })
+      ),
     ]);
     // Sanitize invites — never expose raw token, mask it
     const invites = (invitesRaw as any[]).map((inv) => ({
@@ -88,7 +114,15 @@ export async function GET(req: NextRequest) {
       tokenMasked: true,
     }));
 
-    const formattedUsers = profiles.map((p) => {
+    // Merge pending users without memberships into the list
+    const allProfiles = [...profiles];
+    for (const pu of pendingWithoutMembership) {
+      if (!allProfiles.find((p) => p.id === pu.id)) {
+        allProfiles.push(pu as any);
+      }
+    }
+
+    const formattedUsers = allProfiles.map((p) => {
       // Find role for project if scoped, or highest role via hierarchy
       let activeRole: Role = "CONTRIBUTOR";
       let maxLvl = 0;
@@ -279,14 +313,26 @@ export async function PATCH(req: NextRequest) {
     // 1. Update Profile Status if provided (e.g. pending -> approved, approved -> suspended)
     let updatedProfile = targetProfile;
     if (status && status !== targetProfile.status) {
-      // Verify target user has a membership in this project before allowing status change
-      const targetMembership = await withDbRetry(() =>
+      // Check if target user has a membership in this project
+      let targetMembership = await withDbRetry(() =>
         db.projectMember.findUnique({
           where: { projectId_userId: { projectId, userId: id } },
         })
       ).catch(() => null);
 
-      if (!targetMembership) {
+      // If approving a pending user without membership, create one with default role
+      if (status === "approved" && !targetMembership) {
+        const defaultRole = role || "CONTRIBUTOR";
+        targetMembership = await withDbRetry(() =>
+          db.projectMember.upsert({
+            where: { projectId_userId: { projectId, userId: id } },
+            update: { role: defaultRole },
+            create: { projectId, userId: id, role: defaultRole },
+          })
+        );
+      }
+
+      if (!targetMembership && status !== "approved") {
         return NextResponse.json(
           { error: { code: "NOT_FOUND", message: "User is not a member of this project." } },
           { status: 404 }
@@ -441,17 +487,45 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
+    // Get target user info before deletion for audit
+    const targetProfile = await withDbRetry(() =>
+      db.profile.findUnique({ where: { id }, select: { email: true, displayName: true } })
+    ).catch(() => null);
+
+    // Remove from project membership
     await withDbRetry(() =>
       db.projectMember.deleteMany({
         where: { projectId, userId: id },
       })
     );
 
+    // Check if user has any other project memberships
+    const otherMemberships = await withDbRetry(() =>
+      db.projectMember.count({ where: { userId: id } })
+    ).catch(() => 0);
+
+    // If no other memberships, delete profile and Supabase Auth user permanently
+    if (otherMemberships === 0) {
+      // Delete profile from database
+      await withDbRetry(() =>
+        db.profile.delete({ where: { id } })
+      ).catch(() => {});
+
+      // Delete from Supabase Auth
+      const supabase = await createClient();
+      if (supabase) {
+        await supabase.auth.admin.deleteUser(id).catch((err: any) => {
+          console.warn("Failed to delete Supabase auth user:", err?.message);
+        });
+      }
+    }
+
     await createAuditLog({
       actorId: adminUser.id,
       projectId,
       action: "project.member_removed",
       targetId: id,
+      metadata: { email: targetProfile?.email, name: targetProfile?.displayName, permanentDeletion: otherMemberships === 0 },
     });
 
     return NextResponse.json({ data: { success: true } });

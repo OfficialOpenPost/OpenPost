@@ -504,14 +504,65 @@ export async function DELETE(req: NextRequest) {
       db.projectMember.count({ where: { userId: id } })
     ).catch(() => 0);
 
-    // If no other memberships, delete profile and Supabase Auth user permanently
+    // If no other memberships, perform full cleanup and permanent deletion
     if (otherMemberships === 0) {
-      // Delete profile from database
+      // 1. Reassign project ownership — transfer owned projects to deleting admin
+      const ownedProjects = await withDbRetry(() =>
+        db.project.findMany({ where: { ownerId: id }, select: { id: true } })
+      ).catch(() => []);
+
+      for (const project of ownedProjects) {
+        await withDbRetry(() =>
+          db.project.update({
+            where: { id: project.id },
+            data: { ownerId: adminUser.id },
+          })
+        );
+      }
+
+      // 2. Delete content created by this user (RESTRICT FKs block profile deletion)
+      // Delete blog revisions first (child of blogs)
+      await withDbRetry(() =>
+        db.blogRevision.deleteMany({ where: { createdBy: id } })
+      ).catch(() => {});
+
+      // Delete blogs created by this user
+      await withDbRetry(() =>
+        db.blog.deleteMany({ where: { createdBy: id } })
+      ).catch(() => {});
+
+      // 3. Nullify media uploadedBy (RESTRICT FK blocks deletion)
+      await withDbRetry(() =>
+        db.$executeRaw`UPDATE media SET uploaded_by = ${adminUser.id} WHERE uploaded_by = ${id}`
+      ).catch(() => {});
+
+      // 4. Delete invites created by this user
+      await withDbRetry(() =>
+        db.invite.deleteMany({ where: { createdBy: id } })
+      ).catch(() => {});
+
+      // 5. Delete integrations, connection codes, CLI auth codes created by this user
+      await withDbRetry(() =>
+        db.integration.deleteMany({ where: { createdBy: id } })
+      ).catch(() => {});
+      await withDbRetry(() =>
+        db.connectionCode.deleteMany({ where: { createdBy: id } })
+      ).catch(() => {});
+      await withDbRetry(() =>
+        db.cliAuthCode.deleteMany({ where: { createdBy: id } })
+      ).catch(() => {});
+
+      // 6. Delete from users table (legacy)
+      await withDbRetry(() =>
+        db.user.delete({ where: { id } })
+      ).catch(() => {});
+
+      // 7. Delete profile
       await withDbRetry(() =>
         db.profile.delete({ where: { id } })
       ).catch(() => {});
 
-      // Delete from Supabase Auth
+      // 8. Delete from Supabase Auth
       const supabase = await createClient();
       if (supabase) {
         await supabase.auth.admin.deleteUser(id).catch((err: any) => {

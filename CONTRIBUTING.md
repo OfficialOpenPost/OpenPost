@@ -94,7 +94,7 @@ CRON_SECRET="your-cron-secret"
 ### Database Setup
 
 1. Create a Supabase project at https://supabase.com
-2. Run the migrations in order from `supabase/migrations/` (001 → 021)
+2. Run the migrations in order from `supabase/migrations/` (001 → 024)
 3. Use the SQL Editor in Supabase dashboard
 
 Alternatively, use Prisma:

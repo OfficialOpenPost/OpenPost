@@ -40,7 +40,7 @@ export const DOCS_SEARCH_INDEX: DocSearchItem[] = [
     title: "Supabase & Postgres Setup",
     category: "Guides & Setup",
     slug: "supabase-setup",
-    description: "Project setup, running migrations 001–017, session pooler :5432, RLS policies, and first admin.",
+    description: "Project setup, running migrations 001–024, session pooler :5432, RLS policies, and first admin.",
     keywords: ["supabase", "postgres", "sql", "migrations", "pooler", "rls", "first admin"],
   },
   {

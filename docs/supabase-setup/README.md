@@ -1,6 +1,6 @@
 # Supabase Setup — for OpenPost DB + Auth + RLS
 
-OpenPost uses **Supabase Postgres** (with `pgcrypto`, `uuid-ossp`, `tsvector` FTS, RLS). This guide creates your own project, runs `001→016` migrations, and makes your first user admin so uploads work (`media_uploaded_by_fkey`).
+OpenPost uses **Supabase Postgres** (with `pgcrypto`, `uuid-ossp`, `tsvector` FTS, RLS). This guide creates your own project, runs `001→024` migrations, and makes your first user admin so uploads work (`media_uploaded_by_fkey`).
 
 ## 1. Create Project
 

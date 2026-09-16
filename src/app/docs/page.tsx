@@ -42,7 +42,7 @@ export default function DocsLandingPage() {
     {
       icon: Database,
       title: "Supabase & Postgres Setup",
-      desc: "Run SQL migrations 001–016, configure the Session pooler, and approve your first admin.",
+      desc: "Run SQL migrations 001–024, configure the Session pooler, and approve your first admin.",
       href: "/docs/supabase-setup",
       badge: "SQL",
       badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-200",

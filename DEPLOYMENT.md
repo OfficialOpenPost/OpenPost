@@ -46,7 +46,7 @@ Never commit `.env`. Never prefix `SUPABASE_SERVICE_ROLE_KEY` or `DATABASE_URL` 
 
 1. Create project at https://supabase.com → SQL Editor
 2. Enable email confirmations: Dashboard → Authentication → Providers → Email → Confirm email = ON (if you want verification flow)
-3. Run migrations in order `001` → `019` inside `supabase/migrations/`:
+3. Run migrations in order `001` → `024` inside `supabase/migrations/`:
    - Open SQL Editor → New Query → paste file → Run
    - Verify `Success` each file
 4. Check RLS: `supabase/migrations/README.md` lists rules (public read only `status='published'`, members via `project_members.user_id = auth.uid()`)

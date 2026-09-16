@@ -16,7 +16,7 @@ This guide walks you through creating a Supabase project, executing all SQL migr
 
 ---
 
-## 2. Execute SQL Migrations (001 → 016)
+## 2. Execute SQL Migrations (001 → 024)
 
 Open your Supabase Dashboard → **SQL Editor** → **New query**.
 
@@ -41,6 +41,13 @@ Copy and run each migration file located in `supabase/migrations/` sequentially:
 | **015** | `015_fix_users_name.sql` | Name backfilling and constraint validation |
 | **016** | `016_auto_profile_on_signup.sql` | Auth hook trigger: auto-creates `profiles` and `users` on signup |
 | **017** | `017_strict_rls_and_canonical_roles.sql` | Strict multi-tenant RLS policies, canonical role normalization (`ADMIN`, `EDITOR`, `WRITER`), and composite indexes |
+| **018** | `018_assign_legacy_blogs_to_default_project.sql` | Backfills unassigned legacy posts/taxonomies to primary project |
+| **019** | `019_canonical_five_roles.sql` | Canonical 5-role model `OWNER/ADMIN/EDITOR/AUTHOR/CONTRIBUTOR`, preserves `WRITER` as deprecated alias |
+| **020** | `020_editor_document.sql` | Adds `editor_document` (JSONB), `rendered_html` (text), `content_version` (int) to `blogs` and `blog_revisions` |
+| **021** | `021_site_config_and_cleanup.sql` | Adds site config columns to `projects` (site name, tagline, logo, social URLs); removes demo project |
+| **022** | `022_upgrade_user_to_owner.sql` | Utility script to safely approve any user profile and upgrade them to `OWNER` role |
+| **023** | `023_fix_blog_slug_constraint.sql` | Drops legacy global UNIQUE(slug) constraint on `blogs`, scopes uniqueness per project |
+| **024** | `024_performance_indexes.sql` | Performance indexes: author counts, tag lookups, media usage, poll queries, pending users/invites, owner counts, audit logs |
 
 > [!TIP] Safe to Re-run
 > All SQL migrations use `CREATE TABLE IF NOT EXISTS` and `DO $$ BEGIN ... END $$` guards. You can re-run them safely without data loss.

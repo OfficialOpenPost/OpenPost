@@ -152,7 +152,7 @@ D:/Openpost
 ├── prisma/
 │   └── schema.prisma               # Database schema
 ├── supabase/
-│   └── migrations/                 # SQL migrations (001-021)
+│   └── migrations/                 # SQL migrations (001-024)
 ├── tests/                          # Vitest test suites
 ├── cli/                            # OpenPost CLI
 ├── templates/                      # Blog templates

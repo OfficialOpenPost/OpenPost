@@ -356,7 +356,7 @@ export default function TermsPage() {
                   <p className="mt-3 text-sm leading-relaxed text-text-secondary">
                     Your responsibility (DB, R2, env). We provide{" "}
                     <code className="rounded bg-surface-raised px-1 py-0.5 font-mono text-xs">
-                      supabase/migrations 001→019
+                      supabase/migrations 001→024
                     </code>
                     ,{" "}
                     <code className="rounded bg-surface-raised px-1 py-0.5 font-mono text-xs">

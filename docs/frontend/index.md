@@ -84,7 +84,30 @@ export default async function BlogIndexPage() {
 
 ---
 
-## 3. Rendering a Single Article (`app/blog/[slug]/page.tsx`)
+## 3. Pagination
+
+All list endpoints support `offset` and `limit` query parameters. Responses include `total` and `hasMore` fields:
+
+```typescript
+// Paginated request
+const { data, total, hasMore } = await fetchOpenPost("/posts?limit=12&offset=0");
+
+// Load more
+const { data: more } = await fetchOpenPost("/posts?limit=12&offset=12");
+```
+
+**Response format:**
+```json
+{
+  "data": [...],
+  "total": 48,
+  "hasMore": true
+}
+```
+
+---
+
+## 4. Rendering a Single Article (`app/blog/[slug]/page.tsx`)
 
 ```tsx
 // app/blog/[slug]/page.tsx

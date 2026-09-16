@@ -231,7 +231,7 @@ OPENPOST_TOKEN=op_xxx
 ## Requirements
 
 - Node.js 18+ (`openpost-cli v0.2.5` checks `Node >=18`)
-- Running OpenPost CMS (`DATABASE_URL` + `R2_*` + `NEXT_PUBLIC_SUPABASE_URL` set, `supabase/migrations` 001→021 run, `npm run build` 67 pages)
+- Running OpenPost CMS (`DATABASE_URL` + `R2_*` + `NEXT_PUBLIC_SUPABASE_URL` set, `supabase/migrations` 001→024 run, `npm run build` 67 pages)
 - Single bin `openpost-cli` — use `npx openpost-cli`, not `create-openpost`
 
 ---

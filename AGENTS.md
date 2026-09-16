@@ -26,7 +26,7 @@ D:/Openpost
 ├── src/lib/                 # rbac.ts (5-tier), auth.ts (getCurrentUser, require*), db.ts, supabase/, storage.ts (R2), webhooks.ts, apiToken.ts, rateLimit.ts
 ├── src/components/project/  # ProjectSwitcher (localStorage openpost_active_project_id + projectChanged event)
 ├── prisma/schema.prisma     # UserRole enum OWNER/ADMIN/EDITOR/AUTHOR/CONTRIBUTOR (+ WRITER alias), Profile, Project, ProjectMember, Author, Blog, Media...
-├── supabase/migrations/     # 001 → 021_site_config_and_cleanup.sql (run in order via SQL Editor)
+├── supabase/migrations/     # 001 → 024_performance_indexes.sql (run in order via SQL Editor)
 ├── cli/                     # openpost-cli v0.2.5 → dist/index.js (single bin openpost-cli)
 ├── templates/nextjs-blog/   # Next.js 15 blog starter copied by CLI
 ├── public/logo.svg          # Icon used in README & UI
@@ -120,7 +120,7 @@ node dist/index.js doctor --cms-url http://localhost:3000  # health
 ## 12) Env & Deployment
 
 - `.env.example` lists `DATABASE_URL, NEXT_PUBLIC_SUPABASE_URL/ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, R2_* , NEXT_PUBLIC_APP_URL, CRON_SECRET, NEXT_PUBLIC_CMS_URL, BOOTSTRAP_ADMIN_*`. Never `NEXT_PUBLIC_` for secrets.
-- Migrations `supabase/migrations/README.md` 001→021. `018` backfills `projectId IS NULL` to default project.
+- Migrations `supabase/migrations/README.md` 001→024. `018` backfills `projectId IS NULL` to default project.
 - Vercel: `vercel --prod` + env + cron `POST /api/cron/publish` `Authorization: Bearer CRON_SECRET` every minute.
 - `public/logo.svg` is icon for README & UI.
 

@@ -126,7 +126,7 @@ OpenPost uses **Supabase** as its recommended backend platform, which provides m
 **Self-hosted PostgreSQL:** You can run OpenPost with plain PostgreSQL, but you must:
 1. Implement `auth.uid()` as a PostgreSQL function (returns the current user ID)
 2. Set up an authentication provider that issues JWTs compatible with Supabase's format
-3. Manually apply all 21 migrations — they assume `auth.uid()` exists for RLS policies
+3. Manually apply all 24 migrations — they assume `auth.uid()` exists for RLS policies
 4. Disable RLS or replicate the policies if your auth differs
 
 **Recommended path:** Use Supabase (free tier works) for auth + RLS. The Docker/self-hosted PostgreSQL path works for the database but requires supplementary auth infrastructure.
@@ -179,7 +179,7 @@ D:/Openpost
 │   ├── rateLimit.ts          # 10/min invite
 │   └── slug.ts / publish.ts
 ├── prisma/schema.prisma      # UserRole OWNER/ADMIN/EDITOR/AUTHOR/CONTRIBUTOR (+WRITER alias), Profile, Project, ProjectMember, Author, Blog, Media, Poll, Webhook, Invite, Integration, AuditLog
-├── supabase/migrations/      # 001 → 021_site_config_and_cleanup.sql (run in order)
+├── supabase/migrations/      # 001 → 024_performance_indexes.sql (run in order)
 ├── cli/                      # openpost-cli v0.2.5 → dist/index.js (single bin)
 │   ├── src/index.ts          # init/doctor/login/logout/help/version, healthCheck 8s, 3-retries exchange, copy template, .env.local
 │   └── package.json          # bin: openpost-cli only, v0.2.5
@@ -204,7 +204,7 @@ cp .env.example .env
 
 ### Step 2: Configure Supabase Database
 1. Create project at [Supabase](https://supabase.com) → **SQL Editor**
-2. Run `supabase/migrations/` **001 → 021** sequentially (paste → Run → Success)
+2. Run `supabase/migrations/` **001 → 024** sequentially (paste → Run → Success)
 3. Fill `.env`:
 
 ```env
@@ -452,7 +452,7 @@ Webhooks are delivered with a **5-second timeout** per attempt. Each webhook eve
 
 **Security:** All payloads are signed with HMAC-SHA256 (`X-Webhook-Signature` header). Verify using your webhook secret. SSRF protection blocks `localhost`, `10.x`, `192.168.x`, `172.16.x`, `169.254.x`.
 
-Report: `officialopenpost@outlook.com`. See [SECURITY.md](SECURITY.md) and `supabase/migrations/README.md` `001→021` RLS docs + `DEPLOYMENT.md`.
+Report: `officialopenpost@outlook.com`. See [SECURITY.md](SECURITY.md) and `supabase/migrations/README.md` `001→024` RLS docs + `DEPLOYMENT.md`.
 
 ---
 

@@ -49,6 +49,7 @@ D:/Openpost
 │   │   ├── auth.ts                   # Session, RBAC guards
 │   │   ├── rbac.ts                   # 5-tier role model
 │   │   ├── db.ts                     # Prisma client + retry
+│   │   ├── cache.ts                  # In-memory TTL query cache
 │   │   ├── storage.ts                # R2 upload/delete/validate
 │   │   ├── webhooks.ts               # HMAC signing, delivery, SSRF
 │   │   ├── apiToken.ts               # Integration token auth
@@ -64,7 +65,7 @@ D:/Openpost
 ├── cli/                              # openpost-cli package
 ├── scripts/cms.ts                    # cms:doctor, cms:bootstrap
 ├── tests/                            # Vitest test suites
-├── supabase/migrations/              # SQL migrations (001–021)
+├── supabase/migrations/              # SQL migrations (001–024)
 ├── templates/nextjs-blog/            # Blog starter template
 └── package.json
 ```

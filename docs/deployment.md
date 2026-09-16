@@ -48,8 +48,10 @@ R2_PUBLIC_URL="https://media.yourdomain.com"
 # Cron Secret (for scheduled publishing)
 CRON_SECRET="your-32-char-random-secret"
 
+# CMS domain for email verification redirects
+NEXT_PUBLIC_CMS_URL="https://your-cms-domain.vercel.app"
+
 # Optional
-REQUIRE_EMAIL_VERIFICATION="true"
 BOOTSTRAP_ADMIN_EMAIL="admin@yourdomain.com"
 BOOTSTRAP_ADMIN_PASSWORD="StrongPassword123"
 ```
@@ -366,7 +368,7 @@ jobs:
 | `R2_BUCKET_NAME` | ✅ | R2 bucket name |
 | `R2_PUBLIC_URL` | ✅ | Public URL for R2 media |
 | `CRON_SECRET` | ✅ | Secret for cron endpoint auth |
-| `REQUIRE_EMAIL_VERIFICATION` | Optional | Set `true` to require email verification |
+| `NEXT_PUBLIC_CMS_URL` | ✅ | Deployed CMS domain for email verification redirects |
 | `BOOTSTRAP_ADMIN_EMAIL` | Optional | Auto-create admin on first run |
 | `BOOTSTRAP_ADMIN_PASSWORD` | Optional | Password for bootstrap admin |
 
@@ -381,7 +383,8 @@ jobs:
 - [ ] Configure R2 CORS policy for your domains only
 - [ ] Set up automated database backups (Supabase handles this)
 - [ ] Configure monitoring (health endpoint: `/api/health`)
-- [ ] Set `REQUIRE_EMAIL_VERIFICATION=true` in production
+- [ ] Set `NEXT_PUBLIC_CMS_URL` to your deployed CMS domain
+- [ ] Configure Supabase email verification redirect URLs
 - [ ] Remove or disable `/setup` after initial admin creation
 - [ ] Review and remove any test/demo data
 

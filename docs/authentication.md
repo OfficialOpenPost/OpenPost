@@ -81,17 +81,34 @@ suspended ──admin approve→ approved
 
 ## Email Verification
 
-Controlled by `REQUIRE_EMAIL_VERIFICATION=true` environment variable:
+Email verification is required for all users except the first owner (who is auto-approved). The verification flow is:
 
-```typescript
-// src/lib/auth.ts:256-259
-const requireVerification = process.env.REQUIRE_EMAIL_VERIFICATION === "true";
-if (requireVerification && !user.emailVerified) {
-  throw new AuthError("Email verification required.", 403, "EMAIL_NOT_VERIFIED");
-}
+1. User signs up → Supabase sends a verification email with a link to `${NEXT_PUBLIC_CMS_URL}/auth/callback`
+2. User clicks the link → auth callback exchanges the PKCE code for a session
+3. Callback creates a `pending` profile in the database
+4. User is redirected to `/pending-approval` and waits for admin approval
+
+### Configuration
+
+Set `NEXT_PUBLIC_CMS_URL` to your deployed CMS domain. This is used as the base URL for email verification redirects:
+
+```env
+NEXT_PUBLIC_CMS_URL="https://your-cms-domain.vercel.app"
 ```
 
-`emailVerified` is derived from Supabase's `email_confirmed_at` field.
+### Supabase Setup
+
+In your Supabase Dashboard:
+
+1. **Authentication > URL Configuration**:
+   - Set **Site URL** to your `NEXT_PUBLIC_CMS_URL` value
+   - Add `${NEXT_PUBLIC_CMS_URL}/auth/callback` to **Redirect URLs**
+
+2. **Authentication > Providers > Email**:
+   - Ensure **Confirm email** is **ON** (required for verification flow)
+
+3. **Authentication > Email Templates** (optional):
+   - Customize the "Confirm your email" template for branding
 
 ## Project Membership
 

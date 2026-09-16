@@ -306,7 +306,7 @@ enum ProfileStatus {
 2. `getCurrentUser()` in `src/lib/auth.ts:74` resolves session from cookies
 3. Profile auto-created on first login (pending status)
 4. Session cached in-memory (15s TTL) + React.cache() deduplication
-5. Email verification optional (`REQUIRE_EMAIL_VERIFICATION=true`)
+5. Email verification for non-owner users (`NEXT_PUBLIC_CMS_URL`)
 
 ### 4.2 RBAC (5-tier Model)
 ```
@@ -678,7 +678,7 @@ tag.created, media.uploaded
 |----------|---------|
 | `RESEND_API_KEY` | Transactional email |
 | `EMAIL_FROM_ADDRESS` | Sender email |
-| `REQUIRE_EMAIL_VERIFICATION` | Enforce email verification |
+| `NEXT_PUBLIC_CMS_URL` | CMS domain for email verification redirects |
 | `NEXT_PUBLIC_APP_NAME` | Application name |
 | `BOOTSTRAP_ADMIN_*` | Initial admin setup |
 

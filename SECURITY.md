@@ -49,7 +49,7 @@ The following environment variables affect security:
 - `CRON_SECRET` - Secret for cron job authentication
 - `SUPABASE_SERVICE_ROLE_KEY` - Server-side Supabase key (never expose to client)
 - `NEXTAUTH_SECRET` - Authentication secret
-- `REQUIRE_EMAIL_VERIFICATION` - Enforce email verification
+- `NEXT_PUBLIC_CMS_URL` - Deployed CMS domain for email verification redirects
 
 ## Security Best Practices
 
@@ -58,7 +58,7 @@ When deploying OpenPost:
 1. Never expose `SUPABASE_SERVICE_ROLE_KEY` to the client
 2. Use HTTPS in production
 3. Set `CRON_SECRET` for scheduled publishing
-4. Enable `REQUIRE_EMAIL_VERIFICATION=true` for production
+4. Set `NEXT_PUBLIC_CMS_URL` and configure Supabase email verification
 5. Regularly update dependencies
 6. Review audit logs regularly
 

@@ -49,7 +49,7 @@ Rules:
 ## 3) Auth & Session
 
 - **Source:** Supabase Auth (`src/lib/supabase/server.ts` + `client.ts`). `getCurrentUser()` in `src/lib/auth.ts:47` loads `profiles` + `project_members` (+ owned projects as `OWNER`), derives `role` via `ROLE_HIERARCHY`.
-- **Status:** `pending/approved/rejected/suspended` (`ProfileStatus`), optional `REQUIRE_EMAIL_VERIFICATION=true` checks `email_confirmed_at`.
+- **Status:** `pending/approved/rejected/suspended` (`ProfileStatus`), email verification required for non-owner users via `NEXT_PUBLIC_CMS_URL`.
 - **Enforce:** `requireAuthenticatedUser()` 401, `requireApprovedUser()` 403 `PENDING_APPROVAL/ACCOUNT_SUSPENDED`, `requireProjectMember(projectId, minRole)` 404 (hide existence).
 - **Never** swallow with `.catch(()=>{})` on publish/role checks — must `throw AuthError` → 403 `FORBIDDEN`.
 
@@ -119,7 +119,7 @@ node dist/index.js doctor --cms-url http://localhost:3000  # health
 
 ## 12) Env & Deployment
 
-- `.env.example` lists `DATABASE_URL, NEXT_PUBLIC_SUPABASE_URL/ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, R2_* , NEXT_PUBLIC_APP_URL, CRON_SECRET, REQUIRE_EMAIL_VERIFICATION, BOOTSTRAP_ADMIN_*`. Never `NEXT_PUBLIC_` for secrets.
+- `.env.example` lists `DATABASE_URL, NEXT_PUBLIC_SUPABASE_URL/ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, R2_* , NEXT_PUBLIC_APP_URL, CRON_SECRET, NEXT_PUBLIC_CMS_URL, BOOTSTRAP_ADMIN_*`. Never `NEXT_PUBLIC_` for secrets.
 - Migrations `supabase/migrations/README.md` 001→021. `018` backfills `projectId IS NULL` to default project.
 - Vercel: `vercel --prod` + env + cron `POST /api/cron/publish` `Authorization: Bearer CRON_SECRET` every minute.
 - `public/logo.svg` is icon for README & UI.

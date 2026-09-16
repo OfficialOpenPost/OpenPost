@@ -70,7 +70,7 @@ Flow: Supabase Auth → Profile (pending/approved) → ProjectMember (OWNER>ADMI
 | 👥 **Canonical 5-Tier RBAC** | `OWNER(5) > ADMIN(4) > EDITOR(3) > AUTHOR(2) > CONTRIBUTOR(1)` — `WRITER` deprecated → `AUTHOR`. Explicit perms `posts.edit_others/publish_others`, `members.invite/approve` etc. | `src/lib/rbac.ts:83`, `AGENTS.md:14` |
 | 🗑️ **Project Deletion & Cascade** | `OWNER` only can delete projects with full automatic database cascade deletion (blogs, revisions, taxonomies, media records, webhooks, audit logs). `ADMIN` cannot delete projects. | `src/app/api/projects/[id]/route.ts:175` |
 | 🗑️ **Trash & Admin Purge** | Users move articles to trash with a deletion reason (audited). Only `ADMIN` and `OWNER` can permanently purge articles from the trash bin. | `src/app/api/blogs/[id]/route.ts:367`, `/dashboard/blogs` |
-| ⏳ **User Approval Workflow** | Signup → `pending` → admin `Approve/Reject/Suspend/Reactivate` → `approved` only then access. `REQUIRE_EMAIL_VERIFICATION=true` checks `email_confirmed_at`. | `src/lib/auth.ts:160`, `/dashboard/team`, `supabase/migrations/016_auto_profile_on_signup.sql` |
+| ⏳ **User Approval Workflow** | Signup → `pending` → admin `Approve/Reject/Suspend/Reactivate` → `approved` only then access. Email verification required for non-owner users via `NEXT_PUBLIC_CMS_URL`. | `src/lib/auth.ts:160`, `/dashboard/team`, `supabase/migrations/016_auto_profile_on_signup.sql` |
 | 👤 **Authors vs Users (strict)** | `Author` = public byline `name/slug/bio/photoId/socialLinks/website/email/linkedUserId/projectId` — guest `linkedUserId=null`, linked must be **approved member same project**, photo via `media` same project, slug `unique[projectId,slug]` → `409`, real `_count.blogs`, public `/authors/[slug]` only `published` | `src/app/api/v1/authors/route.ts:8`, `prisma/schema.prisma:82` |
 | 👥 **Team & Invites** | `invites` `gen_random_bytes(32)` hex, 7-day expiry, `tokenPreview` masked, rate-limited `10/min/IP`, `OWNER` only for `OWNER` invites | `src/app/api/settings/users/route.ts:40`, `/dashboard/team` |
 | 📝 **Blogs & Revisions** | Editor `Tiptap` JSON `type:"doc"`, `EDITOR`+ `publish/schedule`, `AUTHOR/CONTRIBUTOR` only own edit, `301` redirect on published slug change, `blogRevisions` audit | `src/app/api/blogs/route.ts:90`, `src/app/api/blogs/[id]/route.ts:7` |
@@ -218,7 +218,7 @@ R2_SECRET_ACCESS_KEY="..."
 R2_BUCKET_NAME="openpost-media"
 R2_PUBLIC_URL="https://media.yourdomain.com"
 CRON_SECRET="openssl rand -hex 32"
-REQUIRE_EMAIL_VERIFICATION="false"
+NEXT_PUBLIC_CMS_URL="https://your-cms-domain.vercel.app"
 NEXT_PUBLIC_APP_URL="http://localhost:3000"
 ```
 
@@ -414,7 +414,7 @@ See `.env.example` — never commit secrets.
 | `R2_ACCOUNT_ID / R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY / R2_BUCKET_NAME` | ⚠️ for media | server | R2, key `openpost-media/<projectId>/<uuid>.<ext>` |
 | `R2_PUBLIC_URL` |  | server | `https://media.yourdomain.com` |
 | `CRON_SECRET` | ✅ prod | server | `Bearer` for `/api/cron/publish` |
-| `REQUIRE_EMAIL_VERIFICATION` |  | server | `true` → block unverified |
+| `NEXT_PUBLIC_CMS_URL` | ✅ prod | client | `https://your-cms-domain.vercel.app` |
 | `NEXT_PUBLIC_APP_URL` |  | client | `https://yourdomain.com` |
 | `BOOTSTRAP_ADMIN_EMAIL / PASSWORD / NAME` | bootstrap | server | `npm run cms:bootstrap` |
 

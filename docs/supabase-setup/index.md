@@ -72,7 +72,22 @@ SUPABASE_SERVICE_ROLE_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
 
 ---
 
-## 4. Approve Your First Admin User
+## 4. Configure Email Verification
+
+For the signup flow, configure Supabase to send verification emails:
+
+1. Go to **Authentication → URL Configuration** in your Supabase Dashboard.
+2. Set **Site URL** to your deployed CMS domain (e.g. `https://your-cms-domain.vercel.app`).
+3. Add `${YOUR_CMS_URL}/auth/callback` to **Redirect URLs** (e.g. `https://your-cms-domain.vercel.app/auth/callback`).
+4. Go to **Authentication → Providers → Email** and ensure **Confirm email** is **ON**.
+5. Set `NEXT_PUBLIC_CMS_URL` in your `.env` to match:
+   ```env
+   NEXT_PUBLIC_CMS_URL="https://your-cms-domain.vercel.app"
+   ```
+
+---
+
+## 5. Approve Your First Admin User
 
 To prevent unauthorized public signups from writing content, OpenPost uses an approval workflow (`profiles.status = 'pending'`).
 
@@ -99,7 +114,7 @@ WHERE email = 'admin@yourdomain.com';
 
 ---
 
-## 5. Verify the Database Setup
+## 6. Verify the Database Setup
 
 Run the following query in the SQL Editor to ensure everything is initialized properly:
 

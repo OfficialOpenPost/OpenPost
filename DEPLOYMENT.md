@@ -31,7 +31,7 @@ SUPABASE_SERVICE_ROLE_KEY="eyJ..."
 NEXT_PUBLIC_APP_URL="https://yourdomain.com"
 CRON_SECRET="openssl rand -hex 32"
 # Optional hardening
-REQUIRE_EMAIL_VERIFICATION="false"
+NEXT_PUBLIC_CMS_URL="https://your-cms-domain.vercel.app"
 # R2
 R2_ACCOUNT_ID="..."
 R2_ACCESS_KEY_ID="..."
@@ -219,7 +219,8 @@ npm run test           # includes RBAC 5-role matrix, SSRF, storage, api-token
 - [ ] `npm run test` 30/30 green
 - [ ] `npm run build` green
 - [ ] Created first OWNER via `cms:bootstrap`
-- [ ] Email verification ON if required (`REQUIRE_EMAIL_VERIFICATION=true`)
+- [ ] `NEXT_PUBLIC_CMS_URL` set to deployed CMS domain
+- [ ] Supabase email verification redirect URLs configured
 - [ ] `CRON_SECRET` set & cron job hitting `/api/cron/publish` with Bearer
 - [ ] R2 bucket & `R2_PUBLIC_URL` correct
 - [ ] HTTPS enforced (Vercel auto, else reverse proxy)

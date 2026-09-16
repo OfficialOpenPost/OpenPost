@@ -39,7 +39,7 @@ All environment variables are defined in `.env.local` (for development) or your 
 
 | Variable | Required | Description |
 |---|:---:|---|
-| `REQUIRE_EMAIL_VERIFICATION` | | Set to `true` to require email verification before account approval. Default: not required |
+| `NEXT_PUBLIC_CMS_URL` | Yes | Deployed CMS domain for email verification redirects (e.g. `https://your-cms-domain.vercel.app`) |
 
 ## Bootstrap / Admin Setup
 

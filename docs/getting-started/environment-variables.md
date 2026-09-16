@@ -39,6 +39,9 @@ CRON_SECRET="your-random-32-char-cron-secret"
 
 # Public site URL
 NEXT_PUBLIC_APP_URL="http://localhost:3000"
+
+# Deployed CMS domain (for email verification redirects)
+NEXT_PUBLIC_CMS_URL="https://your-cms-domain.vercel.app"
 ```
 
 ---
@@ -91,6 +94,7 @@ NEXT_PUBLIC_APP_URL="http://localhost:3000"
 | :--- | :--- | :--- | :--- |
 | `CRON_SECRET` | Recommended | Bearer authorization token used to protect `GET /api/cron/publish`. | `op_cron_8f93a1c890...` |
 | `NEXT_PUBLIC_APP_URL` | Recommended | Canonical base URL used for generating OpenGraph URLs and sitemaps. | `https://cms.yourdomain.com` |
+| `NEXT_PUBLIC_CMS_URL` | **Yes** (production) | Deployed CMS domain used for email verification redirects. Supabase sends verification emails with a link back to this URL. Must match the **Site URL** and **Redirect URLs** configured in your Supabase Dashboard. | `https://your-cms-domain.vercel.app` |
 
 ---
 

@@ -30,7 +30,8 @@
   <a href="#-rbac-5-tier-permission-matrix"><strong>RBAC</strong></a> &bull;
   <a href="#-public-api-reference"><strong>API</strong></a> &bull;
   <a href="#-environment-variables"><strong>Env</strong></a> &bull;
-  <a href="#-production-deployment"><strong>Deployment</strong></a>
+  <a href="#-production-deployment"><strong>Deployment</strong></a> &bull;
+  <a href="#-contributors--thank-you"><strong>Contributors</strong></a>
 </p>
 
 </div>
@@ -469,6 +470,27 @@ npm run dev
 ```
 
 Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
+
+---
+
+## 🙏 Contributors — Thank You!
+
+A huge **thank you** to everyone who has helped build OpenPost — through code, bug reports, docs, reviews, and ideas. This project exists because of you.
+
+<!-- Auto-updates from GitHub contributors API -->
+<a href="https://github.com/OfficialOpenPost/OpenPost/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=OfficialOpenPost/OpenPost" alt="OpenPost contributors" />
+</a>
+
+**Special thanks**
+
+| | Who | For |
+| :---: | :--- | :--- |
+| 🏗️ | [@OfficialOpenPost](https://github.com/OfficialOpenPost) | Project creation, core architecture, maintenance |
+| 🤖 | [dependabot](https://github.com/dependabot) | Keeping dependencies current |
+| 💡 | You? | [Open an issue](https://github.com/OfficialOpenPost/OpenPost/issues) or [PR](https://github.com/OfficialOpenPost/OpenPost/pulls) — every contribution counts |
+
+Prefer a plain list? See [all contributors](https://github.com/OfficialOpenPost/OpenPost/graphs/contributors).
 
 ---
 

@@ -475,15 +475,16 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
 
 ## 🙏 Contributors
 
-Thanks to all these amazing people:
+Thanks to these wonderful people:
 
 <p align="center">
-  <a href="https://github.com/OfficialOpenPost/OpenPost/graphs/contributors">
-    <img src="https://contrib.rocks/image?repo=OfficialOpenPost/OpenPost" alt="Contributors" />
-  </a>
+  <a href="https://github.com/OfficialOpenPost"><img src="https://avatars.githubusercontent.com/u/323424638?v=4&s=100" width="72" height="72" alt="OfficialOpenPost" /></a>
+  <a href="https://github.com/apps/dependabot"><img src="https://avatars.githubusercontent.com/in/29110?v=4&s=100" width="72" height="72" alt="dependabot[bot]" /></a>
 </p>
 
-<p align="center"><sub>Thanks goes to these wonderful people 👇</sub></p>
+<p align="center">
+  <sub>Each avatar links to their GitHub profile · <a href="https://github.com/OfficialOpenPost/OpenPost/graphs/contributors">full list</a></sub>
+</p>
 
 ---
 

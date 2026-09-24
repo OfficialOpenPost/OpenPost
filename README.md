@@ -473,24 +473,17 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
 
 ---
 
-## 🙏 Contributors — Thank You!
+## 🙏 Contributors
 
-A huge **thank you** to everyone who has helped build OpenPost — through code, bug reports, docs, reviews, and ideas. This project exists because of you.
+Thanks to all these amazing people:
 
-<!-- Auto-updates from GitHub contributors API -->
-<a href="https://github.com/OfficialOpenPost/OpenPost/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=OfficialOpenPost/OpenPost" alt="OpenPost contributors" />
-</a>
+<p align="center">
+  <a href="https://github.com/OfficialOpenPost/OpenPost/graphs/contributors">
+    <img src="https://contrib.rocks/image?repo=OfficialOpenPost/OpenPost" alt="Contributors" />
+  </a>
+</p>
 
-**Special thanks**
-
-| | Who | For |
-| :---: | :--- | :--- |
-| 🏗️ | [@OfficialOpenPost](https://github.com/OfficialOpenPost) | Project creation, core architecture, maintenance |
-| 🤖 | [dependabot](https://github.com/dependabot) | Keeping dependencies current |
-| 💡 | You? | [Open an issue](https://github.com/OfficialOpenPost/OpenPost/issues) or [PR](https://github.com/OfficialOpenPost/OpenPost/pulls) — every contribution counts |
-
-Prefer a plain list? See [all contributors](https://github.com/OfficialOpenPost/OpenPost/graphs/contributors).
+<p align="center"><sub>Thanks goes to these wonderful people 👇</sub></p>
 
 ---
 

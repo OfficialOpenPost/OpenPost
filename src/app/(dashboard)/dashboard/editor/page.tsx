@@ -9,7 +9,6 @@ import { EditorRibbon } from "@/components/editor/toolbar/EditorRibbon";
 import { EditorSidePanel } from "@/components/editor/panels/EditorSidePanel";
 import { SelectionBubbleMenu, CodeBlockBubbleMenu } from "@/components/editor/BubbleMenus";
 import { FindReplaceBar } from "@/components/editor/toolbar/FindReplaceBar";
-import { BlockHandle } from "@/components/editor/block-controls/BlockHandle";
 import { EDITOR_STYLES } from "@/components/editor/extensions";
 import { tiptapToEditorDocument, editorDocumentToHtml } from "@/lib/editorDocument";
 import { SharedRender } from "@/components/render/SharedRender";
@@ -84,6 +83,7 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
   const loadedBlogIdRef = useRef<string | null>(effectiveId || null);
   const isSavingRef = useRef<boolean>(false);
   const pendingSaveRef = useRef<boolean>(false);
+  const saveRef = useRef<((manualLabel?: string, overrideStatus?: "draft" | "published" | "scheduled" | "trash", actionType?: "draft" | "publish" | "update") => Promise<void>) | null>(null);
 
   useEffect(() => {
     blogIdRef.current = blogId;
@@ -184,6 +184,14 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
             post.seo?.image ||
             null;
           if (cover) setFeaturedImage(cover);
+
+          // Round-trip tags so existing tags show in the sidebar
+          const loadedTags = Array.isArray(post.tags)
+            ? post.tags
+                .map((t: any) => t?.tag?.name || t?.name)
+                .filter(Boolean)
+            : [];
+          setTags(loadedTags);
 
           let cnt = post.content;
           if (typeof cnt === "string") {
@@ -292,7 +300,8 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
       }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
         e.preventDefault();
-        save("Quick save", undefined, "draft");
+        // Always use the latest save closure — a stale one would send old title/slug/SEO
+        saveRef.current?.("Quick save", undefined, "draft");
       }
       if (e.key === "F11") {
         e.preventDefault();
@@ -586,23 +595,50 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
     }
   };
 
-  // Restore revision handler
-  const handleRestoreRevision = (revContent: any) => {
-    if (editor && revContent) {
-      editor.commands.setContent(revContent);
-      setSaveStatus("unsaved");
+  // Keep the latest save closure available to global shortcuts/autosave/blur.
+  // Assigned in an effect (never during render) so the ref always holds the
+  // freshest closure without violating React's ref rules.
+  useEffect(() => {
+    saveRef.current = save;
+  });
+
+  // Restore revision handler — receives the full revision row { id, content, ... }
+  const handleRestoreRevision = (rev: unknown) => {
+    if (editor && rev) {
+      const doc =
+        rev && typeof rev === "object" && "content" in rev && (rev as { content?: unknown }).content != null
+          ? (rev as { content?: unknown }).content
+          : rev;
+      try {
+        editor.commands.setContent(doc as Parameters<typeof editor.commands.setContent>[0]);
+        setIsDirty(true);
+        setSaveStatus("unsaved");
+      } catch (err) {
+        console.error("Revision restore failed:", err);
+        setSaveStatus("error");
+      }
     }
   };
 
-  // Auto-save: 8 seconds after last edit, only if dirty
+  // Auto-save: 8 seconds after last edit, only if dirty (always latest closure via saveRef)
   useEffect(() => {
     if (isInitialLoadRef.current || !isDirty) return;
     if (!title && !editor?.getText()?.trim()) return;
     const timer = setTimeout(() => {
-      if (isDirty) save();
+      if (isDirty) saveRef.current?.();
     }, 8000);
     return () => clearTimeout(timer);
   }, [title, html, category, tags, seoTitle, seoDesc, featuredImage, status, scheduledAt, excerpt, isDirty]);
+
+  // Save when the editor window loses focus and there are unsaved changes
+  useEffect(() => {
+    const onWindowBlur = () => {
+      if (isInitialLoadRef.current) return;
+      saveRef.current?.();
+    };
+    window.addEventListener("blur", onWindowBlur);
+    return () => window.removeEventListener("blur", onWindowBlur);
+  }, []);
 
   if (loadingInitial) {
     return (
@@ -1059,9 +1095,6 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
                 {/* Selection Bubble Menu */}
                 {editor && <SelectionBubbleMenu editor={editor} />}
                 {editor && <CodeBlockBubbleMenu editor={editor} />}
-
-                {/* Block Handle Controls (WordPress/Sanity-style drag handle, menu, add block) */}
-                {editor && <BlockHandle editor={editor} />}
 
                 {/* Big Uncropped Featured Cover Image — Placed just below Title */}
                 {featuredImage && (

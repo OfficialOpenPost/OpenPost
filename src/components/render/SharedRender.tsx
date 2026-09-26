@@ -25,7 +25,23 @@ function renderInline(content: any[]): React.ReactNode[] {
           if (m.type === "subscript") node = <sub key={`${idx}-sub`} className="text-xs">{node}</sub>;
           if (m.type === "code") node = <code key={`${idx}-c`} className="rounded bg-[#2D3440] px-1 py-0.5 font-mono text-sm text-[#FEA611]">{node}</code>;
           if (m.type === "highlight") node = <mark key={`${idx}-h`} className="px-1 rounded" style={{ backgroundColor: m.attrs?.color || "rgba(254,166,17,0.28)" }}>{node}</mark>;
-          if (m.type === "link") node = <a key={`${idx}-a`} href={m.attrs?.href ?? "#"} target={m.attrs?.target || "_blank"} rel="noopener noreferrer" className="text-[#FE4F01] underline decoration-[#FE4F01]/30 underline-offset-4 hover:decoration-[#FE4F01]">{node}</a>;
+          if (m.type === "link") {
+            const href = m.attrs?.href ?? "#";
+            const explicitTarget = m.attrs?.target as string | undefined;
+            // Respect author intent: only open in a new tab when explicitly requested
+            const target = explicitTarget === "_blank" ? "_blank" : explicitTarget || undefined;
+            node = (
+              <a
+                key={`${idx}-a`}
+                href={href}
+                target={target}
+                rel={target === "_blank" ? "noopener noreferrer" : undefined}
+                className="text-[#FE4F01] underline decoration-[#FE4F01]/30 underline-offset-4 hover:decoration-[#FE4F01]"
+              >
+                {node}
+              </a>
+            );
+          }
           if (m.type === "textStyle") {
             const style: React.CSSProperties = {};
             if (m.attrs?.color) style.color = m.attrs.color;
@@ -46,6 +62,39 @@ function renderInline(content: any[]): React.ReactNode[] {
 function renderInlineText(content: any[]): string {
   if (!Array.isArray(content)) return "";
   return content.map((c: any) => c.text ?? (c.content ? renderInlineText(c.content) : "")).join("");
+}
+
+type ListNode = { type?: string; content?: ListNode[] };
+
+/** Render bullet/ordered lists with full nested-list support. */
+function renderListBlock(node: ListNode, key: number | string): React.ReactNode {
+  const ordered = node.type === "orderedList";
+  const Tag: React.ElementType = ordered ? "ol" : "ul";
+  const cls = ordered
+    ? "list-decimal pl-6 my-4 space-y-2 marker:text-brand marker:font-bold"
+    : "list-disc pl-6 my-4 space-y-2 marker:text-brand";
+  const items = Array.isArray(node.content) ? node.content : [];
+  return (
+    <Tag key={key} className={cls}>
+      {items.map((li: ListNode, idx: number) => {
+        const children = Array.isArray(li?.content) ? li.content : [];
+        return (
+          <li key={idx}>
+            {children.length === 0
+              ? renderInline(Array.isArray(li?.content) ? li.content : [])
+              : children.map((child: ListNode, cidx: number) => {
+                  if (child.type === "bulletList" || child.type === "orderedList") {
+                    return renderListBlock(child, cidx);
+                  }
+                  return (
+                    <React.Fragment key={cidx}>{renderInline(child.content ?? [])}</React.Fragment>
+                  );
+                })}
+          </li>
+        );
+      })}
+    </Tag>
+  );
 }
 
 function getContrastTextColor(hexColor: string): string {
@@ -672,21 +721,37 @@ export function SharedRender({ content, viewport, isMobile }: SharedRenderProps)
             return <hr key={i} className="my-8 border-border" />;
           }
           case "bulletList": {
-            return (
-              <ul key={i} className="list-disc pl-6 my-4 space-y-2 marker:text-brand">
-                {node.content?.map((li: any, idx: number) => (
-                  <li key={idx}>{renderInline(li.content?.[0]?.content ?? li.content ?? [])}</li>
-                ))}
-              </ul>
-            );
+            return renderListBlock(node, i);
           }
           case "orderedList": {
+            return renderListBlock(node, i);
+          }
+          case "socialEmbed": {
+            const provider = String(node.attrs?.provider || "social");
+            const socialUrl = node.attrs?.url || "";
             return (
-              <ol key={i} className="list-decimal pl-6 my-4 space-y-2 marker:text-brand marker:font-bold">
-                {node.content?.map((li: any, idx: number) => (
-                  <li key={idx}>{renderInline(li.content?.[0]?.content ?? li.content ?? [])}</li>
-                ))}
-              </ol>
+              <figure key={i} className="my-6 clear-both overflow-hidden rounded-2xl border border-border bg-surface">
+                <div className="flex items-center gap-3 p-4">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand/15 text-[11px] font-black uppercase text-brand">
+                    {provider.slice(0, 2)}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-navy capitalize">{provider} embed</p>
+                    {socialUrl ? (
+                      <a
+                        href={socialUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block truncate text-xs text-brand underline"
+                      >
+                        {socialUrl}
+                      </a>
+                    ) : (
+                      <p className="text-xs text-text-tertiary">Embedded {provider} post</p>
+                    )}
+                  </div>
+                </div>
+              </figure>
             );
           }
           case "table": {

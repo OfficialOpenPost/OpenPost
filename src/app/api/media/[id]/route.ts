@@ -51,13 +51,16 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
       }
     }
 
+    // Delete DB row first — if R2 deletion then fails we get a harmless orphan
+    // object, whereas the reverse order would leave DB rows pointing at
+    // already-deleted files (broken images across articles).
+    await withDbRetry(() => db.media.delete({ where: { id } }));
+
     if (key) {
       await deleteObject(key).catch((err) => {
         console.warn(`[media/delete] Failed to delete R2 object ${key}:`, err);
       });
     }
-
-    await withDbRetry(() => db.media.delete({ where: { id } }));
 
     await createAuditLog({
       actorId: user.id,

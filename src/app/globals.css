@@ -745,3 +745,68 @@ a, button {
 .stagger-reveal.revealed > *:nth-child(7) { transition-delay: 360ms; opacity: 1; transform: translateY(0); }
 .stagger-reveal.revealed > *:nth-child(8) { transition-delay: 420ms; opacity: 1; transform: translateY(0); }
 .stagger-reveal.revealed > *:nth-child(9) { transition-delay: 480ms; opacity: 1; transform: translateY(0); }
+
+/* ===== Print / Save-as-PDF document layer (#print-root portal) ===== */
+
+#print-root {
+  display: none;
+}
+
+@page {
+  margin: 18mm 16mm;
+}
+
+@media print {
+  body > *:not(#print-root) {
+    display: none !important;
+  }
+
+  #print-root {
+    display: block !important;
+    width: 100%;
+    max-width: 760px;
+    margin: 0 auto;
+    color: #0f172a;
+    font-size: 16px;
+    line-height: 1.7;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  #print-root h1 {
+    font-size: 28px;
+    line-height: 1.25;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    margin: 0 0 8px;
+  }
+
+  #print-root .print-meta {
+    margin: 0 0 20px;
+    font-size: 12px;
+    color: #64748b;
+  }
+
+  #print-root img {
+    max-height: 320px;
+    width: auto;
+    object-fit: contain;
+    page-break-inside: avoid;
+  }
+
+  #print-root table,
+  #print-root blockquote,
+  #print-root pre,
+  #print-root figure {
+    page-break-inside: avoid;
+  }
+
+  #print-root h1,
+  #print-root h2,
+  #print-root h3,
+  #print-root h4,
+  #print-root h5,
+  #print-root h6 {
+    page-break-after: avoid;
+  }
+}

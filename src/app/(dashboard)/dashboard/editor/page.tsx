@@ -12,6 +12,7 @@ import { FindReplaceBar } from "@/components/editor/toolbar/FindReplaceBar";
 import { EDITOR_STYLES } from "@/components/editor/extensions";
 import { tiptapToEditorDocument, editorDocumentToHtml } from "@/lib/editorDocument";
 import { SharedRender } from "@/components/render/SharedRender";
+import { PrintDocument } from "@/components/editor/PrintDocument";
 import {
   ArrowLeft,
   Sparkles,
@@ -30,6 +31,7 @@ import {
   Tablet,
   Smartphone,
   Printer,
+  MoreHorizontal,
 } from "lucide-react";
 
 interface EditorPageProps {
@@ -97,7 +99,10 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
   const [json, setJson] = useState<any>(null);
   const [preview, setPreview] = useState(false);
   const [previewViewport, setPreviewViewport] = useState<"desktop" | "tablet" | "mobile" | "wide">("wide");
+  const [showPrint, setShowPrint] = useState(false);
   const [showSidebar, setShowSidebar] = useState(true);
+  const [headerMenuOpen, setHeaderMenuOpen] = useState(false);
+  const headerMenuRef = useRef<HTMLDivElement>(null);
   const [showFindReplace, setShowFindReplace] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(340);
@@ -362,6 +367,39 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
       window.removeEventListener("mouseup", onUp);
     };
   }, [isResizing]);
+
+  /* eslint-disable react-hooks/set-state-in-effect -- one-time viewport gate on mount: collapses inspector drawer on small screens */
+  useEffect(() => {
+    if (window.innerWidth < 1280) setShowSidebar(false);
+  }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
+
+  useEffect(() => {
+    if (!showSidebar || focusMode) return;
+    const onEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && window.innerWidth < 1280) setShowSidebar(false);
+    };
+    window.addEventListener("keydown", onEscape);
+    return () => window.removeEventListener("keydown", onEscape);
+  }, [showSidebar, focusMode]);
+
+  useEffect(() => {
+    if (!headerMenuOpen) return;
+    const onOutside = (e: MouseEvent) => {
+      if (headerMenuRef.current && !headerMenuRef.current.contains(e.target as Node)) {
+        setHeaderMenuOpen(false);
+      }
+    };
+    const onEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setHeaderMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onOutside);
+    window.addEventListener("keydown", onEscape);
+    return () => {
+      document.removeEventListener("mousedown", onOutside);
+      window.removeEventListener("keydown", onEscape);
+    };
+  }, [headerMenuOpen]);
 
   // Load categories
   useEffect(() => {
@@ -698,7 +736,7 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
           </div>
 
           <button
-            onClick={() => window.print()}
+            onClick={() => setShowPrint(true)}
             className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-white px-3 py-1.5 text-xs font-bold text-navy hover:bg-surface-raised transition shadow-xs"
             title="Print preview"
           >
@@ -757,6 +795,15 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
         <p className="mt-4 text-center text-xs text-slate-400">
           Preview matches public frontend &amp; mobile responsive layout via SharedRender
         </p>
+        {showPrint && (
+          <PrintDocument
+            doc={editor ? editor.getJSON() : json}
+            title={title || "Untitled Article"}
+            meta={category || new Date().toLocaleDateString()}
+            heroSrc={featuredImage}
+            onClose={() => setShowPrint(false)}
+          />
+        )}
       </div>
     );
   }
@@ -812,42 +859,104 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
             {status}
           </span>
 
-          <button
-            type="button"
-            onClick={() => {
-              if (editor) setHtml(editor.getHTML());
-              setPreview(true);
-            }}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-white px-3 py-1.5 text-xs font-bold text-navy hover:bg-surface-raised transition shadow-xs"
-          >
-            <Eye className="h-3.5 w-3.5 text-text-tertiary" /> Preview
-          </button>
+          <div className="hidden md:flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                if (editor) setHtml(editor.getHTML());
+                setPreview(true);
+              }}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-white px-3 py-1.5 text-xs font-bold text-navy hover:bg-surface-raised transition shadow-xs"
+            >
+              <Eye className="h-3.5 w-3.5 text-text-tertiary" /> Preview
+            </button>
 
-          {/* Save Draft Button */}
-          <button
-            type="button"
-            disabled={
-              (isSavingRef.current || saveStatus === "saving") ||
-              (!isDirty && status === "draft" && Boolean(blogIdRef.current)) ||
-              !Boolean(title.trim().length > 0 || (editor && !editor.isEmpty))
-            }
-            onClick={() => save("Saved draft", "draft", "draft")}
-            className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-bold transition shadow-xs ${
-              !(isSavingRef.current || saveStatus === "saving") &&
-              (isDirty || status !== "draft" || !blogIdRef.current) &&
-              Boolean(title.trim().length > 0 || (editor && !editor.isEmpty))
-                ? "border-border bg-white text-navy hover:bg-surface-raised cursor-pointer"
-                : "border-slate-200 bg-slate-100/80 text-slate-400 cursor-not-allowed opacity-60"
-            }`}
-            title="Save as Draft"
-          >
-            {activeSaveAction === "draft" ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin text-brand" />
-            ) : (
-              <Save className="h-3.5 w-3.5 text-text-tertiary" />
+            {/* Save Draft Button */}
+            <button
+              type="button"
+              disabled={
+                (isSavingRef.current || saveStatus === "saving") ||
+                (!isDirty && status === "draft" && Boolean(blogIdRef.current)) ||
+                !Boolean(title.trim().length > 0 || (editor && !editor.isEmpty))
+              }
+              onClick={() => save("Saved draft", "draft", "draft")}
+              className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-bold transition shadow-xs ${
+                !(isSavingRef.current || saveStatus === "saving") &&
+                (isDirty || status !== "draft" || !blogIdRef.current) &&
+                Boolean(title.trim().length > 0 || (editor && !editor.isEmpty))
+                  ? "border-border bg-white text-navy hover:bg-surface-raised cursor-pointer"
+                  : "border-slate-200 bg-slate-100/80 text-slate-400 cursor-not-allowed opacity-60"
+              }`}
+              title="Save as Draft"
+            >
+              {activeSaveAction === "draft" ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-brand" />
+              ) : (
+                <Save className="h-3.5 w-3.5 text-text-tertiary" />
+              )}
+              {activeSaveAction === "draft" ? "Saving Draft..." : "Save Draft"}
+            </button>
+          </div>
+
+          {/* Header Overflow Menu — Preview + Save Draft below md */}
+          <div ref={headerMenuRef} className="relative md:hidden">
+            <button
+              type="button"
+              onClick={() => setHeaderMenuOpen((open) => !open)}
+              className="flex h-8 w-8 items-center justify-center rounded-xl border border-border bg-white text-navy hover:bg-surface-raised transition shrink-0"
+              title="More actions"
+              aria-haspopup="menu"
+              aria-expanded={headerMenuOpen}
+            >
+              <MoreHorizontal className="h-4 w-4" />
+            </button>
+            {headerMenuOpen && (
+              <div className="absolute right-0 top-full mt-1 z-40 w-52 rounded-xl border border-border bg-white p-1.5 shadow-xl text-xs">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (editor) setHtml(editor.getHTML());
+                    setPreview(true);
+                    setHeaderMenuOpen(false);
+                  }}
+                  className="flex w-full items-center gap-2 px-3 py-2 rounded-lg text-left font-bold text-navy hover:bg-surface-raised transition"
+                >
+                  <Eye className="h-3.5 w-3.5 text-text-tertiary" /> Preview
+                </button>
+                <button
+                  type="button"
+                  disabled={
+                    saveStatus === "saving" ||
+                    (!isDirty && status === "draft" && Boolean(blogId)) ||
+                    !Boolean(title.trim().length > 0 || (editor && !editor.isEmpty))
+                  }
+                  onClick={() => {
+                    save("Saved draft", "draft", "draft");
+                    setHeaderMenuOpen(false);
+                  }}
+                  className={`flex w-full items-center gap-2 px-3 py-2 rounded-lg text-left font-bold transition ${
+                    saveStatus !== "saving" &&
+                    (isDirty || status !== "draft" || !blogId) &&
+                    Boolean(title.trim().length > 0 || (editor && !editor.isEmpty))
+                      ? "text-navy hover:bg-surface-raised"
+                      : "text-slate-400 cursor-not-allowed opacity-60"
+                  }`}
+                  title="Save as Draft"
+                >
+                  {activeSaveAction === "draft" ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-brand" />
+                  ) : (
+                    <Save className="h-3.5 w-3.5 text-text-tertiary" />
+                  )}
+                  {activeSaveAction === "draft" ? "Saving Draft..." : "Save Draft"}
+                </button>
+                <div className="my-1 border-t border-border" />
+                <div className="px-3 py-2 font-mono text-[11px] text-text-tertiary">
+                  {words} words · ~{minutes} min read
+                </div>
+              </div>
             )}
-            {activeSaveAction === "draft" ? "Saving Draft..." : "Save Draft"}
-          </button>
+          </div>
 
           {/* Publish / Update Button */}
           {status === "published" ? (
@@ -1056,6 +1165,7 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
                 onToggleOutline={() => setShowSidebar(true)}
                 onToggleFullscreen={toggleFullscreen}
                 isFullscreen={isFullscreen}
+                onPrint={() => setShowPrint(true)}
                 onOpenPreview={() => {
                   if (editor) setHtml(editor.getHTML());
                   setPreview(true);
@@ -1150,59 +1260,75 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
         {showSidebar && !focusMode && (
           <div
             onMouseDown={handleMouseDown}
-            className="hidden lg:block w-1 hover:w-1.5 bg-border hover:bg-brand cursor-col-resize shrink-0 z-20 transition-colors h-full"
+            className="hidden xl:flex w-1 hover:w-1.5 bg-border hover:bg-brand cursor-col-resize shrink-0 z-20 transition-colors h-full"
           />
         )}
 
-        {/* Right-hand Context Inspector Sidebar — NEVER hidden by top navbar */}
+        {/* Right-hand Context Inspector Sidebar — overlay drawer below xl, static resizable column on xl+ */}
         {showSidebar && !focusMode && (
-          <aside
-            style={{ width: `${sidebarWidth}px` }}
-            className="flex flex-col border-l border-border bg-white h-full shrink-0 overflow-y-auto shadow-xs z-20 min-h-0"
-          >
-            <EditorSidePanel
-              editor={editor}
-              title={title}
-              slug={slug}
-              setSlug={(val: string) => { setSlug(val); setIsDirty(true); setSaveStatus("unsaved"); }}
-              setSlugEdited={setSlugEdited}
-              category={category}
-              setCategory={(val: string) => { setCategory(val); setCategoryId(null); setIsDirty(true); setSaveStatus("unsaved"); }}
-              setCategoryId={setCategoryId}
-              catOptions={catOptions}
-              tags={tags}
-              setTags={(val: any) => { setTags(val); setIsDirty(true); setSaveStatus("unsaved"); }}
-              tagInput={tagInput}
-              setTagInput={setTagInput}
-              featuredImage={featuredImage}
-              setFeaturedImage={(val: string | null) => { setFeaturedImage(val); setIsDirty(true); setSaveStatus("unsaved"); }}
-              seoTitle={seoTitle}
-              setSeoTitle={(val: string) => { setSeoTitle(val); setIsDirty(true); setSaveStatus("unsaved"); }}
-              seoDesc={seoDesc}
-              setSeoDesc={(val: string) => { setSeoDesc(val); setIsDirty(true); setSaveStatus("unsaved"); }}
-              canonical={canonical}
-              setCanonical={(val: string) => { setCanonical(val); setIsDirty(true); setSaveStatus("unsaved"); }}
-              ogTitle={ogTitle}
-              setOgTitle={(val: string) => { setOgTitle(val); setIsDirty(true); setSaveStatus("unsaved"); }}
-              ogDesc={ogDesc}
-              setOgDesc={(val: string) => { setOgDesc(val); setIsDirty(true); setSaveStatus("unsaved"); }}
-              ogImage={ogImage}
-              setOgImage={(val: string) => { setOgImage(val); setIsDirty(true); setSaveStatus("unsaved"); }}
-              status={status}
-              setStatus={(val: any) => { setStatus(val); setIsDirty(true); setSaveStatus("unsaved"); }}
-              scheduledAt={scheduledAt}
-              setScheduledAt={(val: string) => { setScheduledAt(val); setIsDirty(true); setSaveStatus("unsaved"); }}
-              revisions={revisions}
-              onRestoreRevision={handleRestoreRevision}
-              seoWarnings={seoWarnings}
-              words={words}
-              minutes={minutes}
-              excerpt={excerpt}
-              setExcerpt={(val: string) => { setExcerpt(val); setIsDirty(true); setSaveStatus("unsaved"); }}
+          <>
+            <div
+              className="fixed inset-0 z-30 bg-navy/30 xl:hidden"
+              onClick={() => setShowSidebar(false)}
             />
-          </aside>
+            <aside
+              style={{ "--inspector-w": `${sidebarWidth}px` } as React.CSSProperties}
+              className="flex flex-col fixed inset-y-0 right-0 z-40 w-80 max-w-[85vw] bg-white shadow-2xl overflow-y-auto min-h-0 xl:static xl:inset-auto xl:w-[var(--inspector-w)] xl:max-w-none xl:h-full xl:shrink-0 xl:border-l xl:border-border xl:shadow-xs"
+            >
+              <EditorSidePanel
+                editor={editor}
+                title={title}
+                slug={slug}
+                setSlug={(val: string) => { setSlug(val); setIsDirty(true); setSaveStatus("unsaved"); }}
+                setSlugEdited={setSlugEdited}
+                category={category}
+                setCategory={(val: string) => { setCategory(val); setCategoryId(null); setIsDirty(true); setSaveStatus("unsaved"); }}
+                setCategoryId={setCategoryId}
+                catOptions={catOptions}
+                tags={tags}
+                setTags={(val: any) => { setTags(val); setIsDirty(true); setSaveStatus("unsaved"); }}
+                tagInput={tagInput}
+                setTagInput={setTagInput}
+                featuredImage={featuredImage}
+                setFeaturedImage={(val: string | null) => { setFeaturedImage(val); setIsDirty(true); setSaveStatus("unsaved"); }}
+                seoTitle={seoTitle}
+                setSeoTitle={(val: string) => { setSeoTitle(val); setIsDirty(true); setSaveStatus("unsaved"); }}
+                seoDesc={seoDesc}
+                setSeoDesc={(val: string) => { setSeoDesc(val); setIsDirty(true); setSaveStatus("unsaved"); }}
+                canonical={canonical}
+                setCanonical={(val: string) => { setCanonical(val); setIsDirty(true); setSaveStatus("unsaved"); }}
+                ogTitle={ogTitle}
+                setOgTitle={(val: string) => { setOgTitle(val); setIsDirty(true); setSaveStatus("unsaved"); }}
+                ogDesc={ogDesc}
+                setOgDesc={(val: string) => { setOgDesc(val); setIsDirty(true); setSaveStatus("unsaved"); }}
+                ogImage={ogImage}
+                setOgImage={(val: string) => { setOgImage(val); setIsDirty(true); setSaveStatus("unsaved"); }}
+                status={status}
+                setStatus={(val: any) => { setStatus(val); setIsDirty(true); setSaveStatus("unsaved"); }}
+                scheduledAt={scheduledAt}
+                setScheduledAt={(val: string) => { setScheduledAt(val); setIsDirty(true); setSaveStatus("unsaved"); }}
+                revisions={revisions}
+                onRestoreRevision={handleRestoreRevision}
+                seoWarnings={seoWarnings}
+                words={words}
+                minutes={minutes}
+                excerpt={excerpt}
+                setExcerpt={(val: string) => { setExcerpt(val); setIsDirty(true); setSaveStatus("unsaved"); }}
+              />
+            </aside>
+          </>
         )}
       </div>
+
+      {showPrint && (
+        <PrintDocument
+          doc={editor ? editor.getJSON() : json}
+          title={title || "Untitled Article"}
+          meta={category || new Date().toLocaleDateString()}
+          heroSrc={featuredImage}
+          onClose={() => setShowPrint(false)}
+        />
+      )}
     </div>
   );
 }

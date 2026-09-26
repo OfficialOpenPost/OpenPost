@@ -40,6 +40,7 @@ import {
   Minus as DividerIcon,
   Indent,
   Outdent,
+  MoreHorizontal,
 } from "lucide-react";
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
@@ -52,6 +53,7 @@ interface EditorRibbonProps {
   onToggleOutline?: () => void;
   onToggleFullscreen?: () => void;
   isFullscreen?: boolean;
+  onPrint?: () => void;
   onOpenPreview?: () => void;
 }
 
@@ -87,6 +89,7 @@ export function EditorRibbon({
   onToggleOutline,
   onToggleFullscreen,
   isFullscreen = false,
+  onPrint,
   onOpenPreview,
 }: EditorRibbonProps) {
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
@@ -247,6 +250,16 @@ export function EditorRibbon({
     (editor.chain().focus() as any).setFontSize?.(`${nextSize}px`).run();
   };
 
+  type FocusChain = ReturnType<Editor["chain"]>;
+  const toggleSuperSub = (mark: "superscript" | "subscript") => {
+    const chain = editor.chain().focus() as FocusChain & {
+      toggleSuperscript?: () => FocusChain;
+      toggleSubscript?: () => FocusChain;
+    };
+    if (mark === "superscript") chain.toggleSuperscript?.().run();
+    else chain.toggleSubscript?.().run();
+  };
+
   return (
     <div
       ref={menuContainerRef}
@@ -292,7 +305,8 @@ export function EditorRibbon({
               <button
                 type="button"
                 onClick={() => {
-                  window.print();
+                  if (onPrint) onPrint();
+                  else window.print();
                   setActiveMenu(null);
                 }}
                 className="flex w-full items-center gap-2 px-3 py-2 rounded-lg text-left hover:bg-surface-raised transition"
@@ -552,7 +566,7 @@ export function EditorRibbon({
       {/* TIER 2: PROFESSIONAL TOOLBAR — single bar with thin separators (no excessive cards) */}
       <div className="editor-ribbon flex items-center gap-0.5 p-1.5 overflow-x-auto flex-nowrap text-navy border-t border-border/60 bg-white">
         {/* Undo / Redo */}
-        <div className="flex items-center gap-0.5 pr-2 border-r border-border/60 mr-1">
+        <div className="shrink-0 flex items-center gap-0.5 pr-2 border-r border-border/60 mr-1">
           <button
             type="button"
             onClick={() => editor.chain().focus().undo().run()}
@@ -574,7 +588,7 @@ export function EditorRibbon({
         </div>
 
         {/* Typography */}
-        <div className="flex items-center gap-1 pr-2 border-r border-border/60 mr-1">
+        <div className="shrink-0 flex items-center gap-1 pr-2 border-r border-border/60 mr-1">
           <select
             value={
               editor.isActive("heading", { level: 1 })
@@ -617,7 +631,7 @@ export function EditorRibbon({
               if (!val) (editor.chain().focus() as any).unsetFontFamily?.().run();
               else (editor.chain().focus() as any).setFontFamily?.(val).run();
             }}
-            className="h-7 rounded-md border border-slate-200 bg-white px-2 text-xs text-navy focus:border-slate-300 focus:outline-none cursor-pointer hidden sm:block max-w-[110px]"
+            className="h-7 rounded-md border border-slate-200 bg-white px-2 text-xs text-navy focus:border-slate-300 focus:outline-none cursor-pointer max-w-[110px]"
           >
             {FONT_FAMILIES.map((f) => (
               <option key={f.label} value={f.value}>
@@ -625,7 +639,7 @@ export function EditorRibbon({
               </option>
             ))}
           </select>
-          <div className="hidden md:flex items-center gap-0.5">
+          <div className="flex items-center gap-0.5">
             <button
               type="button"
               onClick={() => changeFontSizeStep(-2)}
@@ -661,7 +675,7 @@ export function EditorRibbon({
         </div>
 
         {/* Formatting */}
-        <div className="flex items-center gap-0.5 pr-2 border-r border-slate-200 mr-1">
+        <div className="shrink-0 flex items-center gap-0.5 pr-2 border-r border-slate-200 mr-1">
           <button
             type="button"
             onClick={() => editor.chain().focus().toggleBold().run()}
@@ -705,7 +719,7 @@ export function EditorRibbon({
           <button
             type="button"
             onClick={() => (editor.chain().focus() as any).toggleSuperscript?.().run()}
-            className={`hidden lg:flex h-7 w-7 items-center justify-center rounded-md text-xs transition ${
+            className={`hidden xl:flex h-7 w-7 items-center justify-center rounded-md text-xs transition ${
               editor.isActive("superscript") ? "bg-slate-900 text-white" : "text-navy hover:bg-slate-100"
             }`}
             title="Superscript"
@@ -715,7 +729,7 @@ export function EditorRibbon({
           <button
             type="button"
             onClick={() => (editor.chain().focus() as any).toggleSubscript?.().run()}
-            className={`hidden lg:flex h-7 w-7 items-center justify-center rounded-md text-xs transition ${
+            className={`hidden xl:flex h-7 w-7 items-center justify-center rounded-md text-xs transition ${
               editor.isActive("subscript") ? "bg-slate-900 text-white" : "text-navy hover:bg-slate-100"
             }`}
             title="Subscript"
@@ -743,7 +757,7 @@ export function EditorRibbon({
         </div>
 
         {/* Colors */}
-        <div className="flex items-center gap-0.5 pr-2 border-r border-slate-200 mr-1">
+        <div className="shrink-0 flex items-center gap-0.5 pr-2 border-r border-slate-200 mr-1">
           <div className="relative">
             <button
               type="button"
@@ -789,7 +803,7 @@ export function EditorRibbon({
         </div>
 
         {/* Alignments */}
-        <div className="flex items-center gap-0.5 pr-2 border-r border-slate-200 mr-1">
+        <div className="shrink-0 flex items-center gap-0.5 pr-2 border-r border-slate-200 mr-1">
           <button
             type="button"
             onClick={() => handleAlign("left")}
@@ -817,7 +831,7 @@ export function EditorRibbon({
           <button
             type="button"
             onClick={() => handleAlign("justify")}
-            className={`hidden sm:flex h-7 w-7 items-center justify-center rounded-md text-xs transition ${isJustifyActive ? "bg-slate-900 text-white" : "text-navy hover:bg-slate-100"}`}
+            className={`hidden xl:flex h-7 w-7 items-center justify-center rounded-md text-xs transition ${isJustifyActive ? "bg-slate-900 text-white" : "text-navy hover:bg-slate-100"}`}
             title="Justify"
           >
             <AlignJustify className="h-3.5 w-3.5" />
@@ -825,7 +839,7 @@ export function EditorRibbon({
         </div>
 
         {/* Lists */}
-        <div className="flex items-center gap-0.5 pr-2 border-r border-slate-200 mr-1">
+        <div className="shrink-0 flex items-center gap-0.5 pr-2 border-r border-slate-200 mr-1">
           <button
             type="button"
             onClick={() => editor.chain().focus().toggleBulletList().run()}
@@ -845,7 +859,7 @@ export function EditorRibbon({
           <button
             type="button"
             onClick={() => editor.chain().focus().toggleTaskList().run()}
-            className={`hidden md:flex h-7 w-7 items-center justify-center rounded-md text-xs transition ${editor.isActive("taskList") ? "bg-slate-900 text-white" : "text-navy hover:bg-slate-100"}`}
+            className={`hidden xl:flex h-7 w-7 items-center justify-center rounded-md text-xs transition ${editor.isActive("taskList") ? "bg-slate-900 text-white" : "text-navy hover:bg-slate-100"}`}
             title="Checklist"
           >
             <ListChecks className="h-3.5 w-3.5" />
@@ -853,7 +867,7 @@ export function EditorRibbon({
           <button
             type="button"
             onClick={() => editor.chain().focus().sinkListItem("listItem").run()}
-            className="hidden lg:flex h-7 w-7 items-center justify-center rounded-md text-navy hover:bg-slate-100 transition"
+            className="hidden xl:flex h-7 w-7 items-center justify-center rounded-md text-navy hover:bg-slate-100 transition"
             title="Indent"
           >
             <Indent className="h-3.5 w-3.5" />
@@ -861,7 +875,7 @@ export function EditorRibbon({
           <button
             type="button"
             onClick={() => editor.chain().focus().liftListItem("listItem").run()}
-            className="hidden lg:flex h-7 w-7 items-center justify-center rounded-md text-navy hover:bg-slate-100 transition"
+            className="hidden xl:flex h-7 w-7 items-center justify-center rounded-md text-navy hover:bg-slate-100 transition"
             title="Outdent"
           >
             <Outdent className="h-3.5 w-3.5" />
@@ -869,7 +883,7 @@ export function EditorRibbon({
         </div>
 
         {/* Insert */}
-        <div className="flex items-center gap-1">
+        <div className="shrink-0 flex items-center gap-1 pr-2 border-r border-border/60 mr-1">
           <button
             ref={linkBtnRef}
             type="button"
@@ -945,7 +959,7 @@ export function EditorRibbon({
             title="Insert Floating Image"
           >
             <ImageIcon className="h-3.5 w-3.5 text-brand" />
-            <span className="hidden sm:inline">Image</span>
+            <span>Image</span>
           </button>
           <button
             ref={tableBtnRef}
@@ -955,7 +969,7 @@ export function EditorRibbon({
             title="Insert Table Grid Matrix"
           >
             <TableIcon className="h-3.5 w-3.5 text-brand" />
-            <span className="hidden sm:inline">Table</span>
+            <span>Table</span>
             <ChevronDown className="h-3 w-3 text-text-tertiary" />
           </button>
           {showTableGridPicker && tablePopoverPos && createPortal(
@@ -1017,17 +1031,117 @@ export function EditorRibbon({
             title="Create Interactive Reader Poll"
           >
             <BarChart3 className="h-3.5 w-3.5 text-brand" />
-            <span className="hidden sm:inline">Poll</span>
+            <span>Poll</span>
           </button>
           <button
             type="button"
             onClick={() => setActiveModal("callout")}
-            className="flex h-7 items-center gap-1 rounded-lg px-2 text-xs font-bold text-navy hover:bg-white hover:shadow-xs transition hidden lg:flex"
+            className="hidden xl:flex h-7 items-center gap-1 rounded-lg px-2 text-xs font-bold text-navy hover:bg-white hover:shadow-xs transition"
             title="Insert Callout Card"
           >
             <Sparkles className="h-3.5 w-3.5 text-brand" />
             <span>Callout</span>
           </button>
+        </div>
+
+        {/* Overflow menu — secondary tools below xl */}
+        <div className="relative shrink-0 flex items-center xl:hidden">
+          <button
+            type="button"
+            onClick={() => setActiveMenu(activeMenu === "more" ? null : "more")}
+            className={`flex h-7 items-center gap-1 rounded-md px-2 text-xs font-bold transition ${
+              activeMenu === "more" ? "bg-slate-900 text-white" : "text-navy hover:bg-slate-100"
+            }`}
+            title="More tools"
+            aria-haspopup="menu"
+            aria-expanded={activeMenu === "more"}
+          >
+            <MoreHorizontal className="h-3.5 w-3.5" />
+            More
+          </button>
+          {activeMenu === "more" && (
+            <div className="absolute right-0 top-full mt-1 z-50 w-48 rounded-xl border border-border bg-white p-1.5 shadow-xl text-xs">
+              <button
+                type="button"
+                onClick={() => {
+                  toggleSuperSub("superscript");
+                  setActiveMenu(null);
+                }}
+                className={`flex w-full items-center gap-2 px-3 py-2 rounded-lg text-left transition ${
+                  editor.isActive("superscript") ? "bg-slate-900 text-white" : "hover:bg-slate-100"
+                }`}
+              >
+                <span className="w-3.5 text-center font-mono font-bold">X²</span> Superscript
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  toggleSuperSub("subscript");
+                  setActiveMenu(null);
+                }}
+                className={`flex w-full items-center gap-2 px-3 py-2 rounded-lg text-left transition ${
+                  editor.isActive("subscript") ? "bg-slate-900 text-white" : "hover:bg-slate-100"
+                }`}
+              >
+                <span className="w-3.5 text-center font-mono font-bold">X₁</span> Subscript
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  editor.chain().focus().toggleTaskList().run();
+                  setActiveMenu(null);
+                }}
+                className={`flex w-full items-center gap-2 px-3 py-2 rounded-lg text-left transition ${
+                  editor.isActive("taskList") ? "bg-slate-900 text-white" : "hover:bg-slate-100"
+                }`}
+              >
+                <ListChecks className="h-3.5 w-3.5" /> Checklist
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  editor.chain().focus().sinkListItem("listItem").run();
+                  setActiveMenu(null);
+                }}
+                className="flex w-full items-center gap-2 px-3 py-2 rounded-lg text-left hover:bg-slate-100 transition"
+              >
+                <Indent className="h-3.5 w-3.5" /> Indent
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  editor.chain().focus().liftListItem("listItem").run();
+                  setActiveMenu(null);
+                }}
+                className="flex w-full items-center gap-2 px-3 py-2 rounded-lg text-left hover:bg-slate-100 transition"
+              >
+                <Outdent className="h-3.5 w-3.5" /> Outdent
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  handleAlign("justify");
+                  setActiveMenu(null);
+                }}
+                className={`flex w-full items-center gap-2 px-3 py-2 rounded-lg text-left transition ${
+                  isJustifyActive ? "bg-slate-900 text-white" : "hover:bg-slate-100"
+                }`}
+              >
+                <AlignJustify className="h-3.5 w-3.5" /> Justify
+              </button>
+              <div className="my-1 border-t border-border" />
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveModal("callout");
+                  setActiveMenu(null);
+                }}
+                className="flex w-full items-center gap-2 px-3 py-2 rounded-lg text-left hover:bg-slate-100 transition"
+              >
+                <Sparkles className="h-3.5 w-3.5" /> Callout Card
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

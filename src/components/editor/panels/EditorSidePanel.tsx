@@ -24,6 +24,7 @@ import {
   GitCompare,
 } from "lucide-react";
 import React, { useState, useEffect } from "react";
+import { useOrigin } from "@/hooks/useOrigin";
 import { ImageSettingsPanel } from "../image/ImageSettingsPanel";
 import { DocumentOutline } from "../outline/DocumentOutline";
 import { FeaturedImagePicker } from "../FeaturedImagePicker";
@@ -112,6 +113,7 @@ export function EditorSidePanel({
   excerpt,
   setExcerpt,
 }: EditorSidePanelProps) {
+  const origin = useOrigin();
   const [activeTab, setActiveTab] = useState<"post" | "seo" | "cover" | "publish" | "history" | "outline" | "toc" | "quality">("post");
   const [isAddingCat, setIsAddingCat] = useState(false);
   const [newCatInput, setNewCatInput] = useState("");
@@ -312,7 +314,7 @@ export function EditorSidePanel({
                   <div className="mt-2 rounded-lg bg-surface-raised border border-border px-3 py-2">
                     <p className="text-[10px] text-text-tertiary font-bold mb-0.5">Public URL Preview</p>
                     <p className="text-[11px] font-mono text-brand break-all">
-                      {typeof window !== "undefined" ? window.location.origin : "https://yourdomain.com"}/blog/{slug || "your-slug"}
+                      {origin || "https://yourdomain.com"}/blog/{slug || "your-slug"}
                     </p>
                   </div>
                   <button

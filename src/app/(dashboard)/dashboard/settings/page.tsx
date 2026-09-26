@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useOrigin } from "@/hooks/useOrigin";
 import {
   Settings,
   Globe,
@@ -38,6 +39,7 @@ const TABS = [
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState("general");
+  const origin = useOrigin();
   const [settings, setSettings] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -335,7 +337,7 @@ export default function SettingsPage() {
                 </div>
                 <div className="px-5 pb-4">
                   <div className="rounded-lg bg-surface-raised border border-border p-3 flex flex-wrap gap-2 text-xs font-mono">
-                    <span className="text-text-tertiary">ENV:</span> <span>OPENPOST_URL={typeof window !== "undefined" ? window.location.origin : "http://localhost:3000"}</span>
+                    <span className="text-text-tertiary">ENV:</span> <span>OPENPOST_URL={origin || "http://localhost:3000"}</span>
                     <span className="text-border">|</span> <span>OPENPOST_PROJECT_ID={activeProject?.id?.slice(0, 8) || "—"}…</span>
                   </div>
                 </div>

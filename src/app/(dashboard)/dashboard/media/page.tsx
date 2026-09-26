@@ -21,6 +21,10 @@ interface MediaItem {
 export default function MediaPage() {
   const [view, setView] = useState<"grid" | "list">("grid");
   const [search, setSearch] = useState("");
+  const [webpVia, setWebpVia] = useState("canvas");
+  useEffect(() => {
+    if (typeof OffscreenCanvas !== "undefined") setWebpVia("OffscreenCanvas");
+  }, []);
   const debouncedSearch = useDebounce(search, 300);
   const [selected, setSelected] = useState<string | null>(null);
   const [items, setItems] = useState<MediaItem[]>([]);
@@ -433,7 +437,7 @@ export default function MediaPage() {
 
       <div className="mt-6 flex items-center justify-between text-xs text-text-tertiary">
         <span>
-          {filteredAll.length} of {items.length} items · {perPage} per page · page {page}/{totalPages} {loading ? "" : `· WebP via ${typeof window !== "undefined" && (window as any).OffscreenCanvas ? "OffscreenCanvas" : "canvas"}`}
+          {filteredAll.length} of {items.length} items · {perPage} per page · page {page}/{totalPages} {loading ? "" : `· WebP via ${webpVia}`}
         </span>
         <div className="flex gap-2">
           <button disabled={page<=1} onClick={()=>setPage(p=>p-1)} className="rounded-lg border border-border bg-white px-3 py-1 text-xs font-semibold disabled:opacity-40">Prev</button>

@@ -11,10 +11,10 @@
 **Write like WordPress &middot; Deliver like Sanity &middot; Own like Ghost**
 
 <p align="center">
-  <a href="https://github.com/OfficialOpenPost/OpenPost"><img src="https://img.shields.io/badge/tests-30%2F30%20passed-brightgreen.svg?style=for-the-badge&logo=vitest&logoColor=white" alt="Vitest Tests" /></a>
+  <a href="https://github.com/OfficialOpenPost/OpenPost"><img src="https://img.shields.io/badge/tests-33%2F33%20passed-brightgreen.svg?style=for-the-badge&logo=vitest&logoColor=white" alt="Vitest Tests" /></a>
   <a href="https://github.com/OfficialOpenPost/OpenPost/releases"><img src="https://img.shields.io/badge/cli-openpost--cli%20v0.2.5-000000.svg?style=for-the-badge&logo=npm&logoColor=white" alt="openpost-cli v0.2.5" /></a>
   <a href="https://nextjs.org"><img src="https://img.shields.io/badge/Next.js-16.3%20(App%20Router)-000000.svg?style=for-the-badge&logo=next.js&logoColor=white" alt="Next.js" /></a>
-  <a href="https://www.typescriptlang.org"><img src="https://img.shields.io/badge/TypeScript-5.0-3178C6.svg?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript" /></a>
+  <a href="https://www.typescriptlang.org"><img src="https://img.shields.io/badge/TypeScript-6.0-3178C6.svg?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript" /></a>
   <a href="https://supabase.com"><img src="https://img.shields.io/badge/PostgreSQL-Supabase-3ECF8E.svg?style=for-the-badge&logo=supabase&logoColor=white" alt="Supabase" /></a>
   <a href="https://developers.cloudflare.com/r2"><img src="https://img.shields.io/badge/Storage-Cloudflare%20R2-F38020.svg?style=for-the-badge&logo=cloudflare&logoColor=white" alt="Cloudflare R2" /></a>
   <a href="https://tailwindcss.com"><img src="https://img.shields.io/badge/Tailwind-CSS%204.0-06B6D4.svg?style=for-the-badge&logo=tailwindcss&logoColor=white" alt="Tailwind CSS" /></a>
@@ -111,8 +111,8 @@ Flow: Supabase Auth → Profile (pending/approved) → ProjectMember (OWNER>ADMI
 | Layer | Choice | Why |
 | :--- | :--- | :--- |
 | **App** | Next.js 16 App Router, Turbopack | SSR, streaming, `proxy.ts` (Next 16) auth |
-| **Language** | TypeScript 5, Zod | `docSchema` validation, no `any` trust |
-| **DB** | PostgreSQL (Supabase) + Prisma 6 | JSONB `content`, RLS, composite indexes |
+| **Language** | TypeScript 6, Zod | `docSchema` validation, no `any` trust |
+| **DB** | PostgreSQL (Supabase) + Prisma 7 | JSONB `content`, RLS, composite indexes |
 | **Auth** | Supabase Auth (`@supabase/ssr`) | `getCurrentUser()`, `requireProjectMember` |
 | **Storage** | Cloudflare R2 (S3 compat) | zero egress, presigned `PUT`, `validateMagicBytes` |
 | **Editor** | Tiptap (ProseMirror) | block JSON, `countWords`/`readingTime` |
@@ -187,7 +187,7 @@ D:/Openpost
 ├── templates/nextjs-blog/    # starter copied by CLI (Next 15, /api/revalidate)
 ├── public/logo.svg           # icon (see top) — single brand source
 ├── scripts/cms.ts            # cms:doctor, cms:bootstrap (OWNER)
-├── tests/                    # rbac 8, api-token 3, storage 7, ssrf 6, slug 3, webhook 3 = 30
+├── tests/                    # rbac 8, api-token 3, storage 7, ssrf 6, slug 3, webhook 3, cron 3 = 33
 └── AGENTS.md                 # agent guide (keep nextjs-agent-rules block)
 ```
 
@@ -226,7 +226,7 @@ NEXT_PUBLIC_APP_URL="http://localhost:3000"
 ### Step 3: Bootstrap & Launch
 ```bash
 npx prisma generate
-npm run test         # 30/30
+npm run test         # 33/33
 npm run cms:doctor   # Node, env, DB, tables, user_role 5 roles
 npm run cms:bootstrap -- --email admin@example.com --password StrongPass123  # → OWNER
 npm run dev          # http://localhost:3000
@@ -361,7 +361,7 @@ POST /api/v1/polls/<id>/vote { "optionId": "opt_..." }  # 409 ALREADY_VOTED via 
 
 ---
 
-## 🧪 Automated Test Suite — 30 tests
+## 🧪 Automated Test Suite — 33 tests
 
 ```bash
 npm run test
@@ -375,9 +375,10 @@ npm run test
  ✓ tests/ssrf-webhook.test.ts      (6 tests)  — private IP / metadata / https
  ✓ tests/slug-reading-time.test.ts (3 tests)
  ✓ tests/webhook-signing.test.ts   (3 tests)
+ ✓ tests/cron-auth.test.ts         (3 tests)  — Bearer CRON_SECRET, fail-closed, atomic
 
- Test Files  6 passed (6)
-      Tests  30 passed (30)
+ Test Files  7 passed (7)
+      Tests  33 passed (33)
 ```
 
 ---

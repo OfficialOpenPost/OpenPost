@@ -1,21 +1,39 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { PrismaClient } from "../generated/prisma/client";
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
 
-function getDatasourceUrl(): string | undefined {
+// Prisma 7 removed the `datasources` constructor option and requires a driver adapter.
+// Prisma-only URL params (connection_limit/pool_timeout) are not understood by the raw
+// pg driver — strip them and translate them into explicit pool options.
+function getPoolOptions():
+  | { connectionString: string; max: number; connectionTimeoutMillis: number }
+  | undefined {
   const raw = process.env.DATABASE_URL;
   if (!raw) return undefined;
-  // If connection_limit is not explicitly set in the URL, enforce connection_limit=2 to safely fit within Supabase's session pool limit (15)
-  if (!raw.includes("connection_limit=")) {
-    const separator = raw.includes("?") ? "&" : "?";
-    return `${raw}${separator}connection_limit=2&pool_timeout=30`;
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    // Malformed URL: pass through unchanged so the error surfaces at query time (as before).
+    return { connectionString: raw, max: 2, connectionTimeoutMillis: 30000 };
   }
-  return raw;
+  const connectionLimit = Number(url.searchParams.get("connection_limit"));
+  const poolTimeoutSeconds = Number(url.searchParams.get("pool_timeout"));
+  url.searchParams.delete("connection_limit");
+  url.searchParams.delete("pool_timeout");
+  return {
+    connectionString: url.toString(),
+    // connection_limit=2 (when not explicitly set) safely fits Supabase's session pool limit (15);
+    // pool_timeout=30 → 30s acquiring a connection before failing.
+    max: connectionLimit > 0 ? connectionLimit : 2,
+    connectionTimeoutMillis: poolTimeoutSeconds > 0 ? poolTimeoutSeconds * 1000 : 30000,
+  };
 }
 
-const datasourceUrl = getDatasourceUrl();
+const poolOptions = getPoolOptions();
 
 export const db =
   globalForPrisma.prisma ??
@@ -24,7 +42,11 @@ export const db =
       process.env.NODE_ENV === "development"
         ? ["error", "warn"]
         : ["error"],
-    datasources: datasourceUrl ? { db: { url: datasourceUrl } } : undefined,
+    // Prisma 7 requires a driver adapter. Without DATABASE_URL the adapter falls back to
+    // pg defaults and connection errors surface at query time (same as before).
+    adapter: new PrismaPg(
+      poolOptions ?? { max: 2, connectionTimeoutMillis: 30000 },
+    ),
   });
 
 // Ensure BigInts (e.g. Media sizeBytes) are natively JSON-serializable in all Next.js API routes

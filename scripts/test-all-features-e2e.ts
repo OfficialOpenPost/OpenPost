@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import { Prisma } from "../src/generated/prisma/client";
 import { db, withDbRetry } from "../src/lib/db";
 import { generateApiToken } from "../src/lib/apiToken";
 import { uploadBuffer, deleteObject } from "../src/lib/storage";

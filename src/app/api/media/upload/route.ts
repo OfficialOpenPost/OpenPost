@@ -86,24 +86,36 @@ export async function POST(req: NextRequest) {
     }
 
     // Save media record to DB
-    const mediaRecord = await withDbRetry(() =>
-      db.media.create({
-        data: {
-          originalFilename: file.name,
-          mimeType,
-          sizeBytes: BigInt(file.size),
-          checksum,
-          uploadedBy: user.id,
-          projectId: projectId || null,
-          variants: {
-            publicUrl,
-            key,
-            webp: { url: publicUrl },
+    let mediaRecord;
+    try {
+      mediaRecord = await withDbRetry(() =>
+        db.media.create({
+          data: {
+            originalFilename: file.name,
+            mimeType,
+            sizeBytes: BigInt(file.size),
+            width: Number.isFinite(Number(form.get("width"))) ? Math.round(Number(form.get("width"))) || null : null,
+            height: Number.isFinite(Number(form.get("height"))) ? Math.round(Number(form.get("height"))) || null : null,
+            checksum,
+            uploadedBy: user.id,
+            projectId: projectId || null,
+            variants: {
+              publicUrl,
+              key,
+              webp: { url: publicUrl },
+            },
+            altTextDefault: file.name.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " "),
           },
-          altTextDefault: file.name.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " "),
-        },
-      })
-    );
+        })
+      );
+    } catch (dbErr) {
+      // Roll back the R2 object so a failed DB write doesn't leave an orphan
+      if (publicUrl && !publicUrl.startsWith("data:")) {
+        const { deleteObject } = await import("@/lib/storage");
+        await deleteObject(key).catch(() => {});
+      }
+      throw dbErr;
+    }
 
     await createAuditLog({
       actorId: user.id,

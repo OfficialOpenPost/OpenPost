@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db, withDbRetry } from "@/lib/db";
 import { z } from "zod";
 import { requireApprovedUser, requireProjectMember, requirePermission, hasPermission, hasMinimumRole, AuthError, createAuditLog } from "@/lib/auth";
-import { countWords, readingTime as calcReadingTime } from "@/lib/publish";
+import { countContentWords, readingTime as calcReadingTime } from "@/lib/publish";
 import { queryCache } from "@/lib/cache";
 import { triggerWebhooks } from "@/lib/webhooks";
 import { slugify } from "@/lib/slug";
@@ -394,7 +394,7 @@ export async function POST(req: NextRequest) {
       status = "draft";
     }
 
-    const wc = countWords(typeof content === "string" ? content : JSON.stringify(content));
+    const wc = countContentWords(content);
     const rt = calcReadingTime(wc);
 
     // Resolve Category if passed as object/name
@@ -440,6 +440,8 @@ export async function POST(req: NextRequest) {
                 { variants: { path: ["publicUrl"], equals: imgUrl } },
                 { variants: { path: ["webp", "url"], equals: imgUrl } },
               ],
+              // Tenant scope: never attach another project's media as cover
+              ...(targetProjectId ? { projectId: targetProjectId } : {}),
             },
           })
         ).catch(() => null);
@@ -564,20 +566,34 @@ export async function POST(req: NextRequest) {
         throw err;
       }
 
-      // Save revision
-      await withDbRetry(() =>
-        db.blogRevision.create({
-          data: {
-            blogId: id!,
-            content,
-            editorDocument: editorDocument || undefined,
-            renderedHtml: renderedHtml || undefined,
-            contentVersion: contentVersion || undefined,
-            createdBy: user.id,
-            label: revisionLabel || (status === "published" ? "Published update" : "Autosave"),
-          },
+      // Save revision (throttled — see PUT /api/blogs/[id])
+      const lastRev = await withDbRetry(() =>
+        db.blogRevision.findFirst({
+          where: { blogId: id! },
+          orderBy: { createdAt: "desc" },
+          select: { content: true, createdAt: true },
         })
-      ).catch(() => {});
+      ).catch(() => null);
+      const contentChanged =
+        !lastRev || JSON.stringify(lastRev.content ?? null) !== JSON.stringify(content ?? null);
+      const ageOk = !lastRev || Date.now() - new Date(lastRev.createdAt).getTime() >= 2 * 60 * 1000;
+      if (contentChanged && (Boolean(revisionLabel) || ageOk)) {
+        await withDbRetry(() =>
+          db.blogRevision.create({
+            data: {
+              blogId: id!,
+              content,
+              editorDocument: editorDocument || undefined,
+              renderedHtml: renderedHtml || undefined,
+              contentVersion: contentVersion || undefined,
+              createdBy: user.id,
+              wordCount: wc,
+              readingTime: rt,
+              label: revisionLabel || (status === "published" ? "Published update" : "Autosave"),
+            },
+          })
+        ).catch(() => {});
+      }
 
       // Sync taxonomy relations — batch operations for speed
       let resolvedTagIds = Array.isArray(tagIds) ? [...tagIds] : [];

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, withDbRetry } from "@/lib/db";
 import { requireApprovedUser, requireProjectMember, requirePermission, requireAdmin, hasPermission, hasMinimumRole, createAuditLog, AuthError } from "@/lib/auth";
-import { countWords, readingTime as calcReadingTime } from "@/lib/publish";
+import { countContentWords, readingTime as calcReadingTime } from "@/lib/publish";
 import { triggerWebhooks } from "@/lib/webhooks";
 import { queryCache } from "@/lib/cache";
 import { slugify } from "@/lib/slug";
@@ -251,6 +251,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       featuredImageId,
       authorIds,
       tagIds,
+      tags,
       revisionLabel,
       editorDocument,
       renderedHtml,
@@ -319,7 +320,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
     if (content !== undefined) {
       dataToUpdate.content = content;
-      const wc = countWords(typeof content === "string" ? content : JSON.stringify(content));
+      const wc = countContentWords(content);
       dataToUpdate.wordCount = wc;
       dataToUpdate.readingTime = calcReadingTime(wc);
     }
@@ -397,6 +398,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
                   { variants: { path: ["publicUrl"], equals: imgUrl } },
                   { variants: { path: ["webp", "url"], equals: imgUrl } },
                 ],
+                // Tenant scope: never attach another project's media as cover
+                ...(existing.projectId ? { projectId: existing.projectId } : {}),
               },
             })
           ).catch(() => null);
@@ -437,30 +440,91 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       }
     }
 
-    // Save revision snapshot if content changed
+    // Save revision snapshot — throttled to avoid one row per autosave.
+    // Always snapshot on an explicit (manual) label; otherwise only when the
+    // content actually changed AND the previous snapshot is >= 2 minutes old.
     if (content !== undefined) {
-      await withDbRetry(() =>
-        db.blogRevision.create({
-          data: {
-            blogId: id,
-            content,
-            editorDocument: editorDocument || undefined,
-            renderedHtml: renderedHtml || undefined,
-            contentVersion: contentVersion || undefined,
-            createdBy: user.id,
-            label: revisionLabel || (status === "published" ? "Published update" : "Autosave"),
-          },
-        })
-      ).catch(() => {});
+      try {
+        const lastRev = await withDbRetry(() =>
+          db.blogRevision.findFirst({
+            where: { blogId: id },
+            orderBy: { createdAt: "desc" },
+            select: { content: true, createdAt: true },
+          })
+        );
+        const contentChanged =
+          !lastRev || JSON.stringify(lastRev.content ?? null) !== JSON.stringify(content ?? null);
+        const ageOk = !lastRev || Date.now() - new Date(lastRev.createdAt).getTime() >= 2 * 60 * 1000;
+        if (contentChanged && (Boolean(revisionLabel) || ageOk)) {
+          await withDbRetry(() =>
+            db.blogRevision.create({
+              data: {
+                blogId: id,
+                content,
+                editorDocument: editorDocument || undefined,
+                renderedHtml: renderedHtml || undefined,
+                contentVersion: contentVersion || undefined,
+                createdBy: user.id,
+                wordCount: dataToUpdate.wordCount ?? undefined,
+                readingTime: dataToUpdate.readingTime ?? undefined,
+                label: revisionLabel || (status === "published" ? "Published update" : "Autosave"),
+              },
+            })
+          ).catch(() => {});
+        }
+      } catch {
+        // Non-blocking: never fail a save because of snapshot bookkeeping
+      }
     }
 
-    // Sync taxonomy relations — batch operations
-    if (Array.isArray(tagIds)) {
+    // Sync taxonomy relations — batch operations.
+    // Supports both `tagIds` (pre-resolved) and `tags: [{ name }]` (editor sidebar),
+    // matching POST /api/blogs so tag edits after creation are actually persisted.
+    if (Array.isArray(tagIds) || Array.isArray(tags)) {
+      let resolvedTagIds: string[] = Array.isArray(tagIds) ? [...tagIds] : [];
+      if (Array.isArray(tags) && tags.length > 0) {
+        const tagSlugs = (tags as (string | { name?: string })[])
+          .map((t) => {
+            const tName = (typeof t === "string" ? t : t?.name)?.trim();
+            return tName
+              ? { name: tName, slug: tName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") }
+              : null;
+          })
+          .filter(Boolean) as { name: string; slug: string }[];
+
+        if (tagSlugs.length > 0) {
+          const existingTags = await withDbRetry(() =>
+            db.tag.findMany({
+              where: { slug: { in: tagSlugs.map((t) => t.slug) }, projectId: existing.projectId || null },
+              select: { id: true, slug: true },
+            })
+          ).catch(() => []);
+          const existingMap = new Map((existingTags || []).map((t: { slug: string; id: string }) => [t.slug, t.id]));
+          const newTags = tagSlugs.filter((t) => !existingMap.has(t.slug));
+          if (newTags.length > 0 && existing.projectId) {
+            await withDbRetry(() =>
+              db.tag.createMany({
+                data: newTags.map((t) => ({ name: t.name, slug: t.slug, projectId: existing.projectId })),
+                skipDuplicates: true,
+              })
+            ).catch(() => {});
+            const created = await withDbRetry(() =>
+              db.tag.findMany({
+                where: { slug: { in: newTags.map((t) => t.slug) }, projectId: existing.projectId },
+                select: { id: true, slug: true },
+              })
+            ).catch(() => []);
+            (created || []).forEach((t: { slug: string; id: string }) => existingMap.set(t.slug, t.id));
+          }
+          resolvedTagIds = tagSlugs.map((t) => existingMap.get(t.slug)).filter(Boolean) as string[];
+        }
+      }
+
       await withDbRetry(() => db.blogTag.deleteMany({ where: { blogId: id } })).catch(() => {});
-      if (tagIds.length > 0) {
+      if (resolvedTagIds.length > 0) {
         await withDbRetry(() =>
           db.blogTag.createMany({
-            data: tagIds.map((tagId: string) => ({ blogId: id, tagId })),
+            data: resolvedTagIds.map((tagId: string) => ({ blogId: id, tagId })),
             skipDuplicates: true,
           })
         ).catch(() => {});

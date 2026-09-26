@@ -6,10 +6,17 @@
  *  npm run cms:bootstrap -- --email admin@example.com --password secret123 --name "Admin"
  * Or via env: BOOTSTRAP_ADMIN_EMAIL, BOOTSTRAP_ADMIN_PASSWORD, BOOTSTRAP_ADMIN_NAME
  */
-import { PrismaClient } from "@prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { PrismaClient } from "../src/generated/prisma/client";
 import crypto from "crypto";
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({
+  adapter: new PrismaPg(
+    process.env.DATABASE_URL
+      ? { connectionString: process.env.DATABASE_URL }
+      : {},
+  ),
+});
 
 type CheckResult = { name: string; ok: boolean; msg: string };
 

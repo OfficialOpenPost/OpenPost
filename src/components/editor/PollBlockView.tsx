@@ -30,6 +30,8 @@ export function PollBlockView({
   updateAttributes,
   deleteNode,
   selected,
+  editor,
+  getPos,
 }: NodeViewProps) {
   const {
     question = "What do you think?",
@@ -237,6 +239,14 @@ export function PollBlockView({
 
   const currentLayout = layout || align || "center";
 
+  const handleCardClick = (e: React.MouseEvent) => {
+    if (!editor || typeof getPos !== "function") return;
+    const pos = getPos();
+    if (pos == null) return;
+    e.stopPropagation();
+    editor.commands.setNodeSelection(pos);
+  };
+
   const handleLayoutSelect = (newLayout: "left" | "center" | "right" | "wide") => {
     let newWidth = width;
     if ((newLayout === "left" || newLayout === "right") && (!width || width === "100%")) {
@@ -289,6 +299,7 @@ export function PollBlockView({
       <div className={`relative group ${innerMarginCls} w-full`} style={{ width: "100%", maxWidth: "100%" }}>
         {/* Main Poll Card Box — Sharp Non-Rounded Corners with full 4-sided dynamic color border */}
         <div
+          onClick={handleCardClick}
           className={`relative rounded-none bg-white p-5 sm:p-6 shadow-xs transition overflow-visible ${
             selected
               ? "ring-2 ring-brand/50 shadow-md"

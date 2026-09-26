@@ -217,11 +217,10 @@ Items are grouped by category and filterable by title/keyword search. Keyboard n
 
 ## Block Controls
 
-The block handle appears on hover at the left margin of each block (`src/components/editor/block-controls/BlockHandle.tsx`). It provides:
+Block actions live inside the selection bubble menu — the dark pill toolbar that appears above a text selection (`src/components/editor/BubbleMenus.tsx`). Select some text and press the **⋯** button on the right of the pill:
 
-- **Drag Handle** (`GripVertical`): Draggable grip icon — drag to reorder blocks via `dataTransfer` with `application/x-openpost-block` MIME type
-- **Add Button** (`Plus`): Opens a grid menu of block types to insert below current block
-- **Block Label**: Click to open the block actions menu
+- The header shows the block type of the block that contains the selection (`src/components/editor/block-controls/block-utils.ts`).
+- **Add Block Below** opens a grid of block types (`ADD_BLOCK_OPTIONS` in `src/components/editor/block-controls/block-operations.ts`) and moves the caret into the new block.
 
 ### Block Actions Menu
 
@@ -231,9 +230,11 @@ The block handle appears on hover at the left margin of each block (`src/compone
 | Move Up | `Ctrl+Shift+↑` | Swaps with the block above |
 | Move Down | `Ctrl+Shift+↓` | Swaps with the block below |
 | Add Block Below | — | Opens the add-block grid menu |
-| Delete | `Del` | Removes the block (prevents deleting last paragraph) |
+| Delete | — | Removes the block (prevents deleting the last block) |
 
-### Keyboard Shortcuts (`extensions.ts:39-52`)
+All actions operate on the top-level block that contains the start of the selection and are implemented in `src/components/editor/block-controls/block-operations.ts`.
+
+### Keyboard Shortcuts (`extensions.ts:40-53`)
 
 | Shortcut | Action |
 |----------|--------|
@@ -245,4 +246,5 @@ The block handle appears on hover at the left margin of each block (`src/compone
 | `Ctrl+Shift+↑` | Move block up |
 | `Ctrl+Shift+↓` | Move block down |
 
-The handle is hidden on mobile viewports (<768px) via CSS media query (`BlockHandle.tsx:645-649`).
+Block shortcuts only fire while the editor has focus.
+

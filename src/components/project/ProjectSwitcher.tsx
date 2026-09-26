@@ -28,7 +28,13 @@ export interface ProjectItem {
 let globalProjectsCache: ProjectItem[] | null = null;
 let globalActiveProjectCache: ProjectItem | null = null;
 
-export function ProjectSwitcher() {
+export function ProjectSwitcher({
+  compact = false,
+  onNavigate,
+}: {
+  compact?: boolean;
+  onNavigate?: () => void;
+}) {
   const router = useRouter();
   const [projects, setProjects] = useState<ProjectItem[]>(() => globalProjectsCache || []);
   const [activeProject, setActiveProject] = useState<ProjectItem | null>(() => globalActiveProjectCache);
@@ -107,8 +113,81 @@ export function ProjectSwitcher() {
 
   const handleNewProject = () => {
     setDropdownOpen(false);
+    onNavigate?.();
     router.push("/projects/new");
   };
+
+  // Shared dropdown — one source of truth, anchored differently per mode
+  const dropdownMenu = dropdownOpen ? (
+    <div
+      className={`absolute z-50 rounded-xl border border-border bg-white p-1.5 shadow-xl ${
+        compact ? "left-full top-2 ml-2 w-60" : "left-3 right-3 top-[72px]"
+      }`}
+    >
+      <div className="max-h-56 overflow-y-auto space-y-1">
+        {projects.map((proj) => {
+          const isSelected = proj.id === activeProject?.id;
+          return (
+            <div key={proj.id} className={`flex items-center rounded-lg transition ${isSelected ? "bg-brand/15" : "hover:bg-surface-dim"}`}>
+              <button
+                onClick={() => handleSelectProject(proj)}
+                className={`flex-1 flex items-center justify-between px-2.5 py-2 text-left text-xs min-w-0 cursor-pointer ${isSelected ? "font-bold text-navy" : "text-text-secondary"}`}
+              >
+                <div className="min-w-0 pr-2">
+                  <p className="truncate font-semibold">{proj.name}</p>
+                  <p className="text-[10px] text-text-tertiary font-mono truncate">/{proj.slug}</p>
+                </div>
+                {isSelected && <Check className="h-3.5 w-3.5 text-navy shrink-0" />}
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDeleteProject(proj);
+                }}
+                disabled={deletingId === proj.id}
+                className="mr-1.5 p-1.5 rounded-md text-text-tertiary hover:text-red-600 hover:bg-red-50 transition disabled:opacity-50 cursor-pointer"
+                title={`Delete ${proj.name}`}
+              >
+                {deletingId === proj.id ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <Trash2 className="h-3 w-3" />
+                )}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="mt-1 pt-1 border-t border-border">
+        <button
+          onClick={handleNewProject}
+          className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-surface-dim p-2 text-xs font-bold text-navy hover:bg-brand hover:text-navy transition cursor-pointer"
+        >
+          <Plus className="h-3.5 w-3.5" /> Create New Website
+        </button>
+      </div>
+    </div>
+  ) : null;
+
+  if (compact) {
+    // Icon-only sidebar mode: centered project avatar, dropdown anchors outside
+    return (
+      <div className="relative p-3 border-b border-border bg-[#F9FAFB] flex justify-center">
+        <button
+          onClick={() => setDropdownOpen(!dropdownOpen)}
+          aria-label={activeProject?.name ? `Active website: ${activeProject.name}` : "Active website"}
+          aria-expanded={dropdownOpen}
+          title={activeProject?.name || "Main Publication"}
+          className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand/15 text-navy font-extrabold text-xs shadow-xs hover:ring-2 hover:ring-brand/50 transition cursor-pointer"
+        >
+          {activeProject?.name ? activeProject.name.slice(0, 2).toUpperCase() : "OP"}
+        </button>
+
+        {dropdownMenu}
+      </div>
+    );
+  }
 
   return (
     <div className="relative p-3 border-b border-border bg-[#F9FAFB]">
@@ -144,55 +223,7 @@ export function ProjectSwitcher() {
       </button>
 
       {/* Switcher Dropdown */}
-      {dropdownOpen && (
-        <div className="absolute left-3 right-3 top-[72px] z-50 rounded-xl border border-border bg-white p-1.5 shadow-xl">
-          <div className="max-h-56 overflow-y-auto space-y-1">
-            {projects.map((proj) => {
-              const isSelected = proj.id === activeProject?.id;
-              return (
-                <div key={proj.id} className={`flex items-center rounded-lg transition ${isSelected ? "bg-brand/15" : "hover:bg-surface-dim"}`}>
-                  <button
-                    onClick={() => handleSelectProject(proj)}
-                    className={`flex-1 flex items-center justify-between px-2.5 py-2 text-left text-xs min-w-0 cursor-pointer ${isSelected ? "font-bold text-navy" : "text-text-secondary"}`}
-                  >
-                    <div className="min-w-0 pr-2">
-                      <p className="truncate font-semibold">{proj.name}</p>
-                      <p className="text-[10px] text-text-tertiary font-mono truncate">
-                        /{proj.slug}
-                      </p>
-                    </div>
-                    {isSelected && <Check className="h-3.5 w-3.5 text-navy shrink-0" />}
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDeleteProject(proj);
-                    }}
-                    disabled={deletingId === proj.id}
-                    className="mr-1.5 p-1.5 rounded-md text-text-tertiary hover:text-red-600 hover:bg-red-50 transition disabled:opacity-50 cursor-pointer"
-                    title={`Delete ${proj.name}`}
-                  >
-                    {deletingId === proj.id ? (
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                    ) : (
-                      <Trash2 className="h-3 w-3" />
-                    )}
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="mt-1 pt-1 border-t border-border">
-            <button
-              onClick={handleNewProject}
-              className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-surface-dim p-2 text-xs font-bold text-navy hover:bg-brand hover:text-navy transition cursor-pointer"
-            >
-              <Plus className="h-3.5 w-3.5" /> Create New Website
-            </button>
-          </div>
-        </div>
-      )}
+      {dropdownMenu}
     </div>
   );
 }

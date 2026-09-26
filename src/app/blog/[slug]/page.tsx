@@ -1,12 +1,118 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { Clock, Calendar, ArrowLeft, Share2, Folder, User, AlertTriangle } from "lucide-react";
 import { SharedRender } from "@/components/render/SharedRender";
 import { db } from "@/lib/db";
+import { getCurrentUser } from "@/lib/auth";
 import { EDITOR_STYLES } from "@/components/editor/editor-styles";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+
+type SeoShape = {
+  title?: string;
+  description?: string;
+  ogTitle?: string;
+  ogDesc?: string;
+  excerpt?: string;
+  ogImage?: string;
+  image?: string;
+};
+
+type PostRow = {
+  id: string;
+  title: string;
+  slug: string;
+  content: unknown;
+  status: string;
+  projectId: string | null;
+  createdBy: string | null;
+  publishedAt: Date | string | null;
+  createdAt: Date | string;
+  readingTime: number | null;
+  wordCount: number | null;
+  seo: SeoShape | null;
+  featuredImage: { variants?: { publicUrl?: string } | null } | null;
+  category: { name: string } | null;
+  author: { name: string; email: string | null } | null;
+  authors: { author: { name: string } }[];
+} | null;
+
+async function findPostBySlug(slug: string): Promise<PostRow> {
+  const row = await db.blog
+    .findFirst({
+      where: { slug } as never,
+      select: {
+        id: true,
+        title: true,
+        slug: true,
+        content: true,
+        status: true,
+        projectId: true,
+        createdBy: true,
+        publishedAt: true,
+        createdAt: true,
+        readingTime: true,
+        wordCount: true,
+        seo: true,
+        featuredImage: { select: { id: true, variants: true, originalFilename: true } },
+        category: { select: { name: true } },
+        author: { select: { name: true, email: true } },
+        authors: { select: { author: { select: { name: true } } } },
+      } as never,
+    })
+    .catch((err) => {
+      console.error("Error fetching blog by slug:", err);
+      return null;
+    });
+  return row as unknown as PostRow;
+}
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  const post = await findPostBySlug(slug);
+  if (!post) return {};
+
+  const isPublished = post.status === "published";
+  if (!isPublished) {
+    // Never leak draft/scheduled/trashed titles or descriptions to crawlers/visitors
+    return {
+      title: "Draft preview",
+      robots: { index: false, follow: false },
+    };
+  }
+
+  const seo = post.seo ?? {};
+  const description: string | undefined = seo.description || seo.ogDesc || seo.excerpt || undefined;
+  const coverUrl: string | null =
+    post.featuredImage?.variants?.publicUrl ||
+    seo.ogImage ||
+    seo.image ||
+    null;
+
+  return {
+    title: seo.title || post.title,
+    description,
+    openGraph: {
+      type: "article",
+      title: seo.ogTitle || seo.title || post.title,
+      description: seo.ogDesc || description,
+      publishedTime: post.publishedAt ? new Date(post.publishedAt).toISOString() : undefined,
+      ...(coverUrl ? { images: [{ url: coverUrl }] } : {}),
+    },
+    twitter: {
+      card: coverUrl ? "summary_large_image" : "summary",
+      title: seo.ogTitle || seo.title || post.title,
+      description: seo.ogDesc || description,
+      ...(coverUrl ? { images: [coverUrl] } : {}),
+    },
+  };
+}
 
 export default async function BlogPostPage({
   params,
@@ -24,30 +130,7 @@ export default async function BlogPostPage({
       .catch(() => null);
     if (redir) redirect(`/blog/${(redir as any).newSlug}`);
 
-    post = await db.blog
-      .findFirst({
-        where: { slug } as never,
-        select: {
-          id: true,
-          title: true,
-          slug: true,
-          content: true,
-          status: true,
-          publishedAt: true,
-          createdAt: true,
-          readingTime: true,
-          wordCount: true,
-          seo: true,
-          featuredImage: { select: { id: true, variants: true, originalFilename: true } },
-          category: { select: { name: true } },
-          author: { select: { name: true, email: true } },
-          authors: { select: { author: { select: { name: true } } } },
-        } as never,
-      })
-      .catch((err) => {
-        console.error("Error fetching blog by slug:", err);
-        return null;
-      });
+    post = await findPostBySlug(slug);
   } catch (err) {
     console.error("BlogPostPage error:", err);
   }
@@ -56,7 +139,19 @@ export default async function BlogPostPage({
     return notFound();
   }
 
-  const isDraft = post.status === "draft";
+  const isDraft = post.status !== "published";
+
+  // Non-published posts are only visible to members of the owning project (or the creator)
+  if (isDraft) {
+    const user = await getCurrentUser();
+    const isMember =
+      !!user &&
+      ((!!post.projectId && user.memberships.some((m) => m.projectId === post.projectId)) ||
+        user.id === post.createdBy);
+    if (!isMember) {
+      notFound();
+    }
+  }
   const authorName =
     post.authors?.[0]?.author?.name || post.author?.name || "OpenPost Team";
   const categoryName = post.category?.name || "Articles";
@@ -72,6 +167,20 @@ export default async function BlogPostPage({
     } catch {}
   }
   const isJson = content && typeof content === "object" && content.type === "doc";
+  // The page already renders the post title as <h1> — drop a leading content
+  // h1 that repeats it so crawlers/users don't see a duplicated heading.
+  if (isJson && Array.isArray(content?.content)) {
+    const first = content.content[0];
+    if (first?.type === "heading" && (first.attrs?.level ?? 1) === 1) {
+      const h1Text = (first.content ?? [])
+        .map((n: { text?: string }) => n.text ?? "")
+        .join("")
+        .trim();
+      if (h1Text && h1Text === String(post.title ?? "").trim()) {
+        content = { ...content, content: content.content.slice(1) };
+      }
+    }
+  }
   const coverUrl =
     (post.featuredImage?.variants as any)?.publicUrl ||
     (post.featuredImage as any)?.url ||
@@ -89,7 +198,7 @@ export default async function BlogPostPage({
           <div className="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-xs font-bold text-amber-900 flex items-center justify-between shadow-xs">
             <span className="flex items-center gap-2">
               <AlertTriangle className="h-4 w-4 text-amber-600" />
-              Draft Preview Mode — This article is unpublished and only visible to you.
+              Draft Preview Mode — This article is unpublished and only visible to project members.
             </span>
             <Link
               href={`/dashboard/editor/${post.id}`}

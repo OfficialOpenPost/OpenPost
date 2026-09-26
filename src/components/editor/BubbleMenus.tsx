@@ -445,6 +445,3 @@ export function CodeBlockBubbleMenu({ editor }: { editor: Editor | null }) {
   );
 }
 
-export function ImageBubbleMenu({ editor }: { editor: Editor | null }) {
-  return null;
-}

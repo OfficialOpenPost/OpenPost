@@ -54,7 +54,7 @@
     "@tiptap/pm": "^2.25.0",
     "@tiptap/react": "^2.25.0",
     "@tiptap/starter-kit": "^2.25.0",
-    "@tiptap/suggestion": "^2.25.0",
+    "@tiptap/suggestion": "^3.31.3",
     "clsx": "^2.1.1",
     "dotenv": "^16.6.1",
     "framer-motion": "^13.1.1",

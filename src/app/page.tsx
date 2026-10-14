@@ -3,6 +3,7 @@
 import { Hero3DSection } from "@/components/home/Hero3DSection";
 import { SocialProofBar } from "@/components/home/SocialProofBar";
 import { FeaturesGrid } from "@/components/home/FeaturesGrid";
+import { FeatureSpotlight } from "@/components/home/FeatureSpotlight";
 import { InteractiveEditor3D } from "@/components/home/InteractiveEditor3D";
 import { WorkflowSection } from "@/components/home/WorkflowSection";
 import { ApiPlayground3D } from "@/components/home/ApiPlayground3D";
@@ -23,6 +24,9 @@ export default function Home() {
 
       {/* 3. Features Grid — detailed icon cards with animations */}
       <FeaturesGrid />
+
+      {/* 3b. Feature Spotlight — alternating side-by-side deep dive */}
+      <FeatureSpotlight />
 
       {/* 4. Interactive Editor Demo */}
       <InteractiveEditor3D />

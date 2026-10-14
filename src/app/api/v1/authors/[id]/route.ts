@@ -25,13 +25,13 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     if (!parsed.success) return NextResponse.json({ error: { code: "VALIDATION_ERROR", message: parsed.error.message } }, { status: 400 });
 
     const existing = await withDbRetry(() => db.author.findUnique({ where: { id } }));
-    if (!existing) return NextResponse.json({ error: { code: "NOT_FOUND", message: "Author not found." } }, { status: 404 });
-
-    if (existing.projectId) {
-      await requirePermission(existing.projectId, "authors.update").catch(async () => {
-        await requirePermission(existing.projectId!, "taxonomy.manage");
-      });
+    if (!existing || !existing.projectId) {
+      return NextResponse.json({ error: { code: "NOT_FOUND", message: "Author not found." } }, { status: 404 });
     }
+
+    await requirePermission(existing.projectId, "authors.update").catch(async () => {
+      await requirePermission(existing.projectId!, "taxonomy.manage");
+    });
 
     const data: Record<string, unknown> = {};
     if (parsed.data.name !== undefined) data.name = parsed.data.name.trim();
@@ -42,7 +42,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       if (parsed.data.photoId) {
         const media = await withDbRetry(() => db.media.findUnique({ where: { id: parsed.data.photoId! } })).catch(() => null);
         if (!media) return NextResponse.json({ error: { code: "VALIDATION_ERROR", message: "Photo not found." } }, { status: 400 });
-        if ((media as any).projectId && (media as any).projectId !== (existing as any).projectId) {
+        if ((media as any).projectId !== (existing as any).projectId) {
           return NextResponse.json({ error: { code: "VALIDATION_ERROR", message: "Photo must belong to same project." } }, { status: 400 });
         }
       }
@@ -118,7 +118,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   } catch (error: any) {
     const status = error instanceof AuthError ? error.statusCode : 500;
     const code = error instanceof AuthError ? error.code : "UPDATE_FAILED";
-    return NextResponse.json({ error: { code, message: error.message || "Failed to update author." } }, { status });
+    return NextResponse.json({ error: { code, message: status < 500 ? error.message : "Failed to update author." } }, { status });
   }
 }
 
@@ -126,21 +126,21 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   try {
     const { id } = await params;
     const existing = await withDbRetry(() => db.author.findUnique({ where: { id } }));
-    if (!existing) return NextResponse.json({ error: { code: "NOT_FOUND", message: "Author not found." } }, { status: 404 });
-
-    if (existing.projectId) {
-      await requirePermission(existing.projectId, "authors.delete").catch(async () => {
-        await requirePermission(existing.projectId!, "taxonomy.manage");
-      });
+    if (!existing || !existing.projectId) {
+      return NextResponse.json({ error: { code: "NOT_FOUND", message: "Author not found." } }, { status: 404 });
     }
 
-    const count = await withDbRetry(() => db.blogAuthor.count({ where: { authorId: id } })).catch(() => 0);
+    await requirePermission(existing.projectId, "authors.delete").catch(async () => {
+      await requirePermission(existing.projectId!, "taxonomy.manage");
+    });
+
+    const count = await withDbRetry(() => db.blogAuthor.count({ where: { authorId: id, blog: { projectId: existing.projectId } } })).catch(() => 0);
     if (count > 0) {
       // Fetch affected post titles for richer error
       let affected: string[] = [];
       try {
         const rows = await withDbRetry(() =>
-          db.blogAuthor.findMany({ where: { authorId: id }, include: { blog: { select: { title: true } } }, take: 5 })
+          db.blogAuthor.findMany({ where: { authorId: id, blog: { projectId: existing.projectId } }, include: { blog: { select: { title: true } } }, take: 5 })
         );
         affected = (rows as any[]).map((r) => r.blog.title);
       } catch {}
@@ -160,6 +160,6 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   } catch (error: any) {
     const status = error instanceof AuthError ? error.statusCode : 500;
     const code = error instanceof AuthError ? error.code : "DELETE_FAILED";
-    return NextResponse.json({ error: { code, message: error.message || "Failed to delete author." } }, { status });
+    return NextResponse.json({ error: { code, message: status < 500 ? error.message : "Failed to delete author." } }, { status });
   }
 }

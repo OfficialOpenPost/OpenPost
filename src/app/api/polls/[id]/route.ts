@@ -1,14 +1,39 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, withDbRetry } from "@/lib/db";
-import { requireApprovedUser, requireProjectMember, AuthError } from "@/lib/auth";
+import { requireApprovedUser, requireProjectMember, requirePermission, AuthError } from "@/lib/auth";
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Resolve the owning project of a poll. Polls created through the editor always
+ * carry a `projectId`; legacy rows may only have `blogId`, so fall back to the
+ * blog's project. Returns null when the poll cannot be tied to a project — in
+ * that case callers must deny (never allow unauthenticated access).
+ */
+async function resolvePollProjectId(poll: { projectId: string | null; blogId: string | null }): Promise<string | null> {
+  if (poll.projectId) return poll.projectId;
+  const blogId = poll.blogId;
+  if (blogId) {
+    const blog = await withDbRetry(() =>
+      db.blog.findUnique({ where: { id: blogId }, select: { projectId: true } })
+    ).catch(() => null);
+    return blog?.projectId || null;
+  }
+  return null;
+}
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    // SECURITY: every poll is project-scoped. Authenticate first, then verify
+    // membership against the owning project — a missing/null projectId used to
+    // skip authorisation entirely, letting anonymous callers read any poll.
+    await requireApprovedUser();
+
     const { id } = await params;
-    if (!id) {
+    if (!id || !UUID_RE.test(id)) {
       return NextResponse.json(
-        { error: { code: "BAD_REQUEST", message: "Poll ID is required" } },
-        { status: 400 }
+        { error: { code: "NOT_FOUND", message: "Poll not found" } },
+        { status: 404 }
       );
     }
 
@@ -51,9 +76,16 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       );
     }
 
-    if (poll.projectId) {
-      await requireProjectMember(poll.projectId);
+    // Membership check happens BEFORE any data is returned.
+    const projectId = await resolvePollProjectId(poll);
+    if (!projectId) {
+      // Orphaned poll with no tenant — treat as non-existent.
+      return NextResponse.json(
+        { error: { code: "NOT_FOUND", message: "Poll not found" } },
+        { status: 404 }
+      );
     }
+    await requireProjectMember(projectId);
 
     const totalVotes = poll._count.votes;
     const isExpired = poll.closesAt ? new Date(poll.closesAt) < new Date() : false;
@@ -107,35 +139,36 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { id } = await params;
-    if (!id) {
-      return NextResponse.json(
-        { error: { code: "BAD_REQUEST", message: "Poll ID is required" } },
-        { status: 400 }
-      );
-    }
+    // SECURITY: destructive operation — authenticate + require `poll.delete`
+    // (EDITOR or above) on the owning project. Previously this had NO auth at
+    // all when projectId was null, and only a weak membership check otherwise.
+    await requireApprovedUser();
 
-    // Check if id is a UUID (database poll)
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!uuidRegex.test(id)) {
-      // If it's a client temporary ID like `poll_1740...`, nothing in DB to delete
+    const { id } = await params;
+    if (!id || !UUID_RE.test(id)) {
+      // Client temporary IDs like `poll_1740...` — nothing in DB to delete.
       return NextResponse.json({ data: { success: true, id, message: "Client poll cleared" } });
     }
 
     const poll = await withDbRetry(() =>
       db.poll.findUnique({
         where: { id },
-        select: { id: true, projectId: true },
+        select: { id: true, projectId: true, blogId: true },
       })
-    );
+    ).catch(() => null);
 
     if (!poll) {
       return NextResponse.json({ data: { success: true, id, message: "Poll not found or already deleted" } });
     }
 
-    if (poll.projectId) {
-      await requireProjectMember(poll.projectId);
+    const projectId = await resolvePollProjectId(poll);
+    if (!projectId) {
+      return NextResponse.json(
+        { error: { code: "NOT_FOUND", message: "Poll not found" } },
+        { status: 404 }
+      );
     }
+    await requirePermission(projectId, "poll.delete");
 
     // Delete poll (Prisma cascading relation deletes options and votes automatically)
     await withDbRetry(async () => {

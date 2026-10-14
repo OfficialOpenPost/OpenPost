@@ -8,13 +8,12 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     await requireApprovedUser();
 
     const blog = await withDbRetry(() => db.blog.findUnique({ where: { id }, select: { projectId: true } }));
-    if (!blog) {
+    // Fail closed: revisions of an unscoped post are not exposed.
+    if (!blog || !blog.projectId) {
       return NextResponse.json({ error: { code: "NOT_FOUND", message: "Post not found" } }, { status: 404 });
     }
 
-    if (blog.projectId && typeof blog.projectId === "string") {
-      await requireProjectMember(blog.projectId, "CONTRIBUTOR");
-    }
+    await requireProjectMember(blog.projectId, "CONTRIBUTOR");
 
     const revisions = await withDbRetry(() =>
       db.blogRevision.findMany({
@@ -43,6 +42,6 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   } catch (error: any) {
     const status = error instanceof AuthError ? error.statusCode : 500;
     const code = error instanceof AuthError ? error.code : "FETCH_FAILED";
-    return NextResponse.json({ error: { code, message: error.message || "Failed to load revisions." } }, { status });
+    return NextResponse.json({ error: { code, message: status < 500 ? error.message : "Failed to load revisions." } }, { status });
   }
 }

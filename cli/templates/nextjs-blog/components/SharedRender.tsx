@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useState } from "react";
+import { safeHref, sanitizeUrl, sanitizeHtml, isTrustedVideoEmbed, serializeJsonForScript } from "@/lib/sanitize";
 import { Copy, Check, Download as DownloadIcon, BarChart2, ShieldCheck, Loader2, CheckCircle2 } from "lucide-react";
 
 interface SharedRenderProps {
@@ -25,7 +26,7 @@ function renderInline(content: any[]): React.ReactNode[] {
           if (m.type === "subscript") node = <sub key={`${idx}-sub`} className="text-xs">{node}</sub>;
           if (m.type === "code") node = <code key={`${idx}-c`} className="rounded bg-[#2D3440] px-1 py-0.5 font-mono text-sm text-[#FEA611]">{node}</code>;
           if (m.type === "highlight") node = <mark key={`${idx}-h`} className="px-1 rounded" style={{ backgroundColor: m.attrs?.color || "rgba(254,166,17,0.28)" }}>{node}</mark>;
-          if (m.type === "link") node = <a key={`${idx}-a`} href={m.attrs?.href ?? "#"} target={m.attrs?.target || "_blank"} rel="noopener noreferrer" className="text-[#FE4F01] underline decoration-[#FE4F01]/30 underline-offset-4 hover:decoration-[#FE4F01]">{node}</a>;
+          if (m.type === "link") node = <a key={`${idx}-a`} href={safeHref(m.attrs?.href)} target={m.attrs?.target || "_blank"} rel="noopener noreferrer" className="text-[#FE4F01] underline decoration-[#FE4F01]/30 underline-offset-4 hover:decoration-[#FE4F01]">{node}</a>;
           if (m.type === "textStyle") {
             const style: React.CSSProperties = {};
             if (m.attrs?.color) style.color = m.attrs.color;
@@ -366,12 +367,12 @@ export function SharedRender({ content, viewport, isMobile }: SharedRenderProps)
     try {
       parsed = JSON.parse(content);
     } catch {
-      return <div dangerouslySetInnerHTML={{ __html: content }} />;
+      return <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(content) }} />;
     }
   }
 
   if (!parsed || !parsed.content) {
-    if (typeof parsed === "string") return <div dangerouslySetInnerHTML={{ __html: parsed }} />;
+    if (typeof parsed === "string") return <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(parsed) }} />;
     return <p className="text-sm text-text-tertiary">No content</p>;
   }
 
@@ -618,7 +619,7 @@ export function SharedRender({ content, viewport, isMobile }: SharedRenderProps)
             const cls = variant === "primary" ? "bg-brand text-navy shadow-xs hover:bg-brand-hover" : variant === "secondary" ? "bg-navy text-white hover:bg-navy-light" : "border border-navy text-navy hover:bg-surface-raised";
             return (
               <div key={i} className="my-6 text-center">
-                <a href={node.attrs?.url ?? "#"} className={`inline-flex rounded-xl px-6 py-3 text-sm font-bold transition ${cls}`}>
+                <a href={safeHref(node.attrs?.url)} className={`inline-flex rounded-xl px-6 py-3 text-sm font-bold transition ${cls}`}>
                   {node.attrs?.label ?? "Learn More"}
                 </a>
               </div>
@@ -634,7 +635,7 @@ export function SharedRender({ content, viewport, isMobile }: SharedRenderProps)
                   <div className="text-sm font-bold text-navy">{node.attrs?.fileName ?? "Document.pdf"}</div>
                   <div className="text-xs text-text-tertiary">{node.attrs?.fileSize ?? "Download File"}</div>
                 </div>
-                <a href={node.attrs?.url ?? "#"} className="ml-auto rounded-xl bg-navy px-4 py-2 text-xs font-bold text-white hover:bg-navy-light transition">
+                <a href={safeHref(node.attrs?.url)} className="ml-auto rounded-xl bg-navy px-4 py-2 text-xs font-bold text-white hover:bg-navy-light transition">
                   Download
                 </a>
               </div>
@@ -644,11 +645,16 @@ export function SharedRender({ content, viewport, isMobile }: SharedRenderProps)
           case "videoBlock": {
             return node.attrs?.src ? (
               <div key={i} className="my-6 overflow-hidden rounded-2xl border border-border shadow-xs aspect-video">
-                {node.attrs.src.includes("youtube.com") || node.attrs.src.includes("youtu.be") ? (
+                {isTrustedVideoEmbed(node.attrs.src) ? (
                   <iframe src={node.attrs.src} className="h-full w-full" allowFullScreen title="Video player" />
-                ) : (
-                  <video src={node.attrs.src} poster={node.attrs.poster} controls className="w-full h-full object-cover" />
-                )}
+                ) : sanitizeUrl(node.attrs.src, { allowRelative: false }) ? (
+                  <video
+                    src={sanitizeUrl(node.attrs.src, { allowRelative: false }) ?? ""}
+                    poster={sanitizeUrl(node.attrs.poster, { allowRelative: true, allowDataImage: true }) ?? undefined}
+                    controls
+                    className="w-full h-full object-cover"
+                  />
+                ) : null}
               </div>
             ) : null;
           }
@@ -779,7 +785,12 @@ export function SharedRender({ content, viewport, isMobile }: SharedRenderProps)
             return <div key={i} className="my-4 text-xs text-text-tertiary">[{node.type} block]</div>;
         }
       })}
-      {faqJsonLd && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }} />}
+      {faqJsonLd && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: serializeJsonForScript(faqJsonLd) }}
+        />
+      )}
     </div>
   );
 }

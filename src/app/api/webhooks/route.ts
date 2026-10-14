@@ -92,6 +92,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: { code: error.code, message: error.message } }, { status: error.statusCode });
     }
     console.error("POST /api/webhooks error", error);
-    return NextResponse.json({ error: { code: "CREATE_FAILED", message: String(error?.message || error) } }, { status: 500 });
+    return NextResponse.json({ error: { code: "CREATE_FAILED", message: "Internal server error" } }, { status: 500 });
   }
 }

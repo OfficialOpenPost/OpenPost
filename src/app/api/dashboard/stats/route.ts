@@ -23,8 +23,17 @@ export async function GET(req: NextRequest) {
       userRole = role;
     }
 
-    const projectWhere = targetProjectId ? { projectId: targetProjectId } : {};
-    const cacheKey = `dashboard:${targetProjectId || "all"}`;
+    // Strict tenant isolation: stats are always project-scoped. The previous
+    // empty `projectWhere` fallback aggregated EVERY tenant's data for users
+    // without an explicit project.
+    if (!targetProjectId) {
+      return NextResponse.json(
+        { error: { code: "PROJECT_REQUIRED", message: "No project available for this account." } },
+        { status: 400 }
+      );
+    }
+    const projectWhere = { projectId: targetProjectId };
+    const cacheKey = `dashboard:${targetProjectId}`;
 
     const result = await queryCache.getOrSet(cacheKey, 15_000, async () => {
       // 1. Group blogs by status in a SINGLE query instead of 4 separate queries
@@ -117,7 +126,7 @@ export async function GET(req: NextRequest) {
     const status = error instanceof AuthError ? error.statusCode : 500;
     const code = error instanceof AuthError ? error.code : "STATS_FETCH_FAILED";
     return NextResponse.json(
-      { error: { code, message: error.message || "Failed to load dashboard statistics." } },
+      { error: { code, message: status < 500 ? error.message : "Failed to load dashboard statistics." } },
       { status }
     );
   }

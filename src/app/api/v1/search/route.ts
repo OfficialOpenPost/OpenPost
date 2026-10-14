@@ -13,17 +13,23 @@ export async function GET(req: NextRequest) {
     }
 
     const context = await resolveProjectContext(req);
+    // Strict tenant isolation: without a resolved project there is nothing this
+    // caller is allowed to search — never fall back to a global query.
+    if (!context?.projectId) {
+      return NextResponse.json(
+        { data: [], meta: { query: query.trim(), total: 0, warning: "Missing project identification" } },
+        { headers: { "Cache-Control": "no-store" } }
+      );
+    }
+
     const where: any = {
       status: "published",
+      projectId: context.projectId,
       OR: [
         { title: { contains: query.trim(), mode: "insensitive" } },
         { slug: { contains: query.trim(), mode: "insensitive" } },
       ],
     };
-
-    if (context?.projectId) {
-      where.projectId = context.projectId;
-    }
 
     const posts = await withDbRetry(() =>
       db.blog.findMany({
@@ -40,8 +46,9 @@ export async function GET(req: NextRequest) {
           category: {
             select: { id: true, name: true, slug: true },
           },
+          // SECURITY: never expose author emails on the public API.
           author: {
-            select: { id: true, name: true, email: true },
+            select: { id: true, name: true },
           },
           featuredImage: {
             select: { id: true, variants: true, altTextDefault: true },

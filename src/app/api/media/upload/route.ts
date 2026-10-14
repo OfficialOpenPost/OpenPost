@@ -150,6 +150,6 @@ export async function POST(req: NextRequest) {
   } catch (error: any) {
     const status = error instanceof AuthError ? error.statusCode : 500;
     const code = error instanceof AuthError ? error.code : "UPLOAD_FAILED";
-    return NextResponse.json({ error: { code, message: error.message || "Media upload failed." } }, { status });
+    return NextResponse.json({ error: { code, message: status < 500 ? error.message : "Media upload failed." } }, { status });
   }
 }

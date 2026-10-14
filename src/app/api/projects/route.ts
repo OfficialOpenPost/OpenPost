@@ -45,7 +45,7 @@ export async function GET(_req: NextRequest) {
     const status = error instanceof AuthError ? error.statusCode : 500;
     const code = error instanceof AuthError ? error.code : "PROJECT_FETCH_FAILED";
     return NextResponse.json(
-      { error: { code, message: error.message || "Failed to load projects." } },
+      { error: { code, message: status < 500 ? error.message : "Failed to load projects." } },
       { status }
     );
   }
@@ -97,16 +97,28 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Check slug uniqueness — auto-append -2, -3 etc. if taken
+    // Check slug uniqueness — auto-append -2, -3 etc. if taken.
+    // Bounded: an unbounded `while(true)` probing one row per iteration is a
+    // cheap DoS lever (each probe is a round-trip). One prefix query instead.
+    const candidates = await withDbRetry(() =>
+      db.project.findMany({
+        where: {
+          OR: [
+            { slug: cleanSlug },
+            { slug: { startsWith: `${cleanSlug}-` } },
+          ],
+        },
+        select: { slug: true },
+      })
+    ).catch(() => [] as { slug: string }[]);
+
+    const taken = new Set((candidates || []).map((p: { slug: string }) => p.slug));
     let finalSlug = cleanSlug;
-    let counter = 2;
-    while (true) {
-      const existing = await withDbRetry(() =>
-        db.project.findUnique({ where: { slug: finalSlug } })
-      );
-      if (!existing) break;
+    if (taken.has(finalSlug)) {
+      let counter = 2;
+      // Hard cap prevents an infinite probe loop.
+      while (taken.has(`${cleanSlug}-${counter}`) && counter < 1000) counter++;
       finalSlug = `${cleanSlug}-${counter}`;
-      counter++;
     }
 
     // Create Project and add creator as ADMIN ProjectMember atomically
@@ -171,7 +183,7 @@ export async function POST(req: NextRequest) {
     const status = error instanceof AuthError ? error.statusCode : 500;
     const code = error instanceof AuthError ? error.code : "PROJECT_CREATE_FAILED";
     return NextResponse.json(
-      { error: { code, message: error.message || "Failed to create project." } },
+      { error: { code, message: status < 500 ? error.message : "Failed to create project." } },
       { status }
     );
   }

@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useState } from "react";
 import { Copy, Check, Download as DownloadIcon, BarChart2, ShieldCheck, Loader2, CheckCircle2 } from "lucide-react";
+import { safeHref, sanitizeUrl, isTrustedVideoEmbed, serializeJsonForScript } from "@/lib/sanitize";
 
 interface SharedRenderProps {
   content: any;
@@ -26,10 +27,11 @@ function renderInline(content: any[]): React.ReactNode[] {
           if (m.type === "code") node = <code key={`${idx}-c`} className="rounded bg-[#2D3440] px-1 py-0.5 font-mono text-sm text-[#FEA611]">{node}</code>;
           if (m.type === "highlight") node = <mark key={`${idx}-h`} className="px-1 rounded" style={{ backgroundColor: m.attrs?.color || "rgba(254,166,17,0.28)" }}>{node}</mark>;
           if (m.type === "link") {
-            const href = m.attrs?.href ?? "#";
+            // SECURITY: `javascript:`/`data:` and other active schemes are rejected.
+            const href = safeHref(m.attrs?.href);
             const explicitTarget = m.attrs?.target as string | undefined;
             // Respect author intent: only open in a new tab when explicitly requested
-            const target = explicitTarget === "_blank" ? "_blank" : explicitTarget || undefined;
+            const target = explicitTarget === "_blank" ? "_blank" : undefined;
             node = (
               <a
                 key={`${idx}-a`}
@@ -509,7 +511,7 @@ export function SharedRender({ content, viewport, isMobile }: SharedRenderProps)
             const imageElement = (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={src}
+                src={sanitizeUrl(src, { allowRelative: true, allowDataImage: true }) ?? ""}
                 alt={isDecorative ? "" : alt || ""}
                 title={title || undefined}
                 loading="lazy"
@@ -531,7 +533,7 @@ export function SharedRender({ content, viewport, isMobile }: SharedRenderProps)
               <figure key={i} className={`floating-image-render max-w-full ${floatClass}`} data-float={float} data-layout={layout}>
                 {link ? (
                   <a
-                    href={link}
+                    href={safeHref(link)}
                     target={openLinkInNewTab ? "_blank" : undefined}
                     rel="noopener noreferrer"
                     className={`block w-full ${isLeft ? "mr-auto ml-0" : isRight ? "ml-auto mr-0" : "mx-auto"} max-w-full`}
@@ -604,12 +606,12 @@ export function SharedRender({ content, viewport, isMobile }: SharedRenderProps)
           }
           case "gallery": {
             const images = node.attrs?.images ?? node.attrs?.items ?? [];
-            if (images.length < 2) return <img key={i} src={images[0]?.src} alt="" className="rounded-2xl my-6" loading="lazy" />;
+            if (images.length < 2) return <img key={i} src={sanitizeUrl(images[0]?.src, { allowRelative: true, allowDataImage: true }) ?? ""} alt="" className="rounded-2xl my-6" loading="lazy" />;
             const layout = node.attrs?.layout ?? "grid";
             return (
               <div key={i} className={layout === "carousel" ? "my-6 flex gap-4 overflow-x-auto snap-x pb-2" : "my-6 grid grid-cols-2 gap-4"}>
                 {images.map((img: any, idx: number) => (
-                  <img key={idx} src={img.src} alt={img.alt ?? ""} className="rounded-2xl w-full object-cover snap-center" loading="lazy" />
+                  <img key={idx} src={sanitizeUrl(img.src, { allowRelative: true, allowDataImage: true }) ?? ""} alt={img.alt ?? ""} className="rounded-2xl w-full object-cover snap-center" loading="lazy" />
                 ))}
               </div>
             );
@@ -650,7 +652,7 @@ export function SharedRender({ content, viewport, isMobile }: SharedRenderProps)
             const cls = variant === "primary" ? "bg-brand text-navy shadow-xs hover:bg-brand-hover" : variant === "secondary" ? "bg-navy text-white hover:bg-navy-light" : "border border-navy text-navy hover:bg-surface-raised";
             return (
               <div key={i} className="my-6 text-center">
-                <a href={node.attrs?.url ?? "#"} className={`inline-flex rounded-xl px-6 py-3 text-sm font-bold transition ${cls}`}>
+                <a href={safeHref(node.attrs?.url)} className={`inline-flex rounded-xl px-6 py-3 text-sm font-bold transition ${cls}`}>
                   {node.attrs?.label ?? "Learn More"}
                 </a>
               </div>
@@ -666,7 +668,7 @@ export function SharedRender({ content, viewport, isMobile }: SharedRenderProps)
                   <div className="text-sm font-bold text-navy">{node.attrs?.fileName ?? "Document.pdf"}</div>
                   <div className="text-xs text-text-tertiary">{node.attrs?.fileSize ?? "Download File"}</div>
                 </div>
-                <a href={node.attrs?.url ?? "#"} className="ml-auto rounded-xl bg-navy px-4 py-2 text-xs font-bold text-white hover:bg-navy-light transition">
+                <a href={safeHref(node.attrs?.url)} className="ml-auto rounded-xl bg-navy px-4 py-2 text-xs font-bold text-white hover:bg-navy-light transition">
                   Download
                 </a>
               </div>
@@ -674,35 +676,51 @@ export function SharedRender({ content, viewport, isMobile }: SharedRenderProps)
           }
           case "youtube":
           case "videoBlock": {
-            return node.attrs?.src ? (
+            if (!node.attrs?.src) return null;
+            // SECURITY: the previous substring check accepted
+            // `javascript:…//youtube.com` and any attacker-controlled host.
+            const trustedIframe = isTrustedVideoEmbed(node.attrs.src);
+            const mediaSrc = sanitizeUrl(node.attrs.src, { allowRelative: false });
+            const posterSrc = sanitizeUrl(node.attrs.poster, { allowRelative: true, allowDataImage: true });
+            return (
               <div key={i} className="my-6 overflow-hidden rounded-2xl border border-border shadow-xs aspect-video">
-                {node.attrs.src.includes("youtube.com") || node.attrs.src.includes("youtu.be") ? (
+                {trustedIframe ? (
                   <iframe src={node.attrs.src} className="h-full w-full" allowFullScreen title="Video player" />
-                ) : (
-                  <video src={node.attrs.src} poster={node.attrs.poster} controls className="w-full h-full object-cover" />
-                )}
+                ) : mediaSrc ? (
+                  <video src={mediaSrc} poster={posterSrc ?? undefined} controls className="w-full h-full object-cover" />
+                ) : null}
               </div>
-            ) : null;
+            );
           }
           case "embedBlock": {
             const { provider, videoId, url } = node.attrs ?? {};
-            if (provider === "youtube" && videoId) {
+            const safeVideoId =
+              typeof videoId === "string" && /^[A-Za-z0-9_-]{3,30}$/.test(videoId) ? videoId : null;
+            if (provider === "youtube" && safeVideoId) {
               return (
                 <div key={i} className="my-6 overflow-hidden rounded-2xl border border-border aspect-video shadow-xs">
-                  <iframe src={`https://www.youtube.com/embed/${videoId}`} className="h-full w-full" allowFullScreen title="YouTube" />
+                  <iframe src={`https://www.youtube.com/embed/${safeVideoId}`} className="h-full w-full" allowFullScreen title="YouTube" />
                 </div>
               );
             }
-            if (provider === "vimeo" && videoId) {
+            if (provider === "vimeo" && safeVideoId && /^\d+$/.test(safeVideoId)) {
               return (
                 <div key={i} className="my-6 overflow-hidden rounded-2xl border border-border aspect-video shadow-xs">
-                  <iframe src={`https://player.vimeo.com/video/${videoId}`} className="h-full w-full" allowFullScreen title="Vimeo" />
+                  <iframe src={`https://player.vimeo.com/video/${safeVideoId}`} className="h-full w-full" allowFullScreen title="Vimeo" />
                 </div>
               );
             }
+            const safeEmbedUrl = sanitizeUrl(url, { allowRelative: false });
             return (
               <div key={i} className="my-6 rounded-2xl border border-border bg-surface p-6 text-center text-sm text-text-tertiary">
-                Embed: <a href={url ?? "#"} target="_blank" rel="noopener noreferrer" className="text-brand underline">{url ?? "View external content"}</a>
+                Embed:{" "}
+                {safeEmbedUrl ? (
+                  <a href={safeEmbedUrl} target="_blank" rel="noopener noreferrer" className="text-brand underline">
+                    {safeEmbedUrl}
+                  </a>
+                ) : (
+                  <span>external content</span>
+                )}
               </div>
             );
           }
@@ -728,7 +746,7 @@ export function SharedRender({ content, viewport, isMobile }: SharedRenderProps)
           }
           case "socialEmbed": {
             const provider = String(node.attrs?.provider || "social");
-            const socialUrl = node.attrs?.url || "";
+            const socialUrl = sanitizeUrl(node.attrs?.url, { allowRelative: false }) || "";
             return (
               <figure key={i} className="my-6 clear-both overflow-hidden rounded-2xl border border-border bg-surface">
                 <div className="flex items-center gap-3 p-4">
@@ -849,7 +867,6 @@ export function SharedRender({ content, viewport, isMobile }: SharedRenderProps)
             let embedSrc = rawUrl;
             let effVideoId = videoId;
             let effProvider = provider;
-
             const ytMatch = rawUrl.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/))([\w-]{11})/);
             if (ytMatch && ytMatch[1]) {
               effVideoId = ytMatch[1];
@@ -903,13 +920,19 @@ export function SharedRender({ content, viewport, isMobile }: SharedRenderProps)
             return (
               <figure key={i} className={`overflow-hidden rounded-3xl border border-border bg-slate-950 shadow-md ${floatClass}`} style={{ width: isWide ? "100%" : width || "100%", maxWidth: "100%" }}>
                 <div className={`relative w-full ${aspectClass}`}>
-                  <iframe
-                    src={embedSrc}
-                    title={title || caption || "Embedded Video"}
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                    allowFullScreen
-                    className="absolute inset-0 h-full w-full border-0"
-                  />
+                  {isTrustedVideoEmbed(embedSrc) ? (
+                    <iframe
+                      src={embedSrc}
+                      title={title || caption || "Embedded Video"}
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                      allowFullScreen
+                      className="absolute inset-0 h-full w-full border-0"
+                    />
+                  ) : (
+                    <div className="absolute inset-0 flex items-center justify-center bg-slate-950 p-6 text-center text-sm text-slate-400">
+                      Embedded content is unavailable.
+                    </div>
+                  )}
                 </div>
                 {(caption || title) && (
                   <figcaption className="p-3 bg-white border-t border-slate-100 text-center">
@@ -924,7 +947,14 @@ export function SharedRender({ content, viewport, isMobile }: SharedRenderProps)
             return <div key={i} className="my-4 text-xs text-text-tertiary">[{node.type} block]</div>;
         }
       })}
-      {faqJsonLd && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }} />}
+      {faqJsonLd && (
+        <script
+          type="application/ld+json"
+          // SECURITY: `<` must be escaped — `JSON.stringify` alone allows a
+          // `</script>` break-out from author-controlled FAQ text.
+          dangerouslySetInnerHTML={{ __html: serializeJsonForScript(faqJsonLd) }}
+        />
+      )}
     </div>
   );
 }

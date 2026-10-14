@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
     const status = error instanceof AuthError ? error.statusCode : 500;
     const code = error instanceof AuthError ? error.code : "PRESIGN_FAILED";
     return NextResponse.json(
-      { error: { code, message: error.message || "Failed to generate presigned upload URL." } },
+      { error: { code, message: status < 500 ? error.message : "Failed to generate presigned upload URL." } },
       { status }
     );
   }

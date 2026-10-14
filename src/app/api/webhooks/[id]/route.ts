@@ -15,18 +15,16 @@ export async function GET(
       db.webhook.findUnique({ where: { id } })
     );
 
-    if (!webhook) {
+    if (!webhook || !webhook.projectId) {
       return NextResponse.json(
         { error: { code: "NOT_FOUND", message: "Webhook not found." } },
         { status: 404 }
       );
     }
 
-    if (webhook.projectId) {
-      await requirePermission(webhook.projectId, "webhooks.manage").catch(async () => {
-        await requirePermission(webhook.projectId!, "webhook.manage");
-      });
-    }
+    await requirePermission(webhook.projectId, "webhooks.manage").catch(async () => {
+      await requirePermission(webhook.projectId!, "webhook.manage");
+    });
 
     const sanitized = {
       ...webhook,
@@ -64,18 +62,16 @@ export async function PATCH(
       db.webhook.findUnique({ where: { id } })
     );
 
-    if (!existing) {
+    if (!existing || !existing.projectId) {
       return NextResponse.json(
         { error: { code: "NOT_FOUND", message: "Webhook not found." } },
         { status: 404 }
       );
     }
 
-    if (existing.projectId) {
-      await requirePermission(existing.projectId, "webhooks.manage").catch(async () => {
-        await requirePermission(existing.projectId!, "webhook.manage");
-      });
-    }
+    await requirePermission(existing.projectId, "webhooks.manage").catch(async () => {
+      await requirePermission(existing.projectId!, "webhook.manage");
+    });
 
     const dataToUpdate: any = {};
 
@@ -96,9 +92,9 @@ export async function PATCH(
     }
 
     if (events !== undefined) {
-      if (!Array.isArray(events) || events.length === 0) {
+      if (!Array.isArray(events) || events.length === 0 || events.length > 50 || !events.every((e) => typeof e === "string" && e.length > 0 && e.length <= 100)) {
         return NextResponse.json(
-          { error: { code: "VALIDATION_ERROR", message: "Events array must not be empty." } },
+          { error: { code: "VALIDATION_ERROR", message: "Events must be a non-empty array of short strings (max 50)." } },
           { status: 400 }
         );
       }
@@ -146,7 +142,7 @@ export async function PATCH(
       );
     }
     return NextResponse.json(
-      { error: { code: "UPDATE_FAILED", message: String(error?.message || error) } },
+      { error: { code: "UPDATE_FAILED", message: "Internal server error" } },
       { status: 500 }
     );
   }
@@ -164,18 +160,16 @@ export async function DELETE(
       db.webhook.findUnique({ where: { id } })
     );
 
-    if (!existing) {
+    if (!existing || !existing.projectId) {
       return NextResponse.json(
         { error: { code: "NOT_FOUND", message: "Webhook not found." } },
         { status: 404 }
       );
     }
 
-    if (existing.projectId) {
-      await requirePermission(existing.projectId, "webhooks.manage").catch(async () => {
-        await requirePermission(existing.projectId!, "webhook.manage");
-      });
-    }
+    await requirePermission(existing.projectId, "webhooks.manage").catch(async () => {
+      await requirePermission(existing.projectId!, "webhook.manage");
+    });
 
     await withDbRetry(() =>
       db.webhook.delete({ where: { id } })
@@ -190,7 +184,7 @@ export async function DELETE(
       );
     }
     return NextResponse.json(
-      { error: { code: "DELETE_FAILED", message: String(error?.message || error) } },
+      { error: { code: "DELETE_FAILED", message: "Internal server error" } },
       { status: 500 }
     );
   }

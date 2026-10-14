@@ -2,10 +2,32 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { db, withDbRetry } from "@/lib/db";
 
+/**
+ * Open-redirect guard. The `next` parameter is concatenated onto `origin`,
+ * so values like `@evil.com` (→ `https://cms.example.com@evil.com`, where the
+ * CMS host becomes userinfo and evil.com becomes the host), `//evil.com` or
+ * `/\evil.com` would bounce the user off-site after a successful login —
+ * a classic credential-phishing primitive.
+ *
+ * Only same-site absolute paths are accepted; anything else falls back to the
+ * default post-login destination.
+ */
+function safeNextPath(raw: string | null, fallback: string): string {
+  if (!raw) return fallback;
+  const value = raw.trim();
+  // Must be a single-slash absolute path; reject protocol-relative,
+  // backslash variants, control chars and embedded newlines.
+  if (!value.startsWith("/")) return fallback;
+  if (value.startsWith("//") || value.startsWith("/\\")) return fallback;
+  // eslint-disable-next-line no-control-regex
+  if (/[\u0000-\u001f\u007f]/.test(value)) return fallback;
+  return value;
+}
+
 export async function GET(req: NextRequest) {
   const { searchParams, origin } = new URL(req.url);
   const code = searchParams.get("code");
-  const next = searchParams.get("next") ?? "/pending-approval";
+  const next = safeNextPath(searchParams.get("next"), "/pending-approval");
 
   if (code) {
     const supabase = await createClient();

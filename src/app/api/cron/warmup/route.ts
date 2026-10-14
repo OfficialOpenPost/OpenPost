@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, withDbRetry } from "@/lib/db";
+import { verifyCronAuth } from "@/lib/cronAuth";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export async function GET(req: NextRequest) {
+  // SECURITY: cron endpoints must not be publicly invocable — an open warmup
+  // endpoint is free compute for an attacker and discloses DB latency.
+  const authErr = verifyCronAuth(req);
+  if (authErr) return authErr;
+
   const start = Date.now();
 
   try {
@@ -32,7 +38,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(
       {
         status: "error",
-        error: String(error?.message ?? error),
+        error: "Warmup failed",
         latencyMs: Date.now() - start,
       },
       { status: 500 }

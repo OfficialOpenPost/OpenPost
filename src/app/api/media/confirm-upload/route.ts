@@ -42,22 +42,42 @@ export async function POST(req: NextRequest) {
 
     await requirePermission(projectId, "media.upload");
 
-    if (!key || typeof key !== "string" || key.includes("..") || !key.startsWith("openpost-media/")) {
+    // SECURITY: the storage key MUST live inside the caller's own tenant prefix.
+    // Checking only the `openpost-media/` root previously allowed any member of
+    // any project to (a) register another tenant's object as their own media and
+    // (b) delete another tenant's object by sending a disallowed MIME type.
+    const expectedPrefix = `openpost-media/${projectId}/`;
+    if (
+      !key ||
+      typeof key !== "string" ||
+      key.includes("..") ||
+      key.includes("\\") ||
+      key.includes("\0") ||
+      !key.startsWith(expectedPrefix) ||
+      key.length > 512
+    ) {
       return NextResponse.json(
         { error: { code: "INVALID_KEY", message: "Invalid or malicious storage key." } },
         { status: 400 }
       );
     }
 
-    if (!originalFilename || !mimeType) {
+    if (!originalFilename || typeof originalFilename !== "string" || originalFilename.length > 255) {
       return NextResponse.json(
-        { error: { code: "VALIDATION_ERROR", message: "originalFilename and mimeType are required." } },
+        { error: { code: "VALIDATION_ERROR", message: "originalFilename is required." } },
+        { status: 400 }
+      );
+    }
+    if (!mimeType || typeof mimeType !== "string") {
+      return NextResponse.json(
+        { error: { code: "VALIDATION_ERROR", message: "mimeType is required." } },
         { status: 400 }
       );
     }
 
     const normalizedMime = mimeType.toLowerCase();
     if (!allowedConfirmMimes.includes(normalizedMime)) {
+      // Only ever delete an object inside the caller's own prefix (checked above).
       await deleteObject(key).catch(() => {});
       return NextResponse.json(
         { error: { code: "INVALID_TYPE", message: `Unsupported media format for presigned upload: ${mimeType}` } },
@@ -65,10 +85,23 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const MAX_SIZE_BYTES = 25 * 1024 * 1024;
+    const declaredSize =
+      typeof sizeBytes === "number" && Number.isFinite(sizeBytes) && sizeBytes >= 0
+        ? sizeBytes
+        : 0;
+    if (declaredSize > MAX_SIZE_BYTES) {
+      await deleteObject(key).catch(() => {});
+      return NextResponse.json(
+        { error: { code: "PAYLOAD_TOO_LARGE", message: "File exceeds the 25 MB upload limit." } },
+        { status: 413 }
+      );
+    }
+
     const s3 = getS3Client();
     const bucket = env.R2_BUCKET_NAME;
 
-    let actualSizeBytes = sizeBytes || 0;
+    let actualSizeBytes = declaredSize;
 
     // Verify object magic bytes from R2 if S3 is configured
     if (s3 && bucket) {
@@ -104,6 +137,15 @@ export async function POST(req: NextRequest) {
           const match = res.ContentRange.match(/\/(\d+)$/);
           if (match) actualSizeBytes = parseInt(match[1], 10);
         }
+        // Fail closed: the object's real size is authoritative and must be capped.
+        if (!Number.isFinite(actualSizeBytes) || actualSizeBytes < 0) actualSizeBytes = 0;
+        if (actualSizeBytes > MAX_SIZE_BYTES) {
+          await deleteObject(key).catch(() => {});
+          return NextResponse.json(
+            { error: { code: "PAYLOAD_TOO_LARGE", message: "File exceeds the 25 MB upload limit." } },
+            { status: 413 }
+          );
+        }
       } catch (err: any) {
         if (err.name === "NoSuchKey" || err.$metadata?.httpStatusCode === 404) {
           return NextResponse.json(
@@ -111,21 +153,34 @@ export async function POST(req: NextRequest) {
             { status: 404 }
           );
         }
+        // SECURITY: fail closed. Previously any transient S3 error was swallowed
+        // and the record was created with an *unverified* payload.
         console.warn("[confirm-upload] S3 verification error:", err);
+        return NextResponse.json(
+          { error: { code: "VERIFY_FAILED", message: "Could not verify the uploaded file. Please retry." } },
+          { status: 502 }
+        );
       }
+    } else if (declaredSize === 0) {
+      // Storage verification unavailable — do not fabricate a validated record
+      // without at least a client-declared size to audit.
+      actualSizeBytes = 0;
     }
 
     const publicUrl = getPublicUrl(key);
     const checksum = crypto.createHash("sha256").update(`${key}:${Date.now()}:${crypto.randomUUID()}`).digest("hex");
 
+    const toIntOrNull = (v: unknown) =>
+      typeof v === "number" && Number.isFinite(v) && v > 0 && v < 100000 ? Math.floor(v) : null;
+
     const mediaRecord = await withDbRetry(() =>
       db.media.create({
         data: {
-          originalFilename,
+          originalFilename: originalFilename.slice(0, 255),
           mimeType: normalizedMime,
-          sizeBytes: BigInt(actualSizeBytes),
-          width: width ?? null,
-          height: height ?? null,
+          sizeBytes: BigInt(Math.max(0, Math.floor(actualSizeBytes))),
+          width: toIntOrNull(width),
+          height: toIntOrNull(height),
           checksum,
           uploadedBy: user.id,
           projectId,
@@ -134,7 +189,9 @@ export async function POST(req: NextRequest) {
             key,
             webp: normalizedMime === "image/webp" ? { url: publicUrl } : undefined,
           },
-          altTextDefault: altTextDefault || originalFilename.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " "),
+          altTextDefault:
+            (typeof altTextDefault === "string" && altTextDefault.slice(0, 500)) ||
+            originalFilename.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " "),
         },
       })
     );
@@ -170,6 +227,11 @@ export async function POST(req: NextRequest) {
   } catch (error: any) {
     const status = error instanceof AuthError ? error.statusCode : 500;
     const code = error instanceof AuthError ? error.code : "CONFIRM_FAILED";
-    return NextResponse.json({ error: { code, message: error.message || "Failed to confirm upload." } }, { status });
+    // Never echo raw internal/Prisma errors to the client.
+    const message =
+      error instanceof AuthError
+        ? error.message
+        : "Failed to confirm upload.";
+    return NextResponse.json({ error: { code, message } }, { status });
   }
 }

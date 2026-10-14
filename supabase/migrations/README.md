@@ -1,7 +1,7 @@
 # Supabase Migrations — Run in Sequential Order
 
 1. Open **Supabase Dashboard** → **SQL Editor** → **New Query**
-2. Run each file **in sequential order** `001` → `024` (copy-paste, click **Run**)
+2. Run each file **in sequential order** `001` → `025` (copy-paste, click **Run**)
 3. Check for "Success", then proceed to the next file.
 
 ## Requirements
@@ -35,6 +35,7 @@
 | `022_upgrade_user_to_owner.sql` | Utility script to safely approve any user profile and upgrade them to `OWNER` role across workspace projects |
 | `023_fix_blog_slug_constraint.sql` | Drops legacy global UNIQUE(slug) constraint on `blogs` and scopes uniqueness per project `(project_id, slug)` |
 | `024_performance_indexes.sql` | Performance indexes for faster queries: author counts, tag lookups, media usage, poll queries, pending users/invites, owner counts, audit logs |
+| `025_strict_rls_lockdown.sql` | Strict RLS lockdown: drops permissive/service-wide policies and null-project escape hatches, removes email exposure on public author reads, restricts profile self-updates to safe columns, and enforces fail-closed tenant isolation (re-runnable; each `CREATE POLICY` is paired with `DROP POLICY IF EXISTS`) |
 
 ---
 

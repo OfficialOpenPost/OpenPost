@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, withDbRetry } from "@/lib/db";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import {
   requireAdmin,
   requireProjectMember,
@@ -11,6 +11,7 @@ import {
   hasMinimumRole,
   hasPermission,
   canManageRole,
+  clearUserCache,
   Role,
   ProfileStatus,
   AuthError,
@@ -47,7 +48,7 @@ export async function GET(req: NextRequest) {
 
     const adminUser = await requireAdmin(projectId);
 
-    const [profiles, invitesRaw, pendingWithoutMembership] = await Promise.all([
+    const [profiles, invitesRaw, results] = await Promise.all([
       withDbRetry(() =>
         db.profile.findMany({
           where: {
@@ -92,31 +93,42 @@ export async function GET(req: NextRequest) {
           },
         })
       ),
-      // Also fetch pending users who signed up but have no project membership yet
-      withDbRetry(() =>
-        db.profile.findMany({
-          where: {
-            status: "pending",
-            memberships: { none: { projectId } },
-          },
-          orderBy: { createdAt: "asc" },
-          select: {
-            id: true,
-            email: true,
-            displayName: true,
-            status: true,
-            createdAt: true,
-            updatedAt: true,
-            memberships: {
-              include: {
-                project: {
-                  select: { id: true, name: true, slug: true },
+      // Also fetch pending users who signed up but have no project membership yet.
+      // SECURITY: this set is inherently instance-wide (self-signups belong to no
+      // project yet), so it exposes e-mail addresses of strangers to other tenants.
+      // Only the project OWNER (the instance operator) may see the global queue;
+      // admins/editors still see this project's own members and pending invites.
+      ...(hasMinimumRole(
+        adminUser.memberships.find((m) => m.projectId === projectId)?.role,
+        "OWNER"
+      )
+        ? [
+            withDbRetry(() =>
+              db.profile.findMany({
+                where: {
+                  status: "pending",
+                  memberships: { none: { projectId } },
                 },
-              },
-            },
-          },
-        })
-      ),
+                orderBy: { createdAt: "asc" },
+                select: {
+                  id: true,
+                  email: true,
+                  displayName: true,
+                  status: true,
+                  createdAt: true,
+                  updatedAt: true,
+                  memberships: {
+                    include: {
+                      project: {
+                        select: { id: true, name: true, slug: true },
+                      },
+                    },
+                  },
+                },
+              })
+            ),
+          ]
+        : [Promise.resolve([] as any[])]),
     ]);
     // Sanitize invites — never expose raw token, mask it
     const invites = (invitesRaw as any[]).map((inv) => ({
@@ -125,6 +137,11 @@ export async function GET(req: NextRequest) {
       tokenPreview: inv.token ? `${String(inv.token).slice(0, 8)}…` : null,
       tokenMasked: true,
     }));
+
+    // `results` IS the resolved pending-users array (index 2 of Promise.all is a
+    // single conditional promise, not a nested array). The old `results[2]`
+    // always read undefined, so the pending-approval queue was always empty.
+    const pendingWithoutMembership = (results as any[]) || [];
 
     // Merge pending users without memberships into the list
     const allProfiles = [...profiles];
@@ -177,7 +194,7 @@ export async function GET(req: NextRequest) {
     const status = error instanceof AuthError ? error.statusCode : 500;
     const code = error instanceof AuthError ? error.code : "USERS_FETCH_FAILED";
     return NextResponse.json(
-      { error: { code, message: error.message || "Failed to fetch users." } },
+      { error: { code, message: error instanceof AuthError ? error.message : "Failed to fetch users." } },
       { status }
     );
   }
@@ -285,7 +302,7 @@ export async function POST(req: NextRequest) {
     const status = error instanceof AuthError ? error.statusCode : 500;
     const code = error instanceof AuthError ? error.code : "INVITE_FAILED";
     return NextResponse.json(
-      { error: { code, message: error.message || "Failed to invite user." } },
+      { error: { code, message: error instanceof AuthError ? error.message : "Failed to invite user." } },
       { status }
     );
   }
@@ -326,15 +343,52 @@ export async function PATCH(req: NextRequest) {
       );
     }
 
+    // Resolve the target's REAL standing inside this project. `projects.ownerId`
+    // is authoritative — a project owner is an OWNER even if no member row says so.
+    const targetProject = await withDbRetry(() =>
+      db.project.findUnique({ where: { id: projectId }, select: { ownerId: true } })
+    ).catch(() => null);
+
+    const actorMembership = adminUser.memberships.find((m) => m.projectId === projectId);
+    const actorRole = actorMembership
+      ? normalizeRoleStrict(actorMembership.role)
+      : normalizeRoleStrict(adminUser.role as string);
+
+    const targetExistingMembership = await withDbRetry(() =>
+      db.projectMember.findUnique({
+        where: { projectId_userId: { projectId, userId: id } },
+      })
+    ).catch(() => null);
+
+    const targetRoleInProject: Role | null = targetProject?.ownerId === id
+      ? "OWNER"
+      : targetExistingMembership
+        ? normalizeRoleStrict(targetExistingMembership.role)
+        : null;
+
     // 1. Update Profile Status if provided (e.g. pending -> approved, approved -> suspended)
+    // SECURITY: `profiles.status` is a GLOBAL column (it gates login everywhere), so a
+    // status change must respect the role hierarchy *inside this project*. Previously an
+    // ADMIN of any project could suspend/reject a project OWNER and lock them out entirely.
     let updatedProfile = targetProfile;
     if (status && status !== targetProfile.status) {
+      if (targetRoleInProject && !canManageRole(actorRole as any, targetRoleInProject as any, targetRoleInProject as any)) {
+        return NextResponse.json(
+          { error: { code: "FORBIDDEN", message: "You cannot change the status of a user who outranks you." } },
+          { status: 403 }
+        );
+      }
+      // An admin may only touch accounts that already belong to this project, or
+      // brand-new signups they are approving (which creates the membership below).
+      if (!targetRoleInProject && status !== "approved" && targetProfile.status !== "pending") {
+        return NextResponse.json(
+          { error: { code: "NOT_FOUND", message: "User is not a member of this project." } },
+          { status: 404 }
+        );
+      }
+
       // Check if target user has a membership in this project
-      let targetMembership = await withDbRetry(() =>
-        db.projectMember.findUnique({
-          where: { projectId_userId: { projectId, userId: id } },
-        })
-      ).catch(() => null);
+      let targetMembership = targetExistingMembership;
 
       // If approving a pending user without membership, create one with default role
       if (status === "approved" && !targetMembership) {
@@ -369,19 +423,15 @@ export async function PATCH(req: NextRequest) {
         targetId: id,
         metadata: { previousStatus: targetProfile.status, newStatus: status, email: targetProfile.email },
       });
+
+      // Drop any cached session so the change takes effect immediately rather
+      // than after the 15s in-memory session TTL.
+      clearUserCache(id);
     }
 
     // 2. Update Role in Project if provided — enforce hierarchy and owner protection
     if (role && projectId) {
-      // Verify target membership project scoping and role management permission
-      const actorMembership = adminUser.memberships.find((m) => m.projectId === projectId);
-      const actorRole = actorMembership ? normalizeRoleStrict(actorMembership.role) : normalizeRoleStrict(adminUser.role as string);
-
-      // Fetch target current role for canManage check
-      const targetMember = await withDbRetry(() =>
-        db.projectMember.findUnique({ where: { projectId_userId: { projectId, userId: id } } })
-      ).catch(() => null);
-      const targetCurrentRole = targetMember ? normalizeRoleStrict((targetMember as any).role) : "CONTRIBUTOR" as Role;
+      const targetCurrentRole: Role = targetRoleInProject ?? "CONTRIBUTOR";
 
       if (!canManageRole(actorRole as any, targetCurrentRole as any, role as any)) {
         return NextResponse.json({ error: { code: "FORBIDDEN", message: "Insufficient permission to assign this role. Only OWNER can manage OWNER." } }, { status: 403 });
@@ -434,6 +484,8 @@ export async function PATCH(req: NextRequest) {
         targetId: id,
         metadata: { newRole: role, email: targetProfile.email },
       });
+
+      clearUserCache(id);
     }
 
     return NextResponse.json({
@@ -448,7 +500,7 @@ export async function PATCH(req: NextRequest) {
     const status = error instanceof AuthError ? error.statusCode : 500;
     const code = error instanceof AuthError ? error.code : "USER_UPDATE_FAILED";
     return NextResponse.json(
-      { error: { code, message: error.message || "Failed to update user." } },
+      { error: { code, message: error instanceof AuthError ? error.message : "Failed to update user." } },
       { status }
     );
   }
@@ -507,8 +559,61 @@ export async function DELETE(req: NextRequest) {
 
     // Get target user info before deletion for audit
     const targetProfile = await withDbRetry(() =>
-      db.profile.findUnique({ where: { id }, select: { email: true, displayName: true } })
+      db.profile.findUnique({ where: { id }, select: { email: true, displayName: true, status: true } })
     ).catch(() => null);
+
+    if (!targetProfile) {
+      return NextResponse.json(
+        { error: { code: "NOT_FOUND", message: "User profile not found." } },
+        { status: 404 }
+      );
+    }
+
+    // SECURITY: the target must actually belong to THIS project. Without this an
+    // admin of Project A could target any account (e.g. every pending signup) and,
+    // because the branch below triggers on "zero other memberships", permanently
+    // destroy it — including seizing projects owned by the victim in other tenants.
+    const targetMembership = await withDbRetry(() =>
+      db.projectMember.findUnique({
+        where: { projectId_userId: { projectId, userId: id } },
+      })
+    ).catch(() => null);
+
+    const actorMembership = adminUser.memberships.find((m) => m.projectId === projectId);
+    const actorRole = actorMembership
+      ? normalizeRoleStrict(actorMembership.role)
+      : normalizeRoleStrict(adminUser.role as string);
+
+    const targetProject = await withDbRetry(() =>
+      db.project.findUnique({ where: { id: projectId }, select: { ownerId: true } })
+    ).catch(() => null);
+    const targetIsProjectOwner = targetProject?.ownerId === id;
+
+    if (!targetMembership && !targetIsProjectOwner) {
+      // Not a member here: only a never-joined signup may be cleaned up, and only
+      // by the project OWNER (an ADMIN of an unrelated tenant must not be able to
+      // purge strangers' accounts).
+      const hasAnyMembership = await withDbRetry(() =>
+        db.projectMember.count({ where: { userId: id } })
+      ).catch(() => 1);
+
+      const isPendingSignup =
+        targetProfile.status === "pending" || targetProfile.status === "rejected";
+
+      if (hasAnyMembership > 0 || !isPendingSignup || actorRole !== "OWNER") {
+        return NextResponse.json(
+          { error: { code: "NOT_FOUND", message: "User is not a member of this project." } },
+          { status: 404 }
+        );
+      }
+    }
+
+    if (targetIsProjectOwner) {
+      return NextResponse.json(
+        { error: { code: "FORBIDDEN", message: "Cannot remove the project owner. Transfer ownership first." } },
+        { status: 403 }
+      );
+    }
 
     // Remove from project membership
     await withDbRetry(() =>
@@ -516,76 +621,102 @@ export async function DELETE(req: NextRequest) {
         where: { projectId, userId: id },
       })
     );
+    clearUserCache(id);
 
     // Check if user has any other project memberships
     const otherMemberships = await withDbRetry(() =>
       db.projectMember.count({ where: { userId: id } })
-    ).catch(() => 0);
+    ).catch(() => 1);
 
-    // If no other memberships, perform full cleanup and permanent deletion
-    if (otherMemberships === 0) {
-      // 1. Reassign project ownership — transfer owned projects to deleting admin
-      const ownedProjects = await withDbRetry(() =>
-        db.project.findMany({ where: { ownerId: id }, select: { id: true } })
-      ).catch(() => []);
+    // SECURITY: full account destruction is OWNER-only and must never reach into
+    // other tenants. Two hard gates:
+    //  1. the actor must be OWNER of this project, and
+    //  2. the victim must not own ANY project (otherwise we'd be transferring
+    //     / destroying another tenant's ownership).
+    const ownedProjects = await withDbRetry(() =>
+      db.project.findMany({ where: { ownerId: id }, select: { id: true } })
+    ).catch(() => []);
 
-      for (const project of ownedProjects) {
-        await withDbRetry(() =>
-          db.project.update({
-            where: { id: project.id },
-            data: { ownerId: adminUser.id },
-          })
+    const performFullDeletion = otherMemberships === 0 && ownedProjects.length === 0;
+
+    if (otherMemberships === 0 && ownedProjects.length > 0) {
+      // Membership removed, but the account lives on: it still owns projects.
+      await createAuditLog({
+        actorId: adminUser.id,
+        projectId,
+        action: "project.member_removed",
+        targetId: id,
+        metadata: {
+          email: targetProfile?.email,
+          name: targetProfile?.displayName,
+          permanentDeletion: false,
+          reason: "target_still_owns_projects",
+        },
+      });
+      queryCache.invalidate("dashboard:");
+      return NextResponse.json({ data: { success: true, accountDeleted: false } });
+    }
+
+    if (performFullDeletion) {
+      if (actorRole !== "OWNER") {
+        return NextResponse.json(
+          { error: { code: "FORBIDDEN", message: "Only the project owner can permanently delete an account." } },
+          { status: 403 }
         );
       }
 
-      // 2. Delete content created by this user (RESTRICT FKs block profile deletion)
-      // Delete blog revisions first (child of blogs)
+      // Everything below is scoped to THIS project so an admin of one tenant can
+      // never destroy content the user authored elsewhere.
+      // 1. Delete blog revisions first (child of blogs)
       await withDbRetry(() =>
-        db.blogRevision.deleteMany({ where: { createdBy: id } })
+        db.blogRevision.deleteMany({ where: { createdBy: id, blog: { projectId } } })
       ).catch(() => {});
 
-      // Delete blogs created by this user
+      // 2. Delete blogs created by this user in this project
       await withDbRetry(() =>
-        db.blog.deleteMany({ where: { createdBy: id } })
+        db.blog.deleteMany({ where: { createdBy: id, projectId } })
       ).catch(() => {});
 
       // 3. Nullify media uploadedBy (RESTRICT FK blocks deletion)
       await withDbRetry(() =>
-        db.$executeRaw`UPDATE media SET uploaded_by = ${adminUser.id} WHERE uploaded_by = ${id}`
+        db.$executeRaw`UPDATE media SET uploaded_by = ${adminUser.id} WHERE uploaded_by = ${id} AND project_id = ${projectId}`
       ).catch(() => {});
 
-      // 4. Delete invites created by this user
+      // 4. Delete invites / integrations / CLI codes created by this user in this project
       await withDbRetry(() =>
-        db.invite.deleteMany({ where: { createdBy: id } })
+        db.invite.deleteMany({ where: { createdBy: id, projectId } })
+      ).catch(() => {});
+      await withDbRetry(() =>
+        db.integration.deleteMany({ where: { createdBy: id, projectId } })
+      ).catch(() => {});
+      await withDbRetry(() =>
+        db.connectionCode.deleteMany({ where: { createdBy: id, projectId } })
+      ).catch(() => {});
+      await withDbRetry(() =>
+        db.cliAuthCode.deleteMany({ where: { createdBy: id, projectId } })
       ).catch(() => {});
 
-      // 5. Delete integrations, connection codes, CLI auth codes created by this user
-      await withDbRetry(() =>
-        db.integration.deleteMany({ where: { createdBy: id } })
-      ).catch(() => {});
-      await withDbRetry(() =>
-        db.connectionCode.deleteMany({ where: { createdBy: id } })
-      ).catch(() => {});
-      await withDbRetry(() =>
-        db.cliAuthCode.deleteMany({ where: { createdBy: id } })
-      ).catch(() => {});
-
-      // 6. Delete from users table (legacy)
+      // 5. Delete from users table (legacy)
       await withDbRetry(() =>
         db.user.delete({ where: { id } })
       ).catch(() => {});
 
-      // 7. Delete profile
-      await withDbRetry(() =>
+      // 6. Delete profile — if another tenant still references it, this throws and
+      //    we deliberately keep the Auth account so the user isn't orphaned.
+      const profileDeleted = await withDbRetry(() =>
         db.profile.delete({ where: { id } })
-      ).catch(() => {});
+      )
+        .then(() => true)
+        .catch(() => false);
 
-      // 8. Delete from Supabase Auth
-      const supabase = await createClient();
-      if (supabase) {
-        await supabase.auth.admin.deleteUser(id).catch((err: any) => {
-          console.warn("Failed to delete Supabase auth user:", err?.message);
-        });
+      if (profileDeleted) {
+        // 7. Delete from Supabase Auth (requires the service-role key, not anon).
+        const adminSupabase = createAdminClient();
+        if (adminSupabase) {
+          await adminSupabase.auth.admin.deleteUser(id).catch((err: any) => {
+            console.warn("Failed to delete Supabase auth user:", err?.message);
+          });
+        }
       }
     }
 
@@ -594,17 +725,17 @@ export async function DELETE(req: NextRequest) {
       projectId,
       action: "project.member_removed",
       targetId: id,
-      metadata: { email: targetProfile?.email, name: targetProfile?.displayName, permanentDeletion: otherMemberships === 0 },
+      metadata: { email: targetProfile?.email, name: targetProfile?.displayName, permanentDeletion: performFullDeletion },
     });
 
     queryCache.invalidate("dashboard:");
 
-    return NextResponse.json({ data: { success: true } });
+    return NextResponse.json({ data: { success: true, accountDeleted: performFullDeletion } });
   } catch (error: any) {
     const status = error instanceof AuthError ? error.statusCode : 500;
     const code = error instanceof AuthError ? error.code : "USER_DELETE_FAILED";
     return NextResponse.json(
-      { error: { code, message: error.message || "Failed to remove user." } },
+      { error: { code, message: error instanceof AuthError ? error.message : "Failed to remove user." } },
       { status }
     );
   }

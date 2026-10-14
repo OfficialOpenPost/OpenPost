@@ -22,6 +22,15 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const search = searchParams.get("search")?.trim();
 
+    // Dashboard + public API share this route: the full post count (including
+    // drafts) is only revealed to authenticated project members; anonymous /
+    // token callers get the published count only and a publicly-cacheable body.
+    const { getCurrentUser } = await import("@/lib/auth");
+    const viewer = await getCurrentUser().catch(() => null);
+    const isMember = Boolean(
+      viewer?.memberships?.some((m: { projectId: string }) => m.projectId === projectContext!.projectId)
+    );
+
     const where: any = { projectId: projectContext.projectId };
     if (search) {
       where.OR = [
@@ -41,7 +50,7 @@ export async function GET(req: NextRequest) {
           description: true,
           projectId: true,
           _count: {
-            select: { blogs: true },
+            select: { blogs: isMember ? true : { where: { blog: { status: "published" } } } },
           },
         },
       })
@@ -54,7 +63,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json(
       { data: formatted, meta: { total: formatted.length } },
-      { headers: { "Cache-Control": "public, s-maxage=120, stale-while-revalidate=300" } }
+      { headers: { "Cache-Control": isMember ? "private, no-store" : "public, s-maxage=120, stale-while-revalidate=300" } }
     );
   } catch (error: any) {
     console.error("GET /api/v1/tags error:", error);
@@ -117,6 +126,6 @@ export async function POST(req: NextRequest) {
   } catch (error: any) {
     const status = error instanceof AuthError ? error.statusCode : 500;
     const code = error instanceof AuthError ? error.code : "CREATE_FAILED";
-    return NextResponse.json({ error: { code, message: error.message || "Failed to create tag." } }, { status });
+    return NextResponse.json({ error: { code, message: status < 500 ? error.message : "Failed to create tag." } }, { status });
   }
 }

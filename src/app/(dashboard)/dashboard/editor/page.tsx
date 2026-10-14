@@ -11,6 +11,7 @@ import { SelectionBubbleMenu, CodeBlockBubbleMenu } from "@/components/editor/Bu
 import { FindReplaceBar } from "@/components/editor/toolbar/FindReplaceBar";
 import { EDITOR_STYLES } from "@/components/editor/extensions";
 import { tiptapToEditorDocument, editorDocumentToHtml } from "@/lib/editorDocument";
+import { sanitizeHtml } from "@/lib/sanitize";
 import { SharedRender } from "@/components/render/SharedRender";
 import { PrintDocument } from "@/components/editor/PrintDocument";
 import {
@@ -788,7 +789,7 @@ function EditorInner({ initialBlogId }: { initialBlogId?: string }) {
             {editor ? (
               <SharedRender content={editor.getJSON()} viewport={previewViewport} />
             ) : (
-              <div dangerouslySetInnerHTML={{ __html: html }} />
+              <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(html) }} />
             )}
           </div>
         </div>

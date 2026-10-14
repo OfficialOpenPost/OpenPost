@@ -1,5 +1,6 @@
 import { cache } from "react";
 import { cookies } from "next/headers";
+import crypto from "crypto";
 import { createClient } from "@/lib/supabase/server";
 import { db, withDbRetry } from "@/lib/db";
 import {
@@ -76,13 +77,20 @@ export const getCurrentUser = cache(async (): Promise<AuthUser | null> => {
     let cacheKey: string | null = null;
     try {
       const cookieStore = await cookies();
-      const authTokens = cookieStore
+      // SECURITY: the cache key must uniquely identify the session. Supabase session
+      // cookies all share the same name prefix and their values share a constant
+      // JWT/JSON prefix, so a truncated value would collapse every user onto ONE
+      // shared cache slot (cross-user privilege confusion). Hash the full name+value
+      // of every auth cookie instead — distinct sessions always yield distinct keys.
+      const authCookies = cookieStore
         .getAll()
-        .filter((c) => c.name.startsWith("sb-") || c.name.includes("auth"))
-        .map((c) => `${c.name}=${c.value.slice(0, 32)}`)
-        .join(";");
-      if (authTokens) {
-        cacheKey = authTokens;
+        .filter((c) => c.name.startsWith("sb-") || c.name.includes("auth"));
+      if (authCookies.length > 0) {
+        const material = authCookies
+          .map((c) => `${c.name}=${c.value}`)
+          .sort()
+          .join("\n");
+        cacheKey = crypto.createHash("sha256").update(material).digest("hex");
         const cached = userSessionCache.get(cacheKey);
         if (cached && cached.expiresAt > Date.now()) {
           return cached.user;

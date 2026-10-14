@@ -20,13 +20,11 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     }
 
     const existing = await withDbRetry(() => db.tag.findUnique({ where: { id } }));
-    if (!existing) {
+    if (!existing || !existing.projectId) {
       return NextResponse.json({ error: { code: "NOT_FOUND", message: "Tag not found." } }, { status: 404 });
     }
 
-    if (existing.projectId) {
-      await requirePermission(existing.projectId, "taxonomy.manage");
-    }
+    await requirePermission(existing.projectId, "taxonomy.manage");
 
     const data: Record<string, unknown> = {};
     if (parsed.data.name !== undefined) data.name = parsed.data.name.trim();
@@ -58,7 +56,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   } catch (error: any) {
     const status = error instanceof AuthError ? error.statusCode : 500;
     const code = error instanceof AuthError ? error.code : "UPDATE_FAILED";
-    return NextResponse.json({ error: { code, message: error.message || "Failed to update tag." } }, { status });
+    return NextResponse.json({ error: { code, message: status < 500 ? error.message : "Failed to update tag." } }, { status });
   }
 }
 
@@ -66,15 +64,13 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   try {
     const { id } = await params;
     const existing = await withDbRetry(() => db.tag.findUnique({ where: { id } }));
-    if (!existing) {
+    if (!existing || !existing.projectId) {
       return NextResponse.json({ error: { code: "NOT_FOUND", message: "Tag not found." } }, { status: 404 });
     }
 
-    if (existing.projectId) {
-      await requirePermission(existing.projectId, "taxonomy.manage");
-    }
+    await requirePermission(existing.projectId, "taxonomy.manage");
 
-    const usage = await withDbRetry(() => db.blogTag.count({ where: { tagId: id } })).catch(() => 0);
+    const usage = await withDbRetry(() => db.blogTag.count({ where: { tagId: id, blog: { projectId: existing.projectId } } })).catch(() => 0);
     if (usage > 0) {
       return NextResponse.json(
         { error: { code: "IN_USE", message: `Tag in use by ${usage} post(s).` } },
@@ -87,6 +83,6 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   } catch (error: any) {
     const status = error instanceof AuthError ? error.statusCode : 500;
     const code = error instanceof AuthError ? error.code : "DELETE_FAILED";
-    return NextResponse.json({ error: { code, message: error.message || "Failed to delete tag." } }, { status });
+    return NextResponse.json({ error: { code, message: status < 500 ? error.message : "Failed to delete tag." } }, { status });
   }
 }

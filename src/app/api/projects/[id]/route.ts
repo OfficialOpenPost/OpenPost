@@ -64,7 +64,7 @@ export async function GET(
     const status = error instanceof AuthError ? error.statusCode : 500;
     const code = error instanceof AuthError ? error.code : "FETCH_FAILED";
     return NextResponse.json(
-      { error: { code, message: error.message || "Failed to load project." } },
+      { error: { code, message: status < 500 ? error.message : "Failed to load project." } },
       { status }
     );
   }
@@ -166,7 +166,7 @@ export async function PATCH(
     const status = error instanceof AuthError ? error.statusCode : 500;
     const code = error instanceof AuthError ? error.code : "UPDATE_FAILED";
     return NextResponse.json(
-      { error: { code, message: error.message || "Failed to update project." } },
+      { error: { code, message: status < 500 ? error.message : "Failed to update project." } },
       { status }
     );
   }
@@ -250,7 +250,7 @@ export async function DELETE(
     const status = error instanceof AuthError ? error.statusCode : 500;
     const code = error instanceof AuthError ? error.code : "DELETE_FAILED";
     return NextResponse.json(
-      { error: { code, message: error.message || "Failed to delete project." } },
+      { error: { code, message: status < 500 ? error.message : "Failed to delete project." } },
       { status }
     );
   }

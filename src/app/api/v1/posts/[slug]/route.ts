@@ -14,6 +14,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ slug
     const cleanSlug = slug.trim();
 
     // 1. Check project-scoped 301 redirects first (e.g. if slug was renamed)
+    // Strict tenant isolation: never match rows with projectId = null (legacy
+    // escape hatch allowed cross-tenant redirect probing).
     const redirect = await withDbRetry(() =>
       db.redirect.findFirst({
         where: {
@@ -21,10 +23,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ slug
           ...(projectContext?.projectId
             ? {
                 blog: {
-                  OR: [{ projectId: projectContext.projectId }, { projectId: null }],
+                  projectId: projectContext.projectId,
                 },
               }
-            : {}),
+            : { blog: { projectId: null } }),
         },
         select: { newSlug: true },
       })
@@ -43,18 +45,19 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ slug
       );
     }
 
-    // 2. Query published post
+    // 2. Query published post — strictly inside the resolved project.
+    if (!projectContext?.projectId) {
+      return NextResponse.json(
+        { error: { code: "NOT_FOUND", message: "Article not found within project." } },
+        { status: 404 }
+      );
+    }
+
     const postWhere: any = {
       slug: cleanSlug,
       status: "published",
+      projectId: projectContext.projectId,
     };
-
-    if (projectContext?.projectId) {
-      postWhere.OR = [
-        { projectId: projectContext.projectId },
-        { projectId: null },
-      ];
-    }
 
     const post = await withDbRetry(() =>
       db.blog.findFirst({
@@ -128,20 +131,26 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ slug
       category: post.category,
       authors: post.authors.map((a: any) => a.author),
       tags: post.tags.map((t: any) => t.tag),
-      polls: post.polls.map((p: any) => ({
-        id: p.id,
-        question: p.question,
-        type: p.type,
-        status: p.status,
-        totalVotes: p._count.votes,
-        options: p.options.map((o: any) => ({
-          id: o.id,
-          label: o.label,
-          votes: o._count.votes,
-        })),
-      })),
+      polls: post.polls.map((p: any) => {
+        // Enforce the poll's results-visibility setting on the embedded payload.
+        const resultsVisible = p.showResults === "always" || p.status === "closed";
+        return {
+          id: p.id,
+          question: p.question,
+          type: p.type,
+          status: p.status,
+          showResults: p.showResults,
+          totalVotes: resultsVisible ? p._count.votes : null,
+          options: p.options.map((o: any) => ({
+            id: o.id,
+            label: o.label,
+            sortOrder: o.sortOrder,
+            votes: resultsVisible ? o._count.votes : null,
+          })),
+        };
+      }),
       seo: post.seo,
-      projectId: post.projectId,
+      // NOTE: projectId intentionally not exposed on the public API.
     };
 
     return NextResponse.json(

@@ -34,7 +34,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 
     // Tenant + permission check: same rules as PUT /api/blogs/[id]
     if (!blog.projectId) {
-      return NextResponse.json({ error: { code: "FORBIDDEN" } }, { status: 403 });
+      return NextResponse.json({ error: { code: "NOT_FOUND" } }, { status: 404 });
     }
     const membership = user.memberships.find((m) => m.projectId === blog.projectId);
     if (!membership) {
@@ -43,7 +43,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     const role = membership.role;
     const canEditOthers = hasPermission(role, "posts.edit_others");
     if (!canEditOthers && blog.createdBy !== user.id) {
-      return NextResponse.json({ error: { code: "FORBIDDEN" } }, { status: 403 });
+      return NextResponse.json({ error: { code: "NOT_FOUND" } }, { status: 404 });
     }
     if (!hasPermission(role, "posts.edit_own") && !canEditOthers && !hasPermission(role, "post.edit")) {
       return NextResponse.json({ error: { code: "FORBIDDEN" } }, { status: 403 });
@@ -91,6 +91,6 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     if (e instanceof AuthError) {
       return NextResponse.json({ error: { code: e.code, message: e.message } }, { status: e.statusCode });
     }
-    return NextResponse.json({ error: { code: "DB_ERROR", message: String(e) } }, { status: 500 });
+    return NextResponse.json({ error: { code: "DB_ERROR", message: "Internal server error" } }, { status: 500 });
   }
 }

@@ -81,7 +81,7 @@ export async function GET(req: NextRequest) {
     const status = error instanceof AuthError ? error.statusCode : 500;
     const code = error instanceof AuthError ? error.code : "EXPORT_FAILED";
     return NextResponse.json(
-      { error: { code, message: error.message || "Export failed." } },
+      { error: { code, message: status < 500 ? error.message : "Export failed." } },
       { status }
     );
   }

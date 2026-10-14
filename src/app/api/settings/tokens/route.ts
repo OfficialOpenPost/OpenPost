@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, withDbRetry } from "@/lib/db";
-import { requireApprovedUser, requireAdmin, createAuditLog, AuthError } from "@/lib/auth";
+import { requireApprovedUser, requireAdmin, createAuditLog, AuthError, hasMinimumRole } from "@/lib/auth";
 import { generateApiToken } from "@/lib/apiToken";
 import { z } from "zod";
 
@@ -16,9 +16,14 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const projectIdParam = searchParams.get("projectId");
 
-    // Determine target project IDs user has access to
-    const adminProjectIds = user.memberships
-      .filter((m) => m.role === "ADMIN" || m.role === "EDITOR")
+    // SECURITY: token metadata is project-scoped. We only ever return tokens for
+    // projects where the caller is ADMIN/OWNER — and an explicit ?projectId must
+    // pass the same check. The previous implementation fell through to an
+    // *unfiltered* query whenever the membership list was empty (e.g. OWNER-only
+    // users, whose role was missing from the filter), leaking every tenant's
+    // token records including `tokenHash`.
+    const managedProjectIds = user.memberships
+      .filter((m) => hasMinimumRole(m.role, "ADMIN"))
       .map((m) => m.projectId);
 
     let whereClause: any = { revokedAt: null };
@@ -26,15 +31,30 @@ export async function GET(req: NextRequest) {
     if (projectIdParam) {
       await requireAdmin(projectIdParam);
       whereClause.projectId = projectIdParam;
-    } else if (adminProjectIds.length > 0) {
-      whereClause.projectId = { in: adminProjectIds };
+    } else {
+      // Never allow an unscoped listing — empty access means empty result set.
+      if (managedProjectIds.length === 0) {
+        return NextResponse.json({ data: [] });
+      }
+      whereClause.projectId = { in: managedProjectIds };
     }
 
     const integrations = await withDbRetry(() =>
       db.integration.findMany({
         where: whereClause,
         orderBy: { createdAt: "desc" },
-        include: {
+        // SECURITY: `tokenHash` is a server-side credential lookup value and must
+        // never leave the server (it enables offline brute-force / pass-the-hash).
+        select: {
+          id: true,
+          name: true,
+          projectId: true,
+          tokenPrefix: true,
+          permissions: true,
+          createdBy: true,
+          createdAt: true,
+          lastUsedAt: true,
+          revokedAt: true,
           project: {
             select: { id: true, name: true, slug: true },
           },
@@ -47,7 +67,7 @@ export async function GET(req: NextRequest) {
     const status = error instanceof AuthError ? error.statusCode : 500;
     const code = error instanceof AuthError ? error.code : "TOKENS_FETCH_FAILED";
     return NextResponse.json(
-      { error: { code, message: error.message || "Failed to fetch tokens." } },
+      { error: { code, message: status < 500 ? error.message : "Failed to fetch tokens." } },
       { status }
     );
   }
@@ -183,7 +203,7 @@ export async function POST(req: NextRequest) {
     const status = error instanceof AuthError ? error.statusCode : 500;
     const code = error instanceof AuthError ? error.code : "TOKEN_CREATE_FAILED";
     return NextResponse.json(
-      { error: { code, message: error.message || "Failed to create API token." } },
+      { error: { code, message: status < 500 ? error.message : "Failed to create API token." } },
       { status }
     );
   }
@@ -206,14 +226,18 @@ export async function DELETE(req: NextRequest) {
       db.integration.findUnique({ where: { id } })
     );
 
-    if (!integration) {
+    // SECURITY: a caller-chosen ?projectId must never be used to authorize a
+    // resource it doesn't own — otherwise an admin of Project A could revoke
+    // Project B's live tokens. Mismatched/foreign ids are reported as 404 so we
+    // don't confirm the existence of other tenants' tokens.
+    if (!integration || (projectId && projectId !== integration.projectId)) {
       return NextResponse.json(
         { error: { code: "NOT_FOUND", message: "Integration token not found." } },
         { status: 404 }
       );
     }
 
-    const adminUser = await requireAdmin(projectId || integration.projectId);
+    const adminUser = await requireAdmin(integration.projectId);
 
     // Revoke token by setting revokedAt timestamp
     await withDbRetry(() =>
@@ -236,7 +260,7 @@ export async function DELETE(req: NextRequest) {
     const status = error instanceof AuthError ? error.statusCode : 500;
     const code = error instanceof AuthError ? error.code : "TOKEN_DELETE_FAILED";
     return NextResponse.json(
-      { error: { code, message: error.message || "Failed to revoke token." } },
+      { error: { code, message: status < 500 ? error.message : "Failed to revoke token." } },
       { status }
     );
   }

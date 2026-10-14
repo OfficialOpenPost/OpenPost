@@ -7,6 +7,7 @@ import { ArticleEngagement } from "@/components/ArticleEngagement";
 import { PostCard } from "@/components/PostCard";
 import { Clock, Calendar, Tag, User, Sparkles, ArrowRight } from "lucide-react";
 import type { Metadata } from "next";
+import { serializeJsonForScript } from "@/lib/sanitize";
 
 export const revalidate = 60;
 
@@ -107,7 +108,7 @@ export default async function BlogPostPage({
       <style dangerouslySetInnerHTML={{ __html: EDITOR_STYLES }} />
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonForScript(jsonLd) }}
       />
 
       {/* ── 1. Hero Cover Image Backdrop ── */}

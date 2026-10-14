@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, withDbRetry } from "@/lib/db";
 import { requireApprovedUser, requireProjectMember, AuthError, hasPermission } from "@/lib/auth";
+import { parseBoundedInt, parseOffset } from "@/lib/pagination";
 
 export async function GET(req: NextRequest) {
   try {
@@ -8,8 +9,8 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const projectId = searchParams.get("projectId") || req.headers.get("x-openpost-project") || user.memberships[0]?.projectId;
     const action = searchParams.get("action");
-    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") || "50", 10)));
-    const offset = Math.max(0, parseInt(searchParams.get("offset") || "0", 10));
+    const limit = parseBoundedInt(searchParams.get("limit"), 50, 1, 100);
+    const offset = parseOffset(searchParams.get("offset"));
 
     if (!projectId) {
       return NextResponse.json({ error: { code: "PROJECT_REQUIRED", message: "projectId required" } }, { status: 400 });

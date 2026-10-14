@@ -25,13 +25,11 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     }
 
     const existing = await withDbRetry(() => db.category.findUnique({ where: { id } }));
-    if (!existing) {
+    if (!existing || !existing.projectId) {
       return NextResponse.json({ error: { code: "NOT_FOUND", message: "Category not found." } }, { status: 404 });
     }
 
-    if (existing.projectId) {
-      await requirePermission(existing.projectId, "taxonomy.manage");
-    }
+    await requirePermission(existing.projectId, "taxonomy.manage");
 
     const data: Record<string, unknown> = {};
     if (parsed.data.name !== undefined) data.name = parsed.data.name.trim();
@@ -57,7 +55,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       if (parentId) {
         if (parentId === id) return NextResponse.json({ error: { code: "VALIDATION_ERROR", message: "Category cannot be its own parent." } }, { status: 400 });
         const parent = await withDbRetry(() => db.category.findUnique({ where: { id: parentId } }));
-        if (!parent) return NextResponse.json({ error: { code: "NOT_FOUND", message: "Parent category not found." } }, { status: 404 });
+        if (!parent || parent.projectId !== existing.projectId) return NextResponse.json({ error: { code: "NOT_FOUND", message: "Parent category not found." } }, { status: 404 });
         if (parent.parentId) return NextResponse.json({ error: { code: "VALIDATION_ERROR", message: "Only top-level categories can be parents." } }, { status: 400 });
       }
       data.parentId = parentId;
@@ -92,7 +90,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   } catch (error: any) {
     const status = error instanceof AuthError ? error.statusCode : 500;
     const code = error instanceof AuthError ? error.code : "UPDATE_FAILED";
-    return NextResponse.json({ error: { code, message: error.message || "Failed to update category." } }, { status });
+    return NextResponse.json({ error: { code, message: status < 500 ? error.message : "Failed to update category." } }, { status });
   }
 }
 
@@ -100,16 +98,14 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   try {
     const { id } = await params;
     const existing = await withDbRetry(() => db.category.findUnique({ where: { id } }));
-    if (!existing) {
+    if (!existing || !existing.projectId) {
       return NextResponse.json({ error: { code: "NOT_FOUND", message: "Category not found." } }, { status: 404 });
     }
 
-    if (existing.projectId) {
-      await requirePermission(existing.projectId, "taxonomy.manage");
-    }
+    await requirePermission(existing.projectId, "taxonomy.manage");
 
-    // Check usage
-    const usage = await withDbRetry(() => db.blog.count({ where: { categoryId: id } })).catch(() => 0);
+    // Check usage — scoped to this project so foreign usage can't block deletion
+    const usage = await withDbRetry(() => db.blog.count({ where: { categoryId: id, projectId: existing.projectId } })).catch(() => 0);
     if (usage > 0) {
       return NextResponse.json(
         { error: { code: "IN_USE", message: `Category in use by ${usage} post(s).` } },
@@ -131,6 +127,6 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   } catch (error: any) {
     const status = error instanceof AuthError ? error.statusCode : 500;
     const code = error instanceof AuthError ? error.code : "DELETE_FAILED";
-    return NextResponse.json({ error: { code, message: error.message || "Failed to delete category." } }, { status });
+    return NextResponse.json({ error: { code, message: status < 500 ? error.message : "Failed to delete category." } }, { status });
   }
 }

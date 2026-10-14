@@ -351,6 +351,35 @@ function inlineFromTiptap(nodes: any[]): InlineContent[] {
 export function editorDocumentToHtml(doc: EditorDocument): string {
   if (!doc || !Array.isArray(doc.content)) return '<article class="openpost-article"></article>';
   const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  // Allow-list helper: values coming from stored JSON are untrusted at runtime even
+  // though the TypeScript types say they are enums. Anything not in the list falls
+  // back to the default, preventing class/style/attribute injection.
+  const pick = <T extends string>(value: unknown, allowed: readonly T[], fallback: T): T =>
+    typeof value === "string" && (allowed as readonly string[]).includes(value) ? (value as T) : fallback;
+  const TEXT_ALIGN = ["left", "center", "right", "justify"] as const;
+  const IMAGE_ALIGN = ["left", "center", "right", "wide", "full"] as const;
+  const GALLERY_LAYOUT = ["grid", "carousel", "masonry"] as const;
+  const CALLOUT_TONES = ["info", "warning", "success", "note"] as const;
+  const BUTTON_VARIANTS = ["primary", "secondary", "outline"] as const;
+  // CSS value guards (colors / widths / font sizes) — reject anything containing
+  // characters that could break out of the declaration or start a new one.
+  const safeCssColor = (v: unknown): string | null =>
+    typeof v === "string" && /^(#([0-9a-fA-F]{3,8})|[a-zA-Z]{1,20}|(rgb|rgba|hsl|hsla)\([0-9.,%\s/-]+\))$/.test(v) ? v : null;
+  const safeCssLength = (v: unknown): string | null =>
+    typeof v === "string" && /^(\d+(\.\d+)?(px|%|rem|em|ch|vw|vh)?|auto)$/.test(v) ? v : null;
+  const safeCssFontFamily = (v: unknown): string | null =>
+    typeof v === "string" && /^[a-zA-Z0-9 ,'-]{1,80}$/.test(v) ? v : null;
+  // URL guard for block-level hrefs (button, image link, embed fallback).
+  // Allows absolute http(s)/mailto and same-site relative paths ("/foo").
+  const safeUrl = (v: unknown): string | null => {
+    if (typeof v !== "string" || v.length > 2048) return null;
+    if (v.startsWith("/") && !v.startsWith("//") && !v.startsWith("/\\")) return v;
+    try {
+      const u = new URL(v, "https://openpost.invalid");
+      if (!["http:", "https:", "mailto:"].includes(u.protocol)) return null;
+      return v;
+    } catch { return null; }
+  };
   const inlineToHtml = (inlines: InlineContent[]): string => {
     return inlines.map((node) => {
       if (node.type === "hardBreak") return "<br />";
@@ -365,11 +394,15 @@ export function editorDocumentToHtml(doc: EditorDocument): string {
           case "subscript": t = `<sub>${t}</sub>`; break;
           case "superscript": t = `<sup>${t}</sup>`; break;
           case "code": t = `<code>${t}</code>`; break;
-          case "link": t = `<a href="${esc(m.attrs.href)}" ${m.attrs.target ? `target="${esc(m.attrs.target)}"` : ""} rel="noopener noreferrer">${t}</a>`; break;
-          case "color": t = `<span style="color:${esc(m.attrs.color)}">${t}</span>`; break;
-          case "highlight": t = `<mark${m.attrs.color ? ` style="background-color:${esc(m.attrs.color)}"` : ""}>${t}</mark>`; break;
-          case "fontFamily": t = `<span style="font-family:${esc(m.attrs.family)}">${t}</span>`; break;
-          case "fontSize": t = `<span style="font-size:${esc(m.attrs.size)}">${t}</span>`; break;
+          case "link": {
+            const href = safeUrl(m.attrs.href);
+            if (href) t = `<a href="${esc(href)}" ${m.attrs.target ? `target="${esc(m.attrs.target)}"` : ""} rel="noopener noreferrer">${t}</a>`;
+            break;
+          }
+          case "color": { const c = safeCssColor(m.attrs.color); if (c) t = `<span style="color:${esc(c)}">${t}</span>`; break; }
+          case "highlight": { const c = safeCssColor(m.attrs.color); if (c) t = `<mark style="background-color:${esc(c)}">${t}</mark>`; else t = `<mark>${t}</mark>`; break; }
+          case "fontFamily": { const f = safeCssFontFamily(m.attrs.family); if (f) t = `<span style="font-family:${esc(f)}">${t}</span>`; break; }
+          case "fontSize": { const s = safeCssLength(m.attrs.size); if (s) t = `<span style="font-size:${esc(s)}">${t}</span>`; break; }
         }
       }
       return t;
@@ -379,29 +412,33 @@ export function editorDocumentToHtml(doc: EditorDocument): string {
   const blocks = doc.content.map((b) => {
     switch (b.type) {
       case "heading": {
-        const lvl = (b as HeadingBlock).attrs.level;
-        const align = (b as HeadingBlock).attrs.align ? ` style="text-align:${(b as HeadingBlock).attrs.align}"` : "";
+        const rawLvl = Number((b as HeadingBlock).attrs.level);
+        const lvl = Number.isInteger(rawLvl) && rawLvl >= 1 && rawLvl <= 6 ? rawLvl : 2;
+        const a = pick((b as HeadingBlock).attrs.align, TEXT_ALIGN, "left");
+        const align = (b as HeadingBlock).attrs.align ? ` style="text-align:${a}"` : "";
         return `<h${lvl}${align} class="openpost-heading openpost-h${lvl}">${inlineToHtml((b as HeadingBlock).content)}</h${lvl}>`;
       }
       case "paragraph": {
-        const align = (b as ParagraphBlock).attrs?.align ? ` style="text-align:${(b as ParagraphBlock).attrs?.align}"` : "";
+        const a = pick((b as ParagraphBlock).attrs?.align, TEXT_ALIGN, "left");
+        const align = (b as ParagraphBlock).attrs?.align ? ` style="text-align:${a}"` : "";
         return `<p${align} class="openpost-paragraph">${inlineToHtml((b as ParagraphBlock).content)}</p>`;
       }
       case "image": {
         const a = (b as ImageBlock).attrs;
-        const alignClass = `openpost-image--${a.alignment || "center"}`;
-        const widthStyle = a.width ? ` style="width:${esc(String(a.width))};max-width:100%"` : "";
+        const alignClass = `openpost-image--${pick(a.alignment, IMAGE_ALIGN, "center")}`;
+        const widthStyle = safeCssLength(a.width) ? ` style="width:${esc(safeCssLength(a.width) as string)};max-width:100%"` : "";
         const src = esc(a.src || "");
         const alt = esc(a.alt || "");
         const caption = a.caption ? `<figcaption class="openpost-caption">${esc(a.caption)}</figcaption>` : "";
-        const linkStart = a.link ? `<a href="${esc(a.link)}" target="_blank" rel="noopener">` : "";
-        const linkEnd = a.link ? `</a>` : "";
+        const linkHref = safeUrl(a.link);
+        const linkStart = linkHref ? `<a href="${esc(linkHref)}" target="_blank" rel="noopener">` : "";
+        const linkEnd = linkHref ? `</a>` : "";
         return `<figure class="openpost-image ${alignClass}" data-media-id="${esc(a.mediaId || "")}"${widthStyle}>${linkStart}<img src="${src}" alt="${alt}" loading="lazy" decoding="async" />${linkEnd}${caption}</figure>`;
       }
       case "gallery": {
         const g = b as GalleryBlock;
         const items = g.attrs.images.map((im) => `<figure class="openpost-gallery-item"><img src="${esc(im.src || "")}" alt="${esc(im.alt)}" loading="lazy" /><figcaption>${esc(im.caption || "")}</figcaption></figure>`).join("");
-        return `<div class="openpost-gallery openpost-gallery--${g.attrs.layout}">${items}</div>`;
+        return `<div class="openpost-gallery openpost-gallery--${pick(g.attrs.layout, GALLERY_LAYOUT, "grid")}">${items}</div>`;
       }
       case "quote": {
         const q = b as QuoteBlock;
@@ -409,7 +446,7 @@ export function editorDocumentToHtml(doc: EditorDocument): string {
       }
       case "callout": {
         const c = b as CalloutBlock;
-        return `<div class="openpost-callout openpost-callout--${c.attrs.tone}"><div class="openpost-callout-content">${inlineToHtml(c.content)}</div></div>`;
+        return `<div class="openpost-callout openpost-callout--${pick(c.attrs.tone, CALLOUT_TONES, "info")}"><div class="openpost-callout-content">${inlineToHtml(c.content)}</div></div>`;
       }
       case "list": {
         const l = b as ListBlock;
@@ -426,7 +463,7 @@ export function editorDocumentToHtml(doc: EditorDocument): string {
         const t = b as TableBlock;
         const rows = t.content.map((row) => `<tr>${row.content.map((cell) => {
           const tag = cell.type === "tableHeader" ? "th" : "td";
-          const align = cell.attrs?.align ? ` style="text-align:${cell.attrs.align}"` : "";
+          const align = cell.attrs?.align ? ` style="text-align:${pick(cell.attrs.align, TEXT_ALIGN, "left")}"` : "";
           return `<${tag}${align} class="openpost-td">${inlineToHtml(cell.content)}</${tag}>`;
         }).join("")}</tr>`).join("");
         return `<div class="openpost-table-wrapper"><table class="openpost-table"><tbody>${rows}</tbody></table></div>`;
@@ -443,11 +480,14 @@ export function editorDocumentToHtml(doc: EditorDocument): string {
           const id = extractYouTubeId(e.attrs.url);
           if (id) return `<div class="openpost-embed openpost-embed--youtube"><iframe src="https://www.youtube.com/embed/${esc(id)}" allowfullscreen loading="lazy"></iframe></div>`;
         }
-        return `<div class="openpost-embed"><a href="${esc(e.attrs.url)}">${esc(e.attrs.url)}</a></div>`;
+        const embedUrl = safeUrl(e.attrs.url);
+        return embedUrl ? `<div class="openpost-embed"><a href="${esc(embedUrl)}">${esc(e.attrs.url)}</a></div>` : "";
       }
       case "button": {
         const bt = b as ButtonBlock;
-        return `<div class="openpost-button-wrapper"><a href="${esc(bt.attrs.url)}" class="openpost-button openpost-button--${bt.attrs.variant || "primary"}" ${bt.attrs.newTab ? 'target="_blank"' : ""}>${esc(bt.attrs.label)}</a></div>`;
+        const btnUrl = safeUrl(bt.attrs.url);
+        if (!btnUrl) return "";
+        return `<div class="openpost-button-wrapper"><a href="${esc(btnUrl)}" class="openpost-button openpost-button--${pick(bt.attrs.variant, BUTTON_VARIANTS, "primary")}" ${bt.attrs.newTab ? 'target="_blank" rel="noopener noreferrer"' : ""}>${esc(bt.attrs.label)}</a></div>`;
       }
       case "faq": {
         const f = b as FaqBlock;
@@ -456,8 +496,9 @@ export function editorDocumentToHtml(doc: EditorDocument): string {
       }
       case "poll": {
         const p = b as PollBlock;
-        const widthStyle = p.attrs?.width ? ` style="width:${esc(String(p.attrs.width))};max-width:100%"` : "";
-        const alignClass = `openpost-poll--${p.attrs?.align || p.attrs?.layout || "center"}`;
+        const pollWidth = safeCssLength(p.attrs?.width);
+        const widthStyle = pollWidth ? ` style="width:${esc(pollWidth)};max-width:100%"` : "";
+        const alignClass = `openpost-poll--${pick(p.attrs?.align || p.attrs?.layout, TEXT_ALIGN, "center")}`;
         return `<div class="openpost-poll ${alignClass}" data-poll-id="${esc(p.attrs?.pollId || "")}"${widthStyle}><!-- poll:${esc(p.attrs?.pollId || "")} --></div>`;
       }
       default:
@@ -465,14 +506,15 @@ export function editorDocumentToHtml(doc: EditorDocument): string {
     }
   }).join("\n");
 
-  return `<article class="openpost-article" data-version="${doc.version}">\n${blocks}\n</article>`;
+  return `<article class="openpost-article" data-version="${esc(String(doc.version ?? ""))}">\n${blocks}\n</article>`;
 }
 
 function extractYouTubeId(url: string): string | null {
   try {
     const u = new URL(url);
-    if (u.hostname.includes("youtube.com")) return u.searchParams.get("v");
-    if (u.hostname.includes("youtu.be")) return u.pathname.slice(1);
+    const raw = u.hostname.includes("youtube.com") ? u.searchParams.get("v") : u.hostname.includes("youtu.be") ? u.pathname.slice(1) : null;
+    // Only accept canonical 11-char video IDs so the value is always safe in an iframe URL.
+    return raw && /^[A-Za-z0-9_-]{11}$/.test(raw) ? raw : null;
   } catch {}
   return null;
 }

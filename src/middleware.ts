@@ -1,24 +1,51 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
+/**
+ * Paths that are intentionally machine-to-machine and carry their own auth
+ * (Bearer secret, HMAC, or the code itself). Matched EXACTLY by prefix + "/"
+ * so `/api/cronnie` or `/api/healthcheck-evil` cannot piggy-back on the skip.
+ */
+const M2M_PREFIXES = ["/api/health", "/api/cron", "/api/cli", "/api/webhooks", "/api/warmup"];
+
+function isM2mPath(pathname: string): boolean {
+  return M2M_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+}
+
+/** Static asset extensions — skipped for performance, but never for protected trees. */
+const STATIC_EXT_RE = /\.(?:svg|png|jpg|jpeg|gif|webp|ico|avif|woff2?|ttf|map|txt|xml|json)$/i;
+
 export async function middleware(request: NextRequest) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  if (!url || !key || url.includes("placeholder")) {
+  const pathname = request.nextUrl.pathname;
+
+  // Never gate machine-to-machine endpoints here — they verify their own
+  // credentials (CRON_SECRET, webhook HMAC, CLI code exchange).
+  if (isM2mPath(pathname)) {
     return NextResponse.next();
   }
 
-  const pathname = request.nextUrl.pathname;
+  const isDashboardRoute = pathname === "/dashboard" || pathname.startsWith("/dashboard/");
 
-  // Skip middleware only for static machine-to-machine APIs (health, cron, webhooks, cli handshake, warmup)
-  if (
-    pathname.startsWith("/api/health") ||
-    pathname.startsWith("/api/cron") ||
-    pathname.startsWith("/api/cli") ||
-    pathname.startsWith("/api/webhooks") ||
-    pathname.startsWith("/api/warmup")
-  ) {
+  // FAIL CLOSED: if Supabase env is missing/misconfigured, the dashboard must
+  // not be served unauthenticated. Previously every route (including
+  // /dashboard) was passed straight through.
+  if (!url || !key || url.includes("placeholder")) {
+    if (isDashboardRoute) {
+      return NextResponse.json(
+        { error: { code: "SERVER_MISCONFIGURED", message: "Authentication is not configured." } },
+        { status: 503 }
+      );
+    }
+    return NextResponse.next();
+  }
+
+  // Static assets under public trees don't need a session refresh — but this
+  // exemption must never apply to the dashboard (the old regex matcher let
+  // `/dashboard/anything.png` bypass middleware entirely).
+  if (STATIC_EXT_RE.test(pathname) && !isDashboardRoute) {
     return NextResponse.next();
   }
 
@@ -45,7 +72,6 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const isAuthRoute = pathname === "/login" || pathname === "/signup";
-  const isDashboardRoute = pathname.startsWith("/dashboard");
   const isPendingRoute = pathname === "/pending-approval";
   const isSetupRoute = pathname === "/setup";
 
@@ -64,9 +90,9 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(redirectUrl);
   }
 
-  // 3. Authenticated user on pending-approval -> check if approved, redirect to dashboard
+  // 3. Authenticated user on pending-approval -> allow page render; the page
+  //    checks account status client-side and the APIs enforce server-side.
   if (user && isPendingRoute) {
-    // Allow the page to render - it will check status client-side
     return supabaseResponse;
   }
 
@@ -80,6 +106,9 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|icon.svg|logo.svg|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    // Excluded: Next.js internals, favicon and the root logo only. Previously
+    // every image extension was excluded, which let `/dashboard/x.png` skip
+    // the auth gate; the middleware now handles static assets itself.
+    "/((?!_next/static|_next/image|favicon.ico|logo.svg).*)",
   ],
 };

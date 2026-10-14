@@ -6,6 +6,7 @@ import { countContentWords, readingTime as calcReadingTime } from "@/lib/publish
 import { queryCache } from "@/lib/cache";
 import { triggerWebhooks } from "@/lib/webhooks";
 import { slugify } from "@/lib/slug";
+import { sanitizeHtml } from "@/lib/sanitize";
 
 const createSchema = z.object({
   title: z.string().optional().default("Untitled Article"),
@@ -50,33 +51,78 @@ function extractMediaUrls(content: any): string[] {
   return [...new Set(urls)];
 }
 
-async function syncMediaUsage(blogId: string, content: any) {
+/**
+ * Resolve the media IDs referenced by a set of content URLs.
+ *
+ * A media `publicUrl` embeds the storage key (`openpost-media/<projectId>/<ts>-<uuid>.<ext>`)
+ * whose UUID is NOT the `media.id` (the DB assigns media.id independently). The old
+ * implementation extracted the first UUID out of each URL and matched it against media.id,
+ * which always failed (the first UUID is the projectId) — so usage was never recorded.
+ *
+ * Instead we match the full URL (and its storage key) against each media row's
+ * `variants.publicUrl` / `variants.webp.url`. Works for absolute R2 URLs and for the
+ * relative `/<key>` form produced by the metadata (POST /api/media) flow.
+ */
+async function resolveMediaIdsFromUrls(urls: string[], projectId?: string | null): Promise<string[]> {
+  if (!urls.length) return [];
+
+  // Only http(s) and relative-key URLs can correspond to stored media.
+  const candidates = urls.filter((u) => typeof u === "string" && (u.startsWith("http") || u.startsWith("/")));
+  if (!candidates.length) return [];
+
+  // Pull the storage key out of each URL (the `openpost-media/...` tail).
+  const keys = candidates
+    .map((u) => {
+      const idx = u.indexOf("openpost-media/");
+      return idx >= 0 ? u.slice(idx).split(/[?#]/)[0] : null;
+    })
+    .filter((k): k is string => Boolean(k));
+
+  // Query media for this project and match by URL or key in memory (bounded by project media).
+  const where: any = projectId ? { projectId } : {};
+  let rows: any[] = [];
+  try {
+    rows = await withDbRetry(() =>
+      db.media.findMany({
+        where,
+        select: { id: true, variants: true },
+      })
+    );
+  } catch {
+    return [];
+  }
+
+  const matched = new Set<string>();
+  for (const m of rows as any[]) {
+    const v = (m.variants ?? {}) as any;
+    const mediaUrls = [v.publicUrl, v.webp?.url].filter((x: any): x is string => typeof x === "string" && !!x);
+    const mediaKey = typeof v.key === "string" ? v.key : null;
+    for (const c of candidates) {
+      if (mediaUrls.includes(c)) { matched.add(m.id); break; }
+      // Key containment: URL contains the media's storage key.
+      if (mediaKey && c.includes(mediaKey)) { matched.add(m.id); break; }
+    }
+  }
+  return [...matched];
+}
+
+async function syncMediaUsage(blogId: string, content: any, projectId?: string | null) {
   try {
     const urls = extractMediaUrls(content);
-    if (!urls.length) {
-      await withDbRetry(() => db.mediaUsage.deleteMany({ where: { blogId } })).catch(() => {});
-      return;
-    }
 
-    let mediaIds: string[] = [];
-    const uuidRegex = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
-    for (const url of urls) {
-      const m = url.match(uuidRegex);
-      if (m) mediaIds.push(m[0]);
-    }
+    const referencedIds = await resolveMediaIdsFromUrls(urls, projectId);
 
-    mediaIds = [...new Set(mediaIds)];
-    if (!mediaIds.length) return;
-
-    const [existing, validMedia] = await Promise.all([
-      withDbRetry(() => db.mediaUsage.findMany({ where: { blogId }, select: { mediaId: true } })).catch(() => [] as any),
-      withDbRetry(() => db.media.findMany({ where: { id: { in: mediaIds } }, select: { id: true } })).catch(() => [] as any),
-    ]);
+    const existing = await withDbRetry(() =>
+      db.mediaUsage.findMany({ where: { blogId }, select: { mediaId: true } })
+    ).catch(() => [] as any);
 
     const existingIds = new Set((existing as any[]).map((r) => r.mediaId));
-    const validIds = new Set((validMedia as any[]).map((m) => m.id));
-    const newIds = mediaIds.filter((id) => validIds.has(id) && !existingIds.has(id));
-    const toDelete = [...existingIds].filter((id) => !validIds.has(id));
+    const referencedSet = new Set(referencedIds);
+
+    const newIds = referencedIds.filter((id) => !existingIds.has(id));
+    const toDelete = [...existingIds].filter((id) => !referencedSet.has(id));
+
+    if (!newIds.length && !toDelete.length) return;
 
     if (toDelete.length) {
       await withDbRetry(() =>
@@ -114,6 +160,27 @@ function extractPollBlocks(content: any): any[] {
   return polls;
 }
 
+/**
+ * SECURITY: relation ids supplied by the client are re-checked against the
+ * caller's project. Without this, Project A could attach Project B's tags,
+ * authors (name/bio/e-mail/social links are returned by the public v1 API) to
+ * its own posts — a cross-tenant read + write primitive.
+ */
+async function filterIdsForProject(
+  model: "tag" | "author",
+  ids: string[],
+  projectId: string | null
+): Promise<string[]> {
+  if (!ids.length || !projectId) return [];
+  const rows = await withDbRetry(() =>
+    model === "tag"
+      ? db.tag.findMany({ where: { id: { in: ids }, projectId }, select: { id: true } })
+      : db.author.findMany({ where: { id: { in: ids }, projectId }, select: { id: true } })
+  ).catch(() => [] as { id: string }[]);
+  const allowed = new Set(rows.map((r) => r.id));
+  return ids.filter((id) => allowed.has(id));
+}
+
 async function syncPolls(blogId: string, content: any, projectId: string | null, blogStatus: string) {
   try {
     const pollAttrsList = extractPollBlocks(content);
@@ -147,12 +214,27 @@ async function syncPolls(blogId: string, content: any, projectId: string | null,
 
       let existingPoll: any = null;
       if (hasUuid) {
+        // SECURITY: only adopt a poll that already belongs to THIS blog or to the
+        // caller's project. The previous `findUnique({ id })` let anyone embed
+        // another tenant's poll UUID (harvestable from the public v1 API) and
+        // re-parent + rewrite + destroy it.
         existingPoll = await withDbRetry(() =>
-          db.poll.findUnique({
-            where: { id: p.pollId },
+          db.poll.findFirst({
+            where: {
+              id: p.pollId,
+              OR: [{ blogId }, ...(projectId ? [{ projectId }] : [])],
+            },
             include: { options: true },
           })
         ).catch(() => null);
+
+        if (!existingPoll) {
+          const foreign = await withDbRetry(() =>
+            db.poll.findUnique({ where: { id: p.pollId }, select: { id: true } })
+          ).catch(() => null);
+          // A poll with that id exists but belongs to someone else → ignore it.
+          if (foreign) continue;
+        }
       }
 
       if (existingPoll) {
@@ -307,7 +389,7 @@ export async function GET(req: NextRequest) {
     const status = error instanceof AuthError ? error.statusCode : 500;
     const code = error instanceof AuthError ? error.code : "FETCH_FAILED";
     return NextResponse.json(
-      { error: { code, message: error.message || "Failed to fetch articles." } },
+      { error: { code, message: status < 500 ? error.message : "Failed to fetch articles." } },
       { status }
     );
   }
@@ -344,9 +426,13 @@ export async function POST(req: NextRequest) {
       id,
       revisionLabel,
       editorDocument,
-      renderedHtml,
+      renderedHtml: renderedHtmlRaw,
       contentVersion,
     } = parsed.data;
+
+    // SECURITY: `renderedHtml` is client-produced markup stored verbatim — run it
+    // through the allow-list sanitiser so it can never become a stored-XSS sink.
+    const renderedHtml = renderedHtmlRaw !== undefined ? sanitizeHtml(renderedHtmlRaw) : undefined;
 
     // Resolve target project ID
     let targetProjectId = projectId || (req.headers.get("x-openpost-project") as string) || null;
@@ -377,21 +463,37 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: { code: "NOT_FOUND", message: "Project not found or access denied." } }, { status: 404 });
     }
     const role = membership.role;
+    // Non-null narrowing that survives closure callbacks.
+    const projectScope: string = targetProjectId;
+
+    // Resolve the FINAL status BEFORE authorising. Previously `scheduledAt` was
+    // applied after the publish gate, so a CONTRIBUTOR (who has no publish
+    // permission) could send status:"draft" + a future date, land in `scheduled`,
+    // and be auto-published by the cron with no further authorisation.
+    const parsedScheduledAt = scheduledAt ? new Date(scheduledAt) : null;
+    if (parsedScheduledAt && Number.isNaN(parsedScheduledAt.getTime())) {
+      return NextResponse.json(
+        { error: { code: "VALIDATION_ERROR", message: "scheduledAt must be a valid ISO-8601 date." } },
+        { status: 400 }
+      );
+    }
+
+    if (parsedScheduledAt && parsedScheduledAt.getTime() > Date.now()) {
+      status = "scheduled";
+    } else if (status === "scheduled" && (!parsedScheduledAt || parsedScheduledAt.getTime() <= Date.now())) {
+      status = "draft";
+    }
 
     // If attempting to publish or schedule, require publish permission
     if (status === "published" || status === "scheduled") {
-      if (!hasMinimumRole(role, "EDITOR") && !hasPermission(role, "posts.publish_others") && !hasPermission(role, "posts.publish_own")) {
-        return NextResponse.json({ error: { code: "FORBIDDEN", message: "You do not have permission to publish this post." } }, { status: 403 });
+      const canPublish =
+        hasMinimumRole(role, "EDITOR") ||
+        hasPermission(role, "posts.publish_others") ||
+        hasPermission(role, "posts.publish_own") ||
+        hasPermission(role, "post.publish");
+      if (!canPublish) {
+        throw new AuthError("You do not have permission to publish or schedule this post.", 403, "FORBIDDEN");
       }
-      if (!hasPermission(role, "posts.publish_others") && !hasPermission(role, "posts.publish_own") && !hasPermission(role, "post.publish")) {
-        throw new AuthError("You do not have permission to publish this post.", 403, "FORBIDDEN");
-      }
-    }
-
-    if (scheduledAt && new Date(scheduledAt) > new Date()) {
-      status = "scheduled";
-    } else if (status === "scheduled" && (!scheduledAt || new Date(scheduledAt) <= new Date())) {
-      status = "draft";
     }
 
     const wc = countContentWords(content);
@@ -399,6 +501,24 @@ export async function POST(req: NextRequest) {
 
     // Resolve Category if passed as object/name
     let resolvedCategoryId = categoryId || null;
+    // SECURITY: a directly-supplied relation id must belong to THIS project —
+    // otherwise Project A can attach (and thereby read back through the public
+    // v1 API) Project B's category.
+    if (resolvedCategoryId) {
+      const categoryIdToCheck: string = resolvedCategoryId;
+      const ownedCategory = await withDbRetry(() =>
+        db.category.findFirst({
+          where: { id: categoryIdToCheck, projectId: projectScope },
+          select: { id: true },
+        })
+      ).catch(() => null);
+      if (!ownedCategory) {
+        return NextResponse.json(
+          { error: { code: "NOT_FOUND", message: "Category not found in this project." } },
+          { status: 404 }
+        );
+      }
+    }
     if (!resolvedCategoryId && category) {
       const catName = typeof category === "string" ? category.trim() : category.name?.trim();
       if (catName) {
@@ -430,6 +550,22 @@ export async function POST(req: NextRequest) {
 
     // Resolve Featured Image if passed as object/url
     let resolvedFeaturedImageId = featuredImageId || null;
+    if (resolvedFeaturedImageId) {
+      // SECURITY: media ids are tenant-scoped — never adopt another project's asset.
+      const mediaIdToCheck: string = resolvedFeaturedImageId;
+      const ownedMedia = await withDbRetry(() =>
+        db.media.findFirst({
+          where: { id: mediaIdToCheck, projectId: projectScope },
+          select: { id: true },
+        })
+      ).catch(() => null);
+      if (!ownedMedia) {
+        return NextResponse.json(
+          { error: { code: "NOT_FOUND", message: "Featured image not found in this project." } },
+          { status: 404 }
+        );
+      }
+    }
     if (!resolvedFeaturedImageId && featuredImage) {
       const imgUrl = typeof featuredImage === "string" ? featuredImage : featuredImage.url;
       if (imgUrl) {
@@ -485,10 +621,20 @@ export async function POST(req: NextRequest) {
       if (!hasPermission(editorRole, "posts.edit_own") && !hasPermission(editorRole, "posts.edit_others") && !hasPermission(editorRole, "post.edit")) {
         return NextResponse.json({ error: { code: "FORBIDDEN", message: "You do not have permission to edit posts." } }, { status: 403 });
       }
-      // If changing status to published/scheduled via update, enforce publish permission
+      // If changing status to published/scheduled via update, enforce publish permission.
+      // NOTE: `status` was already normalised above (a future `scheduledAt` flips it
+      // to `scheduled`), so this gate cannot be sidestepped.
       if ((status === "published" || status === "scheduled") && existing.status !== status) {
-        if (!hasMinimumRole(editorRole, "EDITOR")) {
-          return NextResponse.json({ error: { code: "FORBIDDEN", message: "You do not have permission to publish this post." } }, { status: 403 });
+        const canPublish =
+          hasMinimumRole(editorRole, "EDITOR") ||
+          hasPermission(editorRole, "posts.publish_others") ||
+          hasPermission(editorRole, "posts.publish_own") ||
+          hasPermission(editorRole, "post.publish");
+        if (!canPublish) {
+          return NextResponse.json(
+            { error: { code: "FORBIDDEN", message: "You do not have permission to publish or schedule this post." } },
+            { status: 403 }
+          );
         }
       }
 
@@ -637,6 +783,12 @@ export async function POST(req: NextRequest) {
           resolvedTagIds = [...new Set(resolvedTagIds)];
         }
       }
+      resolvedTagIds = await filterIdsForProject(
+        "tag",
+        resolvedTagIds,
+        existing.projectId || targetProjectId
+      );
+
       if (resolvedTagIds.length > 0 || Array.isArray(tagIds) || Array.isArray(tags)) {
         await withDbRetry(() => db.blogTag.deleteMany({ where: { blogId: id! } })).catch(() => {});
         if (resolvedTagIds.length > 0) {
@@ -651,17 +803,23 @@ export async function POST(req: NextRequest) {
 
       if (Array.isArray(authorIds)) {
         await withDbRetry(() => db.blogAuthor.deleteMany({ where: { blogId: id! } })).catch(() => {});
-        if (authorIds.length > 0) {
+        // SECURITY: only link bylines owned by this post's project.
+        const safeAuthorIds = await filterIdsForProject(
+          "author",
+          authorIds,
+          existing.projectId || targetProjectId
+        );
+        if (safeAuthorIds.length > 0) {
           await withDbRetry(() =>
             db.blogAuthor.createMany({
-              data: authorIds.map((authorId, i) => ({ blogId: id!, authorId, sortOrder: i })),
+              data: safeAuthorIds.map((authorId, i) => ({ blogId: id!, authorId, sortOrder: i })),
               skipDuplicates: true,
             })
           ).catch(() => {});
         }
       }
 
-      await syncMediaUsage(id, content);
+      await syncMediaUsage(id, content, existing.projectId || targetProjectId);
       await syncPolls(id, content, existing.projectId || targetProjectId, status);
 
       // Trigger Webhooks on publish
@@ -842,7 +1000,8 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // Batch link tags
+      // Batch link tags (tenant-scoped — foreign ids are dropped)
+      resolvedTagIds = await filterIdsForProject("tag", resolvedTagIds, targetProjectId);
       if (resolvedTagIds.length > 0) {
         await withDbRetry(() =>
           db.blogTag.createMany({
@@ -853,17 +1012,20 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Batch link authors
+    // Batch link authors (tenant-scoped — foreign ids are dropped)
     if (Array.isArray(authorIds) && authorIds.length > 0) {
-      await withDbRetry(() =>
-        db.blogAuthor.createMany({
-          data: authorIds.map((authorId, i) => ({ blogId: blog.id, authorId, sortOrder: i })),
-          skipDuplicates: true,
-        })
-      ).catch(() => {});
+      const safeAuthorIds = await filterIdsForProject("author", authorIds, targetProjectId);
+      if (safeAuthorIds.length > 0) {
+        await withDbRetry(() =>
+          db.blogAuthor.createMany({
+            data: safeAuthorIds.map((authorId, i) => ({ blogId: blog.id, authorId, sortOrder: i })),
+            skipDuplicates: true,
+          })
+        ).catch(() => {});
+      }
     }
 
-    await syncMediaUsage(blog.id, content);
+    await syncMediaUsage(blog.id, content, blog.projectId || targetProjectId);
     await syncPolls(blog.id, content, blog.projectId || targetProjectId, status);
 
     // Trigger Webhooks on publish
@@ -900,7 +1062,7 @@ export async function POST(req: NextRequest) {
     const status = error instanceof AuthError ? error.statusCode : 500;
     const code = error instanceof AuthError ? error.code : "SAVE_FAILED";
     return NextResponse.json(
-      { error: { code, message: error.message || "Failed to save article." } },
+      { error: { code, message: status < 500 ? error.message : "Failed to save article." } },
       { status }
     );
   }

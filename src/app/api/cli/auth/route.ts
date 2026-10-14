@@ -26,10 +26,20 @@ export async function POST(req: NextRequest) {
     // Verify user is a member of the project (any role can generate CLI code but must be approved member)
     await requireProjectMember(projectId, "CONTRIBUTOR");
 
-    // Generate high-entropy 8-char alphanumeric code matching DB constraint: OP-XXXX-XXXX
-    const part1 = crypto.randomBytes(2).toString("hex").toUpperCase();
-    const part2 = crypto.randomBytes(2).toString("hex").toUpperCase();
-    const code = `OP-${part1}-${part2}`;
+    // Generate a high-entropy code matching the DB CHECK constraint
+    // `^OP-[A-Z0-9]{4}-[A-Z0-9]{4}$`. The previous implementation used
+    // randomBytes().toString("hex"), which only ever produced 0-9A-F and
+    // therefore just 16 bits of entropy — trivially brute-forceable given the
+    // code is the sole authenticator. We now use the full 32-symbol alphabet
+    // (40 bits) and, critically, the exchange is single-use + rate-limited.
+    const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    const randomChunk = (): string => {
+      const bytes = crypto.randomBytes(4);
+      let out = "";
+      for (let i = 0; i < 4; i++) out += ALPHABET[bytes[i] % ALPHABET.length];
+      return out;
+    };
+    const code = `OP-${randomChunk()}-${randomChunk()}`;
 
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
@@ -48,7 +58,8 @@ export async function POST(req: NextRequest) {
       actorId: user.id,
       projectId,
       action: "cli.code_generated",
-      targetId: connectionCode.code,
+      // SECURITY: never log the full code — it is the sole authenticator.
+      targetId: `${code.slice(0, 7)}…`,
       metadata: { codePrefix: code.slice(0, 7) },
     });
 
@@ -61,7 +72,7 @@ export async function POST(req: NextRequest) {
     const status = error instanceof AuthError ? error.statusCode : 500;
     const code = error instanceof AuthError ? error.code : "CODE_GENERATION_FAILED";
     return NextResponse.json(
-      { error: { code, message: error.message || "Failed to generate connection code." } },
+      { error: { code, message: status < 500 ? error.message : "Failed to generate connection code." } },
       { status }
     );
   }

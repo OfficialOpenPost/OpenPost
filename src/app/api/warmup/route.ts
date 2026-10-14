@@ -13,10 +13,11 @@ export async function GET() {
     }, {
       headers: { "Cache-Control": "no-store" },
     });
-  } catch (error: any) {
+  } catch (error) {
+    console.error("[warmup] database warmup failed:", error);
     return NextResponse.json({
       status: "error",
-      message: error.message || "Warmup failed",
+      message: "Warmup failed",
     }, {
       status: 500,
       headers: { "Cache-Control": "no-store" },

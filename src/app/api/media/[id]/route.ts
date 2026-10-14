@@ -10,18 +10,17 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     const { id } = await params;
 
     const media = await withDbRetry(() => db.media.findUnique({ where: { id } }));
-    if (!media) {
+    if (!media || !media.projectId) {
       return NextResponse.json({ error: { code: "NOT_FOUND", message: "Media item not found." } }, { status: 404 });
     }
 
-    if (media.projectId) {
-      await requirePermission(media.projectId, "media.manage");
-    }
+    await requirePermission(media.projectId, "media.manage");
 
-    // Check usage across articles
+    // Check usage across articles — scoped to this project so foreign usage
+    // can't block deletion nor leak other tenants' article titles.
     const usages = await withDbRetry(() =>
       db.mediaUsage.findMany({
-        where: { mediaId: id },
+        where: { mediaId: id, blog: { projectId: media.projectId } },
         include: { blog: { select: { id: true, title: true } } },
       })
     ).catch(() => []);
@@ -76,7 +75,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   } catch (error: any) {
     const status = error instanceof AuthError ? error.statusCode : 500;
     const code = error instanceof AuthError ? error.code : "DELETE_FAILED";
-    return NextResponse.json({ error: { code, message: error.message || "Failed to delete media item." } }, { status });
+    return NextResponse.json({ error: { code, message: status < 500 ? error.message : "Failed to delete media item." } }, { status });
   }
 }
 
@@ -86,21 +85,23 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const { id } = await params;
     const body = await req.json().catch(() => ({}));
     const { altTextDefault } = body as { altTextDefault?: string };
+    if (altTextDefault !== undefined && typeof altTextDefault !== "string") {
+      return NextResponse.json({ error: { code: "VALIDATION_ERROR", message: "altTextDefault must be a string." } }, { status: 400 });
+    }
+    const altText = typeof altTextDefault === "string" ? altTextDefault.slice(0, 500) : undefined;
 
     const media = await withDbRetry(() => db.media.findUnique({ where: { id } }));
-    if (!media) {
+    if (!media || !media.projectId) {
       return NextResponse.json({ error: { code: "NOT_FOUND", message: "Media item not found." } }, { status: 404 });
     }
 
-    if (media.projectId) {
-      await requirePermission(media.projectId, "media.upload");
-    }
+    await requirePermission(media.projectId, "media.upload");
 
     const updated = await withDbRetry(() =>
       db.media.update({
         where: { id },
         data: {
-          altTextDefault: altTextDefault !== undefined ? altTextDefault : media.altTextDefault,
+          altTextDefault: altText !== undefined ? altText : media.altTextDefault,
         },
       })
     );
@@ -109,6 +110,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   } catch (error: any) {
     const status = error instanceof AuthError ? error.statusCode : 500;
     const code = error instanceof AuthError ? error.code : "UPDATE_FAILED";
-    return NextResponse.json({ error: { code, message: error.message || "Failed to update media item." } }, { status });
+    return NextResponse.json({ error: { code, message: status < 500 ? error.message : "Failed to update media item." } }, { status });
   }
 }

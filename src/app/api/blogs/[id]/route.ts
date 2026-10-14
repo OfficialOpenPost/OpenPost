@@ -5,6 +5,7 @@ import { countContentWords, readingTime as calcReadingTime } from "@/lib/publish
 import { triggerWebhooks } from "@/lib/webhooks";
 import { queryCache } from "@/lib/cache";
 import { slugify } from "@/lib/slug";
+import { sanitizeHtml } from "@/lib/sanitize";
 
 function extractPollBlocks(content: any): any[] {
   const polls: any[] = [];
@@ -57,12 +58,27 @@ async function syncPolls(blogId: string, content: any, projectId: string | null,
 
       let existingPoll: any = null;
       if (hasUuid) {
+        // SECURITY: only adopt a poll that already belongs to THIS blog or to the
+        // caller's project. The previous `findUnique({ id })` let anyone embed
+        // another tenant's poll UUID (harvestable from the public v1 API) and
+        // re-parent + rewrite + destroy it.
         existingPoll = await withDbRetry(() =>
-          db.poll.findUnique({
-            where: { id: p.pollId },
+          db.poll.findFirst({
+            where: {
+              id: p.pollId,
+              OR: [{ blogId }, ...(projectId ? [{ projectId }] : [])],
+            },
             include: { options: true },
           })
         ).catch(() => null);
+
+        if (!existingPoll) {
+          const foreign = await withDbRetry(() =>
+            db.poll.findUnique({ where: { id: p.pollId }, select: { id: true } })
+          ).catch(() => null);
+          // A poll with that id exists but belongs to someone else → ignore it.
+          if (foreign) continue;
+        }
       }
 
       if (existingPoll) {
@@ -179,16 +195,17 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: { code: "NOT_FOUND", message: "Article not found." } }, { status: 404 });
     }
 
-    // Strict access: use already-loaded user memberships (no extra auth call)
+    // Strict access: use already-loaded user memberships (no extra auth call).
+    // Return 404 (not 403) for foreign posts so their existence isn't leaked.
     if (blog.projectId) {
       const member = user.memberships.find((m) => m.projectId === blog.projectId);
       if (!member) {
-        return NextResponse.json({ error: { code: "FORBIDDEN", message: "Access denied." } }, { status: 403 });
+        return NextResponse.json({ error: { code: "NOT_FOUND", message: "Article not found." } }, { status: 404 });
       }
       const role = member.role;
       if (!hasPermission(role, "posts.view") && !hasPermission(role, "post.read")) {
         if (blog.createdBy !== user.id) {
-          return NextResponse.json({ error: { code: "FORBIDDEN", message: "Access denied." } }, { status: 403 });
+          return NextResponse.json({ error: { code: "NOT_FOUND", message: "Article not found." } }, { status: 404 });
         }
       }
     } else {
@@ -205,7 +222,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     console.error("GET /api/blogs/[id] error:", error);
     const status = error?.statusCode || (error instanceof AuthError ? error.statusCode : 500);
     const code = error?.code || "FETCH_FAILED";
-    return NextResponse.json({ error: { code, message: error.message || "Failed to load article." } }, { status });
+    return NextResponse.json({ error: { code, message: status < 500 ? error.message : "Failed to load article." } }, { status });
   }
 }
 
@@ -220,20 +237,18 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     }
 
     // Strict authorization: use already-loaded user memberships (no extra auth call)
+    // Return 404 for foreign/absent posts to avoid leaking existence.
     if (!existing.projectId) {
-      return NextResponse.json({ error: { code: "FORBIDDEN", message: "Post has no project assignment." } }, { status: 403 });
+      return NextResponse.json({ error: { code: "NOT_FOUND", message: "Article not found." } }, { status: 404 });
     }
     const editMembership = user.memberships.find((m) => m.projectId === existing.projectId);
     if (!editMembership) {
-      return NextResponse.json({ error: { code: "FORBIDDEN", message: "Access denied." } }, { status: 403 });
+      return NextResponse.json({ error: { code: "NOT_FOUND", message: "Article not found." } }, { status: 404 });
     }
     const role = editMembership.role;
     const canEditOthers = hasPermission(role, "posts.edit_others") || hasMinimumRole(role, "EDITOR");
     if (!canEditOthers && existing.createdBy !== user.id) {
-      return NextResponse.json(
-        { error: { code: "FORBIDDEN", message: "You can only modify your own posts." } },
-        { status: 403 }
-      );
+      return NextResponse.json({ error: { code: "NOT_FOUND", message: "Article not found." } }, { status: 404 });
     }
     if (!hasPermission(role, "posts.edit_own") && !hasPermission(role, "posts.edit_others") && !hasPermission(role, "post.edit")) {
       return NextResponse.json({ error: { code: "FORBIDDEN", message: "You do not have permission to edit posts." } }, { status: 403 });
@@ -254,14 +269,43 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       tags,
       revisionLabel,
       editorDocument,
-      renderedHtml,
+      renderedHtml: renderedHtmlRaw,
       contentVersion,
     } = body;
 
-    // If changing to published or scheduled, require permission (use already-loaded role)
-    if (status && (status === "published" || status === "scheduled") && existing.status !== status && existing.projectId) {
-      if (!hasPermission(role, "posts.publish_others") && !hasPermission(role, "posts.publish_own") && !hasPermission(role, "post.publish")) {
-        throw new AuthError("You do not have permission to publish this post.", 403, "FORBIDDEN");
+    // SECURITY: client-produced HTML must be sanitised before storage.
+    const renderedHtml = renderedHtmlRaw !== undefined ? sanitizeHtml(renderedHtmlRaw) : undefined;
+
+    // Status-transition gates (role is the caller's membership role in this post's project).
+    // - Publishing/scheduling: requires publish permission; publish_own only counts for own posts.
+    // - Unpublishing (published → draft/archived) requires posts.unpublish.
+    // - Moving to trash requires delete permission (own vs others).
+    if (status && existing.status !== status) {
+      const isOwn = existing.createdBy === user.id;
+      if (status === "published" || status === "scheduled") {
+        const canPublish =
+          hasPermission(role, "posts.publish_others") ||
+          (isOwn && hasPermission(role, "posts.publish_own")) ||
+          hasPermission(role, "post.publish");
+        if (!canPublish) {
+          throw new AuthError("You do not have permission to publish this post.", 403, "FORBIDDEN");
+        }
+      }
+      if (existing.status === "published" && status !== "published") {
+        const canUnpublish =
+          hasPermission(role, "posts.unpublish") ||
+          hasPermission(role, "posts.publish_others") ||
+          (isOwn && hasPermission(role, "posts.publish_own")) ||
+          hasPermission(role, "post.publish");
+        if (!canUnpublish) {
+          throw new AuthError("You do not have permission to unpublish this post.", 403, "FORBIDDEN");
+        }
+      }
+      if (status === "trash" || status === "archived") {
+        const requiredPerm = isOwn ? "posts.delete_own" : "posts.delete_others";
+        if (!hasPermission(role, requiredPerm) && !hasPermission(role, "post.delete")) {
+          throw new AuthError("You do not have permission to move this post to trash.", 403, "FORBIDDEN");
+        }
       }
     }
 
@@ -408,6 +452,28 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       }
     }
 
+    // SECURITY: directly-supplied relation ids must belong to this post's
+    // project — otherwise Project A can attach (and read back) Project B's
+    // category or media.
+    if (resolvedCategoryId) {
+      const catId: string = resolvedCategoryId;
+      const ownedCategory = await withDbRetry(() =>
+        db.category.findFirst({ where: { id: catId, projectId: existing.projectId }, select: { id: true } })
+      ).catch(() => null);
+      if (!ownedCategory) {
+        return NextResponse.json({ error: { code: "NOT_FOUND", message: "Category not found in this project." } }, { status: 404 });
+      }
+    }
+    if (resolvedFeaturedImageId) {
+      const mediaId: string = resolvedFeaturedImageId;
+      const ownedMedia = await withDbRetry(() =>
+        db.media.findFirst({ where: { id: mediaId, projectId: existing.projectId }, select: { id: true } })
+      ).catch(() => null);
+      if (!ownedMedia) {
+        return NextResponse.json({ error: { code: "NOT_FOUND", message: "Media not found in this project." } }, { status: 404 });
+      }
+    }
+
     if (resolvedCategoryId !== undefined) {
       dataToUpdate.categoryId = resolvedCategoryId;
     }
@@ -520,6 +586,20 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         }
       }
 
+      // SECURITY: client-supplied tag ids must be verified to belong to this
+      // post's project — otherwise Project A can attach (and read back via the
+      // public API) Project B's tags.
+      if (resolvedTagIds.length > 0) {
+        const ownedTags = await withDbRetry(() =>
+          db.tag.findMany({
+            where: { id: { in: resolvedTagIds }, projectId: existing.projectId },
+            select: { id: true },
+          })
+        ).catch(() => []);
+        const ownedSet = new Set((ownedTags || []).map((t: { id: string }) => t.id));
+        resolvedTagIds = resolvedTagIds.filter((tagId) => ownedSet.has(tagId));
+      }
+
       await withDbRetry(() => db.blogTag.deleteMany({ where: { blogId: id } })).catch(() => {});
       if (resolvedTagIds.length > 0) {
         await withDbRetry(() =>
@@ -532,11 +612,23 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     }
 
     if (Array.isArray(authorIds)) {
-      await withDbRetry(() => db.blogAuthor.deleteMany({ where: { blogId: id } })).catch(() => {});
+      // SECURITY: same as tags — author ids must belong to this post's project.
+      let safeAuthorIds: string[] = authorIds;
       if (authorIds.length > 0) {
+        const ownedAuthors = await withDbRetry(() =>
+          db.author.findMany({
+            where: { id: { in: authorIds }, projectId: existing.projectId },
+            select: { id: true },
+          })
+        ).catch(() => []);
+        const ownedSet = new Set((ownedAuthors || []).map((a: { id: string }) => a.id));
+        safeAuthorIds = authorIds.filter((authorId: string) => ownedSet.has(authorId));
+      }
+      await withDbRetry(() => db.blogAuthor.deleteMany({ where: { blogId: id } })).catch(() => {});
+      if (safeAuthorIds.length > 0) {
         await withDbRetry(() =>
           db.blogAuthor.createMany({
-            data: authorIds.map((authorId: string, i: number) => ({ blogId: id, authorId, sortOrder: i })),
+            data: safeAuthorIds.map((authorId: string, i: number) => ({ blogId: id, authorId, sortOrder: i })),
             skipDuplicates: true,
           })
         ).catch(() => {});
@@ -589,7 +681,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   } catch (error: any) {
     const status = error instanceof AuthError ? error.statusCode : 500;
     const code = error instanceof AuthError ? error.code : "UPDATE_FAILED";
-    return NextResponse.json({ error: { code, message: error.message || "Failed to update article." } }, { status });
+    return NextResponse.json({ error: { code, message: status < 500 ? error.message : "Failed to update article." } }, { status });
   }
 }
 
@@ -599,22 +691,19 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     const user = await requireApprovedUser();
 
     const existing = await withDbRetry(() => db.blog.findUnique({ where: { id } }));
-    if (!existing) {
+    // Fail closed: a post with no project cannot be safely authorised.
+    if (!existing || !existing.projectId) {
       return NextResponse.json({ error: { code: "NOT_FOUND", message: "Article not found." } }, { status: 404 });
     }
 
     const { searchParams } = new URL(req.url);
     const isPermanent = searchParams.get("permanent") === "true";
     const body = await req.json().catch(() => ({}));
-    const reason = (body?.reason || searchParams.get("reason") || "").trim();
+    const reason = (body?.reason || searchParams.get("reason") || "").trim().slice(0, 500);
 
     // 1. PERMANENT DELETION (Only ADMIN or OWNER can purge articles)
     if (existing.status === "trash" || isPermanent || body?.permanent === true) {
-      if (existing.projectId) {
-        await requireAdmin(existing.projectId);
-      } else {
-        await requireAdmin();
-      }
+      await requireAdmin(existing.projectId);
 
       await withDbRetry(async () => {
         await db.blogRevision.deleteMany({ where: { blogId: id } }).catch(() => {});
@@ -627,7 +716,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
       await createAuditLog({
         actorId: user.id,
-        projectId: existing.projectId || undefined,
+        projectId: existing.projectId,
         action: "post.deleted_permanent",
         targetId: id,
         metadata: {
@@ -637,21 +726,19 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
         },
       });
 
+      queryCache.invalidate("blogs:");
+      queryCache.invalidate("dashboard:");
+
       return NextResponse.json({ data: { success: true, id }, message: "Article permanently deleted." });
     }
 
-    queryCache.invalidate("blogs:");
-    queryCache.invalidate("dashboard:");
-
     // 2. SOFT DELETION (Move to Trash with user reason)
     // Check permission: author can delete own with posts.delete_own; otherwise posts.delete_others (EDITOR+)
-    if (existing.projectId) {
-      const isOwn = existing.createdBy === user.id;
-      const requiredPerm = isOwn ? "posts.delete_own" : "posts.delete_others";
-      const { role } = await requireProjectMember(existing.projectId);
-      if (!hasPermission(role, requiredPerm) && !hasPermission(role, "post.delete")) {
-        throw new AuthError("Insufficient permissions to delete this article.", 403, "FORBIDDEN");
-      }
+    const isOwn = existing.createdBy === user.id;
+    const requiredPerm = isOwn ? "posts.delete_own" : "posts.delete_others";
+    const { role } = await requireProjectMember(existing.projectId);
+    if (!hasPermission(role, requiredPerm) && !hasPermission(role, "post.delete")) {
+      throw new AuthError("Insufficient permissions to delete this article.", 403, "FORBIDDEN");
     }
 
     const currentSeo = typeof existing.seo === "object" && existing.seo !== null ? (existing.seo as any) : {};
@@ -672,22 +759,20 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       })
     );
 
-    if (existing.projectId) {
-      triggerWebhooks({
-        projectId: existing.projectId,
-        event: "post.deleted",
-        payload: {
-          id: existing.id,
-          title: existing.title,
-          slug: existing.slug,
-          trashReason: reason || undefined,
-        },
-      }).catch(() => {});
-    }
+    triggerWebhooks({
+      projectId: existing.projectId,
+      event: "post.deleted",
+      payload: {
+        id: existing.id,
+        title: existing.title,
+        slug: existing.slug,
+        trashReason: reason || undefined,
+      },
+    }).catch(() => {});
 
     await createAuditLog({
       actorId: user.id,
-      projectId: existing.projectId || undefined,
+      projectId: existing.projectId,
       action: "post.trashed",
       targetId: id,
       metadata: {
@@ -696,6 +781,9 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       },
     });
 
+    queryCache.invalidate("blogs:");
+    queryCache.invalidate("dashboard:");
+
     return NextResponse.json({
       data: updated,
       message: "Article moved to trash.",
@@ -703,6 +791,6 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   } catch (error: any) {
     const status = error instanceof AuthError ? error.statusCode : 500;
     const code = error instanceof AuthError ? error.code : "DELETE_FAILED";
-    return NextResponse.json({ error: { code, message: error.message || "Failed to delete article." } }, { status });
+    return NextResponse.json({ error: { code, message: status < 500 ? error.message : "Failed to delete article." } }, { status });
   }
 }

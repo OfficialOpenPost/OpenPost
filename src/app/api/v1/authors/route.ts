@@ -28,6 +28,16 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const search = searchParams.get("search")?.trim();
 
+    // The dashboard and the public v1 API share this route. Private fields
+    // (author email, linked login email) are only included for authenticated
+    // members of the project — anonymous/token callers get the public byline
+    // shape only. The private variant must never be publicly cached.
+    const { getCurrentUser } = await import("@/lib/auth");
+    const viewer = await getCurrentUser().catch(() => null);
+    const isMember = Boolean(
+      viewer?.memberships?.some((m: { projectId: string }) => m.projectId === projectContext!.projectId)
+    );
+
     const where: any = { projectId: projectContext.projectId };
     if (search) {
       where.OR = [
@@ -54,7 +64,9 @@ export async function GET(req: NextRequest) {
           photo: { select: { id: true, variants: true } },
           linkedUser: { select: { id: true, email: true } },
           _count: {
-            select: { blogs: true },
+            // Members see the true total; the public API only reveals the
+            // published count so draft volume isn't leaked.
+            select: { blogs: isMember ? true : { where: { blog: { status: "published" } } } },
           },
         },
       })
@@ -65,20 +77,20 @@ export async function GET(req: NextRequest) {
       name: a.name,
       slug: a.slug,
       bio: a.bio,
-      email: a.email,
+      ...(isMember ? { email: a.email } : {}),
       website: a.website,
       social: a.socialLinks ?? {},
       photoId: a.photoId,
       photoUrl: (a.photo?.variants as any)?.publicUrl ?? null,
-      linkedUserId: a.linkedUserId,
-      linkedUserEmail: a.linkedUser?.email ?? null,
-      projectId: a.projectId,
+      ...(isMember
+        ? { linkedUserId: a.linkedUserId, linkedUserEmail: a.linkedUser?.email ?? null, projectId: a.projectId }
+        : {}),
       postCount: a._count?.blogs ?? 0,
     }));
 
     return NextResponse.json(
       { data: formatted, meta: { total: formatted.length } },
-      { headers: { "Cache-Control": "public, s-maxage=120, stale-while-revalidate=300" } }
+      { headers: { "Cache-Control": isMember ? "private, no-store" : "public, s-maxage=120, stale-while-revalidate=300" } }
     );
   } catch (error: any) {
     console.error("GET /api/v1/authors error:", error);
@@ -179,6 +191,6 @@ export async function POST(req: NextRequest) {
   } catch (error: any) {
     const status = error instanceof AuthError ? error.statusCode : 500;
     const code = error instanceof AuthError ? error.code : "CREATE_FAILED";
-    return NextResponse.json({ error: { code, message: error.message || "Failed to create author." } }, { status });
+    return NextResponse.json({ error: { code, message: status < 500 ? error.message : "Failed to create author." } }, { status });
   }
 }

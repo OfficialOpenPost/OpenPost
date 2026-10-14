@@ -146,6 +146,6 @@ export async function POST(req: NextRequest) {
   } catch (error: any) {
     const status = error instanceof AuthError ? error.statusCode : 500;
     const code = error instanceof AuthError ? error.code : "CREATE_FAILED";
-    return NextResponse.json({ error: { code, message: error.message || "Failed to create category." } }, { status });
+    return NextResponse.json({ error: { code, message: status < 500 ? error.message : "Failed to create category." } }, { status });
   }
 }

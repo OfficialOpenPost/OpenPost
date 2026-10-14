@@ -26,10 +26,40 @@ export function rateLimit(key: string, opts: RateLimitOpts): { allowed: boolean;
   return { allowed: true, remaining: opts.max - entry.count, resetAt: entry.resetAt };
 }
 
+/**
+ * Extract the client IP for rate limiting.
+ *
+ * `x-forwarded-for` is attacker-controllable end-to-end: the client can send
+ * any value and each proxy *appends* the real peer. Trusting the LEFT-most
+ * entry (the old behaviour) let any caller bypass rate limits simply by
+ * sending a fresh `X-Forwarded-For` per request. We instead prefer
+ * `x-real-ip` (set by the terminating proxy and not client-suppliable when
+ * the platform overwrites it) and otherwise take the RIGHT-most XFF entry,
+ * which is the address added by our own edge.
+ */
 export function getClientIp(req: Request): string {
-  const h = (req.headers as any).get?.("x-forwarded-for") || (req.headers as any).get?.("x-real-ip") || "unknown";
-  if (typeof h === "string") return h.split(",")[0].trim();
+  const get = (name: string): string | null => {
+    const v = (req.headers as any).get?.(name);
+    return typeof v === "string" ? v : null;
+  };
+
+  const realIp = get("x-real-ip")?.trim();
+  if (realIp) return sanitizeIp(realIp);
+
+  const xff = get("x-forwarded-for");
+  if (xff) {
+    const parts = xff.split(",").map((p) => p.trim()).filter(Boolean);
+    const rightMost = parts[parts.length - 1];
+    if (rightMost) return sanitizeIp(rightMost);
+  }
+
   return "unknown";
+}
+
+/** Keep only a short, printable token so header content can't explode rate-limit keys. */
+function sanitizeIp(value: string): string {
+  const cleaned = value.replace(/[^0-9a-fA-F:.%\-_]/g, "");
+  return cleaned.slice(0, 45) || "unknown";
 }
 
 // Clean up old entries periodically

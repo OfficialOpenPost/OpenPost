@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { db, withDbRetry } from "@/lib/db";
 import { requireApprovedUser, requireProjectMember, AuthError, hasPermission, hasMinimumRole } from "@/lib/auth";
 import { queryCache } from "@/lib/cache";
+import { parseBoundedInt, parseOffset } from "@/lib/pagination";
+import { Prisma } from "@/generated/prisma/client";
 import crypto from "crypto";
 
 export async function GET(req: NextRequest) {
@@ -10,8 +12,8 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const search = searchParams.get("search")?.trim();
     const projectId = searchParams.get("projectId") || req.headers.get("x-openpost-project");
-    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") ?? "50", 10)));
-    const offset = parseInt(searchParams.get("offset") || "0", 10);
+    const limit = parseBoundedInt(searchParams.get("limit"), 50, 1, 100);
+    const offset = parseOffset(searchParams.get("offset"));
 
     let targetProjectId = projectId;
     if (!targetProjectId) {
@@ -62,9 +64,15 @@ export async function GET(req: NextRequest) {
 
     let withUsage = withUrl;
     try {
-      const ids = withUrl.map((m) => m.id);
+      const ids = withUrl.map((m) => m.id).filter((v: unknown): v is string => typeof v === "string" && /^[0-9a-f-]{36}$/i.test(v));
       if (ids.length) {
-        const usages: any[] = await (db as any).$queryRaw`SELECT media_id, array_agg(blog_id) as blogs FROM media_usage WHERE media_id = ANY(ARRAY[${ids.join(",")}]::uuid[]) GROUP BY media_id`;
+        // Parameterised properly — the old `ARRAY[${ids.join(",")}]::uuid[]`
+        // interpolation passed the whole list as one string parameter (broken)
+        // and would have been an injection vector had the ids been
+        // client-controlled. Prisma.join emits one bound parameter per id.
+        const usages: any[] = await (db as any).$queryRaw(
+          Prisma.sql`SELECT media_id, array_agg(blog_id) as blogs FROM media_usage WHERE media_id = ANY(ARRAY[${Prisma.join(ids)}]::uuid[]) GROUP BY media_id`
+        );
         const map = new Map<string, string[]>(usages.map((u: any) => [u.media_id, u.blogs ?? []]));
         withUsage = withUrl.map((m) => ({ ...m, usedIn: map.get(m.id) ?? [] }));
       }
@@ -85,7 +93,10 @@ export async function POST(req: NextRequest) {
   try {
     const user = await requireApprovedUser();
     const body = await req.json().catch(() => ({}));
-    const { originalFilename, mimeType, sizeBytes, width, height, key: clientKey, publicUrl: clientPublicUrl, checksum: clientChecksum, altTextDefault, projectId } = body as any;
+    // NOTE: `key` and `publicUrl` are intentionally NOT read from the body —
+    // they are server-generated below. Only the checksum is optionally accepted
+    // (validated as a 64-char hex SHA-256).
+    const { originalFilename, mimeType, sizeBytes, width, height, checksum: clientChecksum, altTextDefault, projectId } = body as any;
 
     if (!originalFilename || !mimeType) {
       return NextResponse.json({ error: { code: "VALIDATION_ERROR", message: "Missing required fields: originalFilename, mimeType" } }, { status: 400 });
@@ -123,7 +134,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: { code: "INVALID_TYPE", message: `Unsupported media type ${mimeType}` } }, { status: 400 });
     }
 
-    const publicUrl = clientPublicUrl || `/${key}`;
+    // SECURITY: the public URL is derived server-side from the server-generated
+    // key. The previous code trusted `clientPublicUrl`, letting a member store
+    // an arbitrary URL (javascript:, external phishing host, another tenant's
+    // CDN path) that is later rendered as an image src across the site.
+    // `clientKey` is likewise ignored entirely (path traversal / cross-project
+    // overwrite) — see key generation above.
+    const publicUrl = `/${key}`;
 
     const variants: any = { publicUrl, key };
     if (mimeType === "image/webp") {
@@ -165,6 +182,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: { code: error.code, message: error.message } }, { status: error.statusCode });
     }
     console.error("POST /api/media error", error);
-    return NextResponse.json({ error: { code: "DB_ERROR", message: String(error) } }, { status: 500 });
+    return NextResponse.json({ error: { code: "DB_ERROR", message: "Internal server error" } }, { status: 500 });
   }
 }

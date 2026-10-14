@@ -6,6 +6,7 @@ import { SharedRender } from "@/components/render/SharedRender";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { EDITOR_STYLES } from "@/components/editor/editor-styles";
+import { sanitizeHtml } from "@/lib/sanitize";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -270,7 +271,9 @@ export default async function BlogPostPage({
             {isJson ? (
               <SharedRender content={content} viewport="wide" />
             ) : (
-              <div dangerouslySetInnerHTML={{ __html: String(content || "") }} />
+              // SECURITY: legacy string content is passed through an allow-list
+              // sanitiser — never rendered as raw markup.
+              <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(String(content || "")) }} />
             )}
           </article>
 
